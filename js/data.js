@@ -166,3 +166,45 @@ GD.INJURIES = {
   badKnee:  { name: 'Ruined knee',     verb: 'ruined a knee',        mods: { agi: -1.5 },        w: 1.5 },
   weakLungs:{ name: 'Weak lungs',      verb: 'developed weak lungs', mods: { vit: -2 },          w: 1,   elderOnly: true },
 };
+
+// ---------------------------------------------------------------- identity, body and attraction
+GD.GENDERS = {
+  man:   { name: 'Man',   sym: '♂' },
+  woman: { name: 'Woman', sym: '♀' },
+};
+// who someone is drawn to. 'ace' feel little attraction but can still choose companionship.
+GD.ORIENTATIONS = {
+  straight: { name: 'Straight',        w: 70, desc: 'Drawn to the other gender.' },
+  gay:      { name: 'Gay / Lesbian',   w: 11, desc: 'Drawn to their own gender.' },
+  bi:       { name: 'Bisexual',        w: 13, desc: 'Drawn to any gender.' },
+  ace:      { name: 'Asexual',         w: 6,  desc: 'Little desire. May marry for companionship; rarely has children.' },
+};
+// what kindles attraction beyond gender; weights a partner's qualities
+GD.PREFERENCES = {
+  none:     { name: 'No particular type', w: 50 },
+  sapio:    { name: 'Sapiosexual',        w: 12, stat: 'int',  desc: 'Drawn to a sharp mind (INT).' },
+  strength: { name: 'Drawn to strength',  w: 12, stat: 'str',  desc: 'Drawn to the strong (STR).' },
+  kindness: { name: 'Drawn to kindness',  w: 12, stat: 'wil',  desc: 'Drawn to a warm, steady heart (WIL).' },
+  beauty:   { name: 'Drawn to beauty',    w: 10, looks: true,  desc: 'Drawn to good looks.' },
+  status:   { name: 'Drawn to status',    w: 8,  status: true, desc: 'Drawn to rank and high birth.' },
+};
+GD.HEIGHTS = {
+  short:   { name: 'Short',   scale: 0.9,  mods: { agi: 0.5, str: -0.5 } },
+  average: { name: 'Average height', scale: 1, mods: {} },
+  tall:    { name: 'Tall',    scale: 1.1,  mods: { str: 0.5, agi: -0.5 } },
+};
+GD.BUILDS = {
+  slight:  { name: 'Slight',  width: 0.85, mods: { agi: 1, vit: -1 } },
+  average: { name: 'Average build', width: 1, mods: {} },
+  stout:   { name: 'Stout',   width: 1.15, mods: { vit: 1, agi: -0.5 } },
+  large:   { name: 'Large',   width: 1.3,  mods: { str: 1, vit: 1, agi: -1.5 } },
+};
+GD.LOOKS = ['Homely', 'Plain', 'Plain', 'Fair', 'Fair', 'Fair', 'Comely', 'Comely', 'Striking', 'Beautiful'];
+// conditions people are born with; some run in families
+GD.CONDITIONS = {
+  lame:       { name: 'Lame',         mods: { agi: -2 },           hereditary: false, desc: 'Born with a twisted leg. Walks with a cane.' },
+  weakHeart:  { name: 'Weak heart',   mods: { vit: -2 }, life: 0.8, hereditary: true, desc: 'A frail heart. A shorter life.' },
+  cloudedEye: { name: 'Clouded eye',  mods: { agi: -1, int: 0.5 },  hereditary: true, desc: 'Half-blind from birth, and more watchful for it.' },
+  deaf:       { name: 'Deaf',         mods: { wil: 1, agi: -1 },    hereditary: true, desc: 'Born without hearing. Patient and hard to rattle.' },
+};
+GD.HAIRSTYLES = ['short', 'long', 'bun', 'braid', 'shaved', 'crop'];

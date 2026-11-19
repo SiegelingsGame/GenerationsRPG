@@ -72,12 +72,30 @@ function rollBase(race) {
   return b;
 }
 
+function rollGender() { return R.chance(0.5) ? 'man' : 'woman'; }
+function rollOrientation() { return R.weighted(Object.fromEntries(Object.entries(GD.ORIENTATIONS).map(([k, v]) => [k, v.w]))); }
+function rollPref() { return R.weighted(Object.fromEntries(Object.entries(GD.PREFERENCES).map(([k, v]) => [k, v.w]))); }
+function rollCondition() { return R.chance(0.06) ? R.pick(Object.keys(GD.CONDITIONS)) : null; }
+
 function makeChar(o = {}) {
   const race = o.race || randomRace();
   const r = GD.RACES[race];
   const id = 'c' + (G.nextId++);
+  const gender = o.gender || rollGender();
+  const condition = o.condition !== undefined ? o.condition : rollCondition();
   const c = {
-    id, race,
+    id, race, gender,
+    orientation: o.orientation || rollOrientation(),
+    pref: o.pref || rollPref(),
+    height: o.height || R.weighted({ short: 1, average: 3, tall: 1 }),
+    build: o.build || R.weighted({ slight: 1, average: 3, stout: 1, large: 0.6 }),
+    looks: o.looks ?? R.int(0, 9),
+    condition,
+    infertile: o.infertile ?? R.chance(0.07),
+    infertileKnown: false,
+    orientKnown: !!o.orientKnown,
+    hairStyle: o.hairStyle || R.pick(GD.HAIRSTYLES),
+    beard: o.beard ?? (race === 'dwarf' ? R.chance(0.8) : gender === 'man' && R.chance(0.4)),
     name: o.name || genName(race),
     born: o.born ?? (G.day - (r.maturity + R.int(0, 8)) * DAYS_PER_YEAR),
     lifespan: o.lifespan || R.int(r.life[0], r.life[1]),
@@ -108,6 +126,7 @@ function makeChar(o = {}) {
     gear: { weapon: o.weapon || 0, armor: o.armor || 0 },
     generation: o.generation || 0,
   };
+  if (condition && GD.CONDITIONS[condition].life) c.lifespan = Math.round(c.lifespan * GD.CONDITIONS[condition].life);
   G.chars[c.id] = c;
   c.hp = maxHp(c);
   return c;
@@ -152,6 +171,8 @@ function stat(c, k) {
   const r = GD.RACES[c.race];
   let v = c.base[k] + r.growth[k] * (c.level - 1) * 0.9 + (c.bonus[k] || 0);
   for (const inj of c.injuries || []) v += (GD.INJURIES[inj].mods[k] || 0);
+  v += (GD.HEIGHTS[c.height || 'average'].mods[k] || 0) + (GD.BUILDS[c.build || 'average'].mods[k] || 0);
+  if (c.condition) v += GD.CONDITIONS[c.condition].mods[k] || 0;
   const b = GD.BIRTH[birthKey(c)];
   if (b.mods[k]) v *= b.mods[k];
   if (birthKey(c) === 'bastard' && c.bastardStat === k) v *= 1.15;
@@ -227,6 +248,33 @@ function addFormative(c, n) {
   return c.formative - before;
 }
 
+// How drawn a is to b (0 = not at all). Gender and orientation gate it; a 'type' weights it.
+function attraction(a, b) {
+  if (!a || !b || a.id === b.id) return 0;
+  const same = a.gender === b.gender;
+  let base = { straight: same ? 0 : 1, gay: same ? 1 : 0, bi: 1, ace: 0.35 }[a.orientation || 'straight'];
+  if (!base) return 0;
+  const p = GD.PREFERENCES[a.pref || 'none'];
+  if (p.stat) base *= clamp(0.6 + (stat(b, p.stat) - 6) * 0.09, 0.45, 1.7);
+  if (p.looks) base *= clamp(0.5 + (b.looks ?? 5) * 0.12, 0.5, 1.6);
+  if (p.status) base *= b.birth === 'highborn' || b.house === G.house.name ? 1.5 : 0.7;
+  return base;
+}
+function mutual(a, b) { return Math.min(attraction(a, b), attraction(b, a)); }
+function canConceive(a, b) { return a.gender !== b.gender && !a.infertile && !b.infertile; }
+function orientationText(c, viewer) {
+  if (!c.orientKnown && c.house !== G.house.name && c.status !== 'party' && c.status !== 'household') return 'Unknown';
+  const o = GD.ORIENTATIONS[c.orientation || 'straight'].name;
+  const p = c.pref && c.pref !== 'none' ? ` · ${GD.PREFERENCES[c.pref].name}` : '';
+  return o + p;
+}
+function bodyText(c) {
+  const parts = [];
+  if (c.height && c.height !== 'average') parts.push(GD.HEIGHTS[c.height].name);
+  if (c.build && c.build !== 'average') parts.push(GD.BUILDS[c.build].name);
+  parts.push(GD.LOOKS[clamp(Math.round(c.looks ?? 5), 0, 9)]);
+  return parts.join(' · ');
+}
 function bond(a, b) { return a.bonds[b.id] || 0; }
 function addBond(a, b, n) {
   if (a.id === b.id) return;
@@ -292,7 +340,17 @@ function haveChild(a, b) {
     corruption: isHouse ? 0 : R.int(0, 10),
     generation: Math.max(a.generation, b.generation) + 1,
     trait: R.chance(0.4) ? (R.chance(0.5) && a.trait ? a.trait : b.trait) : (R.chance(0.4) ? R.pick(Object.keys(GD.TRAITS)) : null),
+    height: R.chance(0.75) ? (R.chance(0.5) ? a.height : b.height) : undefined,
+    build: R.chance(0.7) ? (R.chance(0.5) ? a.build : b.build) : undefined,
+    looks: clamp(Math.round(((a.looks ?? 5) + (b.looks ?? 5)) / 2 + R.int(-2, 2)), 0, 9),
+    condition: (() => {
+      const her = [a.condition, b.condition].filter((x) => x && GD.CONDITIONS[x].hereditary);
+      if (her.length && R.chance(0.3)) return R.pick(her);
+      return rollCondition();
+    })(),
+    infertile: (a.infertile || b.infertile) ? R.chance(0.15) : R.chance(0.06),
   });
+  if (kid.condition) chron(`${kid.name} was born ${GD.CONDITIONS[kid.condition].name.toLowerCase()}.`, 'dim', [kid.id], 'condition');
   if (isHouse) {
     const legacy = Math.floor(G.house.generation / 2);
     for (const k of STATS) kid.bonus[k] += legacy;
@@ -328,14 +386,15 @@ function bloodline(c) {
 }
 function isDescendantOf(c, ancestorId) {
   const seen = new Set();
-  const stack = [...c.parents];
+  const up = (x) => [...x.parents, ...(x.adoptedBy || [])];
+  const stack = up(c);
   while (stack.length) {
     const id = stack.pop();
     if (id === ancestorId) return true;
     if (seen.has(id)) continue;
     seen.add(id);
     const p = ch(id);
-    if (p) stack.push(...p.parents);
+    if (p) stack.push(...up(p));
   }
   return false;
 }
@@ -468,9 +527,9 @@ function seedPopulation() {
   // NPC families across the towns, so lineages exist from the start
   for (let i = 0; i < 9; i++) {
     const town = i % G.world.towns.length;
-    const a = makeChar({ town, birth: R.pick(['lowborn', 'lowborn', 'highborn', 'bastard']) });
+    const a = makeChar({ town, birth: R.pick(['lowborn', 'lowborn', 'highborn', 'bastard']), orientation: R.pick(['straight', 'straight', 'bi']), infertile: false });
     if (R.chance(0.55)) {
-      const b = makeChar({ town, race: R.chance(0.7) ? a.race : randomRace(), birth: R.pick(['lowborn', 'lowborn', 'highborn']) });
+      const b = makeChar({ town, race: R.chance(0.7) ? a.race : randomRace(), birth: R.pick(['lowborn', 'lowborn', 'highborn']), gender: a.gender === 'man' ? 'woman' : 'man', orientation: R.pick(['straight', 'straight', 'bi']), infertile: false });
       marry(a, b);
       const kids = R.int(0, 2);
       for (let k = 0; k < kids; k++) {
@@ -585,11 +644,18 @@ function yearTick() {
       const sameGroup = (a.status === 'npc' && b.status === 'npc' && a.town === b.town) || (a.status !== 'npc' && b.status !== 'npc');
       if (!sameGroup) continue;
       const bd = bond(a, b);
-      if ((bd >= 60 && R.chance(0.4)) || (a.status === 'npc' && b.status === 'npc' && R.chance(0.08))) {
-        marry(a, b); used.add(a.id); used.add(b.id); break;
+      const m = mutual(a, b);
+      if (m <= 0) continue;
+      if ((bd >= 60 && R.chance(0.4 * Math.min(1.3, m))) || (a.status === 'npc' && b.status === 'npc' && R.chance(0.1 * m))) {
+        marry(a, b); used.add(a.id); used.add(b.id);
+        if (a.house === h.name || b.house === h.name) {
+          const kin = a.house === h.name ? a : b;
+          if (!canConceive(a, b) && a.gender === b.gender) chron(`${kin.name} chose a partner of their own heart. They will not have children together.`, 'dim', [a.id, b.id], 'love');
+        }
+        break;
       }
       // affairs between close companions
-      if (bd >= 45 && a.status !== 'npc' && R.chance(0.04)) { haveChild(a, b); used.add(a.id); used.add(b.id); break; }
+      if (bd >= 45 && a.status !== 'npc' && canConceive(a, b) && R.chance(0.04 * m)) { haveChild(a, b); used.add(a.id); used.add(b.id); break; }
     }
   }
   // births
@@ -600,7 +666,19 @@ function yearTick() {
     doneCouples.add(a.id); doneCouples.add(b.id);
     if (['elder'].includes(stageKey(a)) || ['elder'].includes(stageKey(b))) continue;
     const kids = a.children.filter((k) => b.children.includes(k)).length;
+    if (a.gender === b.gender) continue;
+    a.yearsTrying = (a.yearsTrying || 0) + 1; b.yearsTrying = (b.yearsTrying || 0) + 1;
+    if (a.infertile || b.infertile) {
+      const who = [a, b].filter((x) => x.infertile && !x.infertileKnown);
+      if (who.length && kids === 0 && a.yearsTrying >= 3 && R.chance(0.5)) {
+        who.forEach((x) => { x.infertileKnown = true; });
+        if (relevant(a) || relevant(b)) chron(`After years of trying, it is clear ${who.map((x) => x.name).join(' and ')} cannot have children.`, 'bad', who.map((x) => x.id), 'infertile');
+      }
+      continue;
+    }
     let p = 0.24 * ((GD.RACES[a.race].fertility + GD.RACES[b.race].fertility) / 2) * E.births;
+    if (a.orientation === 'ace' || b.orientation === 'ace') p *= 0.35;
+    if (a.forced || b.forced) p *= 0.6;
     if (a.trait === 'fertile' || b.trait === 'fertile') p *= 1.5;
     if (kids >= 4) p *= 0.25;
     if ((a.id === G.mcId || b.id === G.mcId) && kids === 0) p = Math.max(p, 0.55);
@@ -629,6 +707,19 @@ function yearTick() {
     c.corruption = clamp(c.corruption + d, 0, 120);
     const rivals = living.filter((x) => x.status === 'rival').length;
     if (c.corruption >= 100 && rivals < 3) turnEvil(c);
+  }
+  // House members who resent the head of House may renounce it or turn on it
+  if (mc) for (const c of living) {
+    if (c.house !== h.name || c.id === mc.id || !isAdult(c) || c.evil) continue;
+    const bd = bond(c, mc);
+    if (bd >= -40) { c.corruption = Math.max(0, c.corruption - 3); continue; }
+    c.corruption = clamp(c.corruption + (bd < -70 ? 12 : 6), 0, 120);
+    if (bd < -70 && R.chance(0.08)) {
+      c.house = null; c.status = 'npc'; c.grudge = true; c.servedHouse = true;
+      G.party = G.party.filter((id) => id !== c.id);
+      if (G.heirId === c.id) G.heirId = null;
+      chron(`${c.name} renounced House ${h.name} and left, cursing ${mc.name}'s name.`, 'bad', [c.id, mc.id], 'renounce');
+    } else if (c.corruption >= 100) turnEvil(c);
   }
   // rivals grow in power
   for (const c of living.filter((x) => x.status === 'rival')) if (R.chance(0.6)) c.level++;
@@ -769,8 +860,8 @@ function performTimeskip(heir) {
 }
 
 // ---------------------------------------------------------------- partners & recruits
-function genPartner(tier) {
-  const mc = ch(G.mcId);
+function genPartner(tier, forWhom, genders) {
+  const mc = forWhom || ch(G.mcId);
   const race = randomRace({ human: 4, orc: 2, halfling: 2, dwarf: 2, elf: 0.6 + tier * 0.5 });
   const r = GD.RACES[race];
   const mcAgeFrac = mc ? clamp((age(mc) - GD.RACES[mc.race].maturity) / (GD.RACES[mc.race].primeEnd - GD.RACES[mc.race].maturity), 0, 1) : 0.1;
@@ -786,7 +877,13 @@ function genPartner(tier) {
     trait: R.chance(0.8) ? R.pick(Object.keys(GD.TRAITS).filter((t) => t !== 'frail' || tier === 0)) : null,
     weapon: tier ? Math.min(tier, 5) : 0,
     armor: tier ? Math.min(tier, 5) : 0,
+    gender: genders ? R.pick(genders) : undefined,
+    looks: clamp(R.int(2, 9) + Math.round(tier / 2), 0, 9),
+    infertile: R.chance(0.06),
   });
+  // matchmakers present people who could love the one they are matched with
+  if (mc && attraction(c, mc) === 0) c.orientation = c.gender === mc.gender ? R.pick(['gay', 'bi']) : R.pick(['straight', 'straight', 'bi']);
+  c.orientKnown = true;
   c.orphaned = birth === 'orphan';
   if (c.orphaned) c.birth = 'lowborn';
   c.status = 'candidate';
@@ -821,6 +918,10 @@ function loadGame() {
     if (!data || data.version !== 1) return false;
     G = data;
     G.ledger = G.ledger || [];
+    for (const c of Object.values(G.chars)) {
+      c.gender = c.gender || rollGender(); c.orientation = c.orientation || 'straight'; c.pref = c.pref || 'none';
+      c.height = c.height || 'average'; c.build = c.build || 'average'; c.looks = c.looks ?? 5; c.hairStyle = c.hairStyle || 'short';
+    }
     G.house.reigns = G.house.reigns || [];
     return true;
   } catch (e) { return false; }

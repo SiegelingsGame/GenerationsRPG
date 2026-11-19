@@ -227,3 +227,6 @@ table.sum td { padding: 3px 12px 3px 0; vertical-align: top; }
 .head-card small { font-size: 11px; }
 .tnode.head { border-color: #8a7240; }
 @media (prefers-reduced-motion: reduce) { .lrow.pop { animation: none; } .tl-person { transition: none; } }
+.choices.two { grid-template-columns: repeat(2, minmax(0, 160px)); }
+.idrow label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--dim); }
+p.small { font-size: 12px; }

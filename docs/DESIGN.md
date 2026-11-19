@@ -126,6 +126,19 @@ Staying alive and levelling naturally is always better than dying and skipping.
 - Companions' children grow up in towns and can be **found and recruited** later, with known lineage.
 - Children of the House and of companions who grow up together become **childhood friends**.
 
+## 6b. Identity, attraction and the body
+
+Under the deck, every person is simulated as a whole person:
+
+- **Gender** (man or woman) and **orientation** (straight, gay or lesbian, bisexual, asexual) decide who they are drawn to. Only a man and a woman can have children together.
+- **Type:** some people have a particular type: sapiosexual (INT), drawn to strength (STR), drawn to kindness (WIL), drawn to beauty (looks) or drawn to status (high birth). It scales how fast bonds grow and who they marry.
+- **Body:** height, build and looks are inherited from both parents with some variation, and each slightly shifts stats.
+- **Conditions** (lame, weak heart, clouded eye, deaf). Some run in families.
+- **Infertility** is hidden. A couple only finds out after years of trying.
+- **Kin choose for themselves.** Heirs and kin marry by their own nature, so a gay heir may marry someone they can't have children with.
+- **Forced matches:** the head of House can force an arranged match that "can give an heir". The forced person's bond with the head drops sharply. Unless the head mends it (time together, gifts, a heart-to-heart that can go badly, a public apology), they may renounce the House or turn against it as a rival.
+- **Adoption** of orphans and foundlings gives any couple heirs who carry the House name and its legacy, but not its blood.
+
 ### Betrayal
 
 Every non-House adult builds **corruption** each year. It builds faster during war and famine, for bastards and orphans, and for people with a grudge against the House. Loyalty, bonds with the current protagonist and being in the party slow it down. At 100 the character **turns against the House** and becomes a **Rival**: a named boss who levels up each year and ambushes you on the road. Your heir's childhood friend can end up as the villain of the next generation.

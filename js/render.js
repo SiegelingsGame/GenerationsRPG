@@ -414,7 +414,13 @@ Render.drawParty = function (pp) {
 function figLook(c) {
   const inj = {};
   for (const k of c.injuries || []) if (GD.INJURIES[k].look) inj[GD.INJURIES[k].look] = true;
-  return { skin: GD.RACES[c.race].skin, hair: c.hair, tunic: c.tunic, stage: stageKey(c), race: c.race, evil: c.evil, house: c.house === G.house.name, inj, armor: (c.gear && c.gear.armor) || 0 };
+  return {
+    skin: GD.RACES[c.race].skin, hair: c.hair, tunic: c.tunic, stage: stageKey(c), race: c.race, evil: c.evil,
+    house: G && G.house && c.house === G.house.name, inj, armor: (c.gear && c.gear.armor) || 0,
+    gender: c.gender || 'man', hairStyle: c.hairStyle || 'short', beard: !!c.beard,
+    hScale: GD.HEIGHTS[c.height || 'average'].scale, wScale: GD.BUILDS[c.build || 'average'].width,
+    cane: c.condition === 'lame', cloudy: c.condition === 'cloudedEye',
+  };
 }
 const ARMOR_COLORS = ['', '#7d7f84', '#a9b1b9', '#c8d0d8', '#d4b05a', '#8fd8f0'];
 
@@ -423,8 +429,11 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
   const c = this.ctx;
   const r = GD.RACES[look.race] || GD.RACES.human;
   const st = look.stage || 'prime';
-  let s = scale * r.height * (st === 'child' ? 0.6 : st === 'youth' ? 0.92 : 1);
-  const wd = r.width * (st === 'child' ? 0.85 : 1);
+  let s = scale * r.height * (st === 'child' ? 0.6 : st === 'youth' ? 0.92 : 1) * (look.hScale || 1);
+  const wd = r.width * (st === 'child' ? 0.85 : 1) * (look.wScale || 1);
+  const woman = look.gender === 'woman';
+  const sh = woman ? 6.2 : 7.4; // shoulder half-width
+  const hip = woman ? 8.6 : 8;
   const stoop = st === 'elder' ? 3 : st === 'venerable' ? 6 : 0;
   const hair = (st === 'elder' || st === 'venerable') ? (st === 'venerable' ? '#e8e8e8' : '#a8a8a8') : (st === 'seasoned' ? shade(look.hair, 0.25) : look.hair);
   const bob = (o.bob || 0) * 1.5;
@@ -449,8 +458,8 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
   const by = y - 14 * s;
   c.fillStyle = fl ? '#fff' : (look.evil ? '#2a1420' : look.tunic);
   c.beginPath();
-  c.moveTo(x - 8 * s * wd, by); c.lineTo(x + 8 * s * wd, by);
-  c.lineTo(x + 7 * s * wd + stoop * 0.5, by - 20 * s); c.lineTo(x - 7 * s * wd + stoop * 0.5, by - 20 * s);
+  c.moveTo(x - hip * s * wd, by); c.lineTo(x + hip * s * wd, by);
+  c.lineTo(x + sh * s * wd + stoop * 0.5, by - 20 * s); c.lineTo(x - sh * s * wd + stoop * 0.5, by - 20 * s);
   c.closePath(); c.fill();
   // armour: a breastplate and pauldrons that change with its tier
   if (look.armor && !fl) {
@@ -472,11 +481,15 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
   c.fillRect(x - 8 * s * wd, by - 6 * s, 16 * s * wd, 3 * s);
   // arms (a bound stump if one was lost)
   c.fillStyle = fl ? '#fff' : shade(look.evil ? '#2a1420' : look.tunic, -0.2);
-  c.fillRect(x - 11 * s * wd, by - 19 * s, 4 * s, 14 * s);
+  c.fillRect(x - (sh + 3.6) * s * wd, by - 19 * s, 4 * s, 14 * s);
   if (inj.arm) {
-    c.fillRect(x + 7 * s * wd + stoop * 0.5, by - 19 * s, 4 * s, 5 * s);
-    c.fillStyle = '#d8d2c0'; c.fillRect(x + 7 * s * wd + stoop * 0.5, by - 14.5 * s, 4 * s, 1.5 * s);
-  } else c.fillRect(x + 7 * s * wd + stoop * 0.5, by - 19 * s, 4 * s, 14 * s);
+    c.fillRect(x + (sh - 0.4) * s * wd + stoop * 0.5, by - 19 * s, 4 * s, 5 * s);
+    c.fillStyle = '#d8d2c0'; c.fillRect(x + (sh - 0.4) * s * wd + stoop * 0.5, by - 14.5 * s, 4 * s, 1.5 * s);
+  } else c.fillRect(x + (sh - 0.4) * s * wd + stoop * 0.5, by - 19 * s, 4 * s, 14 * s);
+  if (look.cane && !o.dead) {
+    c.strokeStyle = '#6b4a2a'; c.lineWidth = 1.6 * s;
+    c.beginPath(); c.moveTo(x - (sh + 2) * s * wd, by - 6 * s); c.lineTo(x - (sh + 4) * s * wd, y); c.stroke();
+  }
   // weapon
   if (o.weapon && !(inj.arm && o.weapon !== 'shield')) {
     c.strokeStyle = o.weapon === 'staff' ? '#7a5a3a' : '#cfd6dc'; c.lineWidth = 2.2 * s;
@@ -496,12 +509,20 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
     c.beginPath(); c.moveTo(hx - 6 * s, hy); c.lineTo(hx - 11 * s, hy - 5 * s); c.lineTo(hx - 5 * s, hy - 2 * s); c.fill();
     c.beginPath(); c.moveTo(hx + 6 * s, hy); c.lineTo(hx + 11 * s, hy - 5 * s); c.lineTo(hx + 5 * s, hy - 2 * s); c.fill();
   }
-  // hair
+  // hair, in the person's own style
   c.fillStyle = hair;
-  c.beginPath(); c.arc(hx, hy - 1.5 * s, 6.8 * s, Math.PI * 1.05, Math.PI * 1.95); c.fill();
+  const style = look.hairStyle || 'short';
+  if (style !== 'shaved') {
+    c.beginPath(); c.arc(hx, hy - 1.5 * s, (style === 'crop' ? 6.6 : 6.9) * s, Math.PI * 1.05, Math.PI * 1.95); c.fill();
+  } else {
+    c.globalAlpha = 0.35; c.beginPath(); c.arc(hx, hy - 1 * s, 6.6 * s, Math.PI * 1.1, Math.PI * 1.9); c.fill(); c.globalAlpha = 1;
+  }
+  if (style === 'long') { c.fillRect(hx - 7 * s, hy - 2 * s, 2.6 * s, 11 * s); c.fillRect(hx + 4.4 * s, hy - 2 * s, 2.6 * s, 11 * s); }
+  if (style === 'bun') { c.beginPath(); c.arc(hx - 3 * s, hy - 7.5 * s, 3 * s, 0, Math.PI * 2); c.fill(); }
+  if (style === 'braid') { c.fillRect(hx - 6.8 * s, hy - 1 * s, 2.2 * s, 14 * s); c.beginPath(); c.arc(hx - 5.7 * s, hy + 13.5 * s, 1.6 * s, 0, Math.PI * 2); c.fill(); }
   if (st === 'venerable') { c.fillStyle = look.skin; c.beginPath(); c.arc(hx, hy - 4 * s, 3 * s, Math.PI, 0); c.fill(); }
-  // beard (dwarf, or older human men-ish look as random flourish)
-  if (look.race === 'dwarf' && st !== 'child') {
+  // beard
+  if (look.beard && st !== 'child') {
     c.fillStyle = hair;
     c.beginPath(); c.moveTo(hx - 6 * s, hy + 1 * s); c.lineTo(hx + 6 * s, hy + 1 * s); c.lineTo(hx, hy + 13 * s); c.closePath(); c.fill();
   }
@@ -518,6 +539,7 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
     c.strokeStyle = '#111'; c.lineWidth = 0.8 * s;
     c.beginPath(); c.moveTo(hx - 6.5 * s, hy - 3 * s); c.lineTo(hx + 6.5 * s, hy + 0.5 * s); c.stroke();
   } else c.fillRect(hx + 1.5 * s, hy - 1 * s, 1.6 * s, 1.6 * s);
+  if (look.cloudy && !inj.eye) { c.fillStyle = '#d8dde2'; c.fillRect(hx + 1.5 * s, hy - 1 * s, 1.6 * s, 1.6 * s); }
   if (inj.scar) {
     c.strokeStyle = '#a03a2e'; c.lineWidth = 0.9 * s;
     c.beginPath(); c.moveTo(hx - 4 * s, hy - 4 * s); c.lineTo(hx - 1 * s, hy + 4 * s); c.stroke();

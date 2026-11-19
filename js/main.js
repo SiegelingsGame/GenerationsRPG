@@ -25,13 +25,27 @@ Game.title = function () {
 // ---------------------------------------------------------------- founding
 Game.create = function () {
   newGame();
-  const sel = { race: 'human', birth: 'lowborn', color: GD.HOUSE_COLORS[0], name: genName('human'), house: R.pick(GD.HOUSE_NAMES) };
+  const sel = { race: 'human', birth: 'lowborn', color: GD.HOUSE_COLORS[0], name: genName('human'), house: R.pick(GD.HOUSE_NAMES),
+    gender: 'man', orientation: 'straight', pref: 'none', height: 'average', build: 'average' };
+  const pick = (id, label, key, table, extra) => h('label', {}, label, ' ',
+    h('select', { id, onchange: (e) => { sel[key] = e.target.value; if (extra) extra(); } },
+      Object.entries(table).map(([k, v]) => h('option', { value: k, selected: sel[key] === k }, v.name))));
   const draw = () => {
     const body = h('div', { class: 'create' },
       h('div', { class: 'row' },
         h('label', {}, 'Your name ', h('input', { value: sel.name, oninput: (e) => { sel.name = e.target.value; } })),
         h('label', {}, 'House ', h('input', { value: sel.house, oninput: (e) => { sel.house = e.target.value; } })),
         h('div', { class: 'colors' }, GD.HOUSE_COLORS.map((c) => h('span', { class: 'swatch' + (sel.color === c ? ' on' : ''), style: `background:${c}`, onclick: () => { sel.color = c; UI.replaceModal(draw(), opts); } })))),
+      h('h4', {}, 'Who you are'),
+      h('div', { class: 'choices two' }, Object.entries(GD.GENDERS).map(([k, g]) => h('div', { class: 'choice' + (sel.gender === k ? ' on' : ''), onclick: () => { sel.gender = k; UI.replaceModal(draw(), opts); } },
+        portrait({ race: sel.race, gender: k, hairStyle: k === 'man' ? 'crop' : 'long', beard: false, hair: '#5a3a22', tunic: '#3d5a80', alive: true, born: G.day - (GD.RACES[sel.race].maturity + 4) * DAYS_PER_YEAR, lifespan: 999, height: sel.height, build: sel.build }, 60),
+        h('b', {}, `${g.sym} ${g.name}`)))),
+      h('div', { class: 'row idrow' },
+        pick('c-orient', 'Drawn to', 'orientation', GD.ORIENTATIONS),
+        pick('c-pref', 'Type', 'pref', GD.PREFERENCES),
+        pick('c-height', 'Height', 'height', GD.HEIGHTS, () => UI.replaceModal(draw(), opts)),
+        pick('c-build', 'Build', 'build', GD.BUILDS, () => UI.replaceModal(draw(), opts))),
+      h('p', { class: 'dim small' }, `${GD.ORIENTATIONS[sel.orientation].desc} ${GD.PREFERENCES[sel.pref].desc || ''} Your partner choices follow from this. Only a man and a woman can have children together; anyone can adopt.`),
       h('h4', {}, 'Race'),
       h('div', { class: 'choices' }, Object.entries(GD.RACES).map(([k, r]) => h('div', { class: 'choice' + (sel.race === k ? ' on' : ''), onclick: () => { sel.race = k; sel.name = genName(k); UI.replaceModal(draw(), opts); } },
         racePortrait(k), h('b', {}, r.name), h('small', {}, `Comes of age at ${r.maturity} · lives ${r.life[0]}–${r.life[1]}`), h('small', { class: 'dim' }, r.desc)))),
@@ -60,6 +74,8 @@ Game.found = function (sel) {
     name: sel.name.trim().slice(0, 20), race: sel.race, birth: sel.birth === 'orphan' ? 'lowborn' : sel.birth,
     born: G.day - (r.maturity + Math.max(1, Math.round((r.primeEnd - r.maturity) * 0.08))) * DAYS_PER_YEAR - 40,
     house: G.house.name, status: 'party', loyalty: 100, corruption: 0, weapon: 1, trait: R.pick(['brave', 'wise', 'hardy', 'charming', 'ambitious', 'loyal']),
+    gender: sel.gender, orientation: sel.orientation, pref: sel.pref, height: sel.height, build: sel.build,
+    condition: null, infertile: R.chance(0.04), orientKnown: true, beard: sel.gender === 'man' ? R.chance(0.4) : sel.race === 'dwarf',
   });
   if (sel.birth === 'orphan') { mc.orphaned = true; mc.formative = 2; mc.lineageKnown = true; mc.secret = 'common'; }
   if (sel.birth === 'highborn') { G.house.prestige += 10; G.house.gold += 100; mc.gear.armor = 1; }
@@ -72,42 +88,78 @@ Game.found = function (sel) {
   G.house.heroes = [mc.id];
   G.house.reigns = [{ id: mc.id, from: year(), to: null, gen: 1 }];
   G.house.heirloom = makeHeirloom();
-  this.choosePartner(true);
+  this.matchmaker(mc, { opening: true });
 };
 
-Game.choosePartner = function (opening) {
+// Find a spouse for someone of the House (the head, or one of their kin).
+// Candidates follow the person's own orientation unless the House overrides it.
+function compatibleGenders(c) {
+  const other = c.gender === 'man' ? 'woman' : 'man';
+  return { straight: [other], gay: [c.gender], bi: [other, c.gender], ace: [other, c.gender] }[c.orientation || 'straight'];
+}
+Game.matchmaker = function (who, opts = {}) {
   const mc = ch(G.mcId);
+  const self = who.id === G.mcId;
+  const opening = !!opts.opening;
+  const forHeir = !!opts.forHeir;
   const tier = opening ? 0 : maxPartnerTier();
-  const cands = [genPartner(tier), genPartner(Math.max(0, tier - 1)), genPartner(tier)];
+  const genders = forHeir ? [who.gender === 'man' ? 'woman' : 'man'] : compatibleGenders(who);
+  const cands = [genPartner(tier, who, genders), genPartner(Math.max(0, tier - 1), who, genders), genPartner(tier, who, genders)];
+  const canSwitch = who.orientation !== 'straight';
   const done = (chosen) => {
     discardCandidates(cands, chosen ? chosen.id : null);
     UI.closeAll();
     if (chosen) {
       if (!opening) G.house.gold -= chosen.dowry;
       chosen.status = 'npc';
-      joinHouse(chosen, mc);
+      joinHouse(chosen, who);
       if (chosen.birth === 'highborn') G.house.prestige += 5;
+      const against = attraction(who, chosen) === 0;
+      if (against) {
+        who.forced = true; chosen.forced = true;
+        addBond(who, chosen, -15);
+        if (!self) {
+          addBond(who, mc, -55);
+          who.loyalty = clamp(who.loyalty - 30, -100, 100);
+          who.forcedBy = mc.id;
+          chron(`${who.name} was forced by ${mc.name} to marry ${chosen.name}, against their heart. ${who.name} will not forget it.`, 'bad', [who.id, chosen.id, mc.id], 'forced');
+        } else chron(`${who.name} married ${chosen.name} out of duty to the House, not love.`, 'dim', [who.id, chosen.id], 'duty');
+      } else if (!self) addBond(who, mc, 8);
       if (!opening) advanceDays(15);
     }
     if (opening) this.enterWorld(true);
     else this.after();
   };
+  const note = (c) => {
+    const kids = canConceive(who, c) ? null : (who.gender === c.gender ? 'No children together. Adoption is possible.' : null);
+    const love = attraction(who, c) === 0 ? (self ? 'A marriage of duty: no love on your side.' : `Against ${who.name}'s heart: they will resent you.`) : (attraction(who, c) > 1.15 ? `${who.name} is strongly drawn to them.` : null);
+    return [kids ? h('small', { class: 'bad' }, kids) : null, love ? h('small', { class: attraction(who, c) === 0 ? 'bad' : 'good' }, love) : null];
+  };
+  const intro = opening
+    ? 'Every House begins with a union. Choose who will be the other parent of your line. Their blood will shape your heirs.'
+    : self
+      ? `A matchmaker presents three suitors. With ${Math.round(G.house.prestige)} prestige and a ${GD.ESTATE[G.house.tier].name}, you can attract tier ${tier} matches.`
+      : `A match for ${who.name} (${GD.GENDERS[who.gender].name}, ${GD.ORIENTATIONS[who.orientation].name}${who.pref !== 'none' ? ', ' + GD.PREFERENCES[who.pref].name.toLowerCase() : ''}).`;
   const body = h('div', {},
-    h('p', { class: 'dim' }, opening
-      ? 'Every House begins with a union. Choose who will be the other parent of your line. Their blood will shape your heirs.'
-      : `A matchmaker presents three suitors. With ${Math.round(G.house.prestige)} prestige and a ${GD.ESTATE[G.house.tier].name}, you can attract tier ${tier} matches.`),
+    h('p', { class: 'dim' }, intro),
     h('div', { class: 'choices partners' }, cands.map((c) => h('div', { class: 'choice' },
       portrait(c, 110),
       h('b', {}, c.name), h('small', {}, UI.charLine(c)),
+      h('small', {}, `${bodyText(c)}${c.condition ? ' · ' + GD.CONDITIONS[c.condition].name : ''}`),
       h('small', {}, `${GD.BIRTH[birthKey(c)].name}${c.trait ? ' · ' + GD.TRAITS[c.trait].name : ''} · L${c.level} · Power ${power(c)}`),
       h('small', { class: 'dim' }, STATS.map((k) => `${STAT_NAMES[k]} ${stat(c, k).toFixed(0)}`).join(' · ')),
-      h('small', { class: 'dim' }, GD.RACES[c.race].desc),
-      h('small', { class: 'dim' }, `Children come of age at ~${GD.RACES[c.race].maturity} (if ${GD.RACES[c.race].name})`),
+      h('small', { class: 'dim' }, `${orientationText(c)}`),
+      h('small', { class: 'dim' }, `Children would come of age at ~${GD.RACES[c.race].maturity} (if ${GD.RACES[c.race].name})`),
+      note(c),
       act(opening ? 'Choose' : `Marry (${c.dowry}g)`, () => done(c), { cls: 'hl', disabled: !opening && G.house.gold < c.dowry })))),
-    !opening ? act('Decline for now', () => done(null)) : null,
+    h('div', { class: 'row' },
+      canSwitch && !forHeir ? act(self ? 'Seek a match who can give you an heir' : `Force a match that can give an heir`, () => { discardCandidates(cands, null); UI.closeAll(); this.matchmaker(who, { ...opts, forHeir: true }); }, { cls: self ? '' : 'danger', sub: self ? 'a marriage of duty' : `${who.name} will hate you for it` }) : null,
+      forHeir ? act('Back to matches of the heart', () => { discardCandidates(cands, null); UI.closeAll(); this.matchmaker(who, { ...opts, forHeir: false }); }) : null,
+      !opening ? act('Decline for now', () => done(null)) : null),
   );
-  UI.modal(body, { title: opening ? 'Choose your Partner' : 'Arranged Match', wide: true, locked: true });
+  UI.modal(body, { title: opening ? 'Choose your Partner' : self ? 'Arranged Match' : `A Match for ${who.name}`, wide: true, locked: true });
 };
+Game.choosePartner = function (opening) { this.matchmaker(ch(G.mcId), { opening }); };
 function maxPartnerTier() {
   let t = 0;
   GD.PARTNER_TIER_PRESTIGE.forEach((p, i) => { if (G.house.prestige >= p) t = i; });
@@ -286,21 +338,100 @@ Game.court = function (c) {
   const mc = ch(G.mcId);
   G.house.gold -= 20;
   advanceDays(10);
-  const gain = R.int(8, 15) + Math.round(stat(mc, 'wil') / 3) + (G.house.prestige > 30 ? 3 : 0) - (c.birth === 'highborn' && mc.birth !== 'highborn' ? 4 : 0);
-  addBond(c, mc, gain);
-  UI.toast(`You spend time with ${c.name}. Bond +${gain} (${Math.round(bond(c, mc))}).`);
+  const att = attraction(c, mc);
+  c.orientKnown = true;
+  let gain;
+  if (att === 0) {
+    gain = R.int(1, 4);
+    addBond(c, mc, gain);
+    UI.toast(`${c.name} enjoys your company, but isn't drawn to you that way (${GD.ORIENTATIONS[c.orientation].name}).`);
+  } else {
+    gain = Math.round((R.int(8, 15) + Math.round(stat(mc, 'wil') / 3) + (G.house.prestige > 30 ? 3 : 0) - (c.birth === 'highborn' && mc.birth !== 'highborn' ? 4 : 0)) * Math.min(1.5, att));
+    addBond(c, mc, gain);
+    UI.toast(`You spend time with ${c.name}. Bond +${gain} (${Math.round(bond(c, mc))}).${att > 1.15 ? ' They seem taken with you.' : ''}`);
+  }
   Log.add(`${mc.name} courts ${c.name}.`, 'dim');
   this.after(true);
 };
 Game.propose = function (c) {
   const mc = ch(G.mcId);
   if (c.status === 'npc' && householdCount() >= GD.ESTATE[G.house.tier].household) return UI.toast('Your household is full. Improve your estate.');
+  if (attraction(c, mc) === 0) return UI.toast(`${c.name} does not feel that way about you.`);
   const wasStatus = c.status;
   if (wasStatus !== 'npc') { c.house = G.house.name; marry(mc, c); c.loyalty = Math.max(c.loyalty, 60); }
   else joinHouse(c, mc);
   if (c.birth === 'highborn') G.house.prestige += 5;
   this.after();
 };
+// ---- relationships: mend or deepen bonds with your kin and companions
+Game.interact = function (c, kind) {
+  const mc = ch(G.mcId);
+  let gain = 0, text;
+  if (kind === 'time') {
+    advanceDays(7);
+    gain = R.int(3, 8) + (mc.trait === 'charming' ? 2 : 0) + (!isAdult(c) ? 3 : 0);
+    text = !isAdult(c) ? `${mc.name} spends a week with young ${c.name}.` : `${mc.name} and ${c.name} spend time together.`;
+  } else if (kind === 'gift') {
+    G.house.gold -= 30;
+    gain = R.int(5, 11);
+    text = `${mc.name} gives ${c.name} a gift.`;
+  } else if (kind === 'talk') {
+    advanceDays(14);
+    if (R.chance(clamp(0.45 + stat(mc, 'wil') / 40 + (c.trait === 'loyal' ? 0.15 : 0), 0.2, 0.9))) {
+      gain = R.int(12, 20);
+      text = `${mc.name} and ${c.name} talk long into the night. Old wounds begin to close.`;
+    } else {
+      gain = -R.int(3, 8);
+      text = `${mc.name} tries to talk with ${c.name}. It ends in shouting.`;
+    }
+  } else if (kind === 'apology') {
+    G.house.prestige = Math.max(0, G.house.prestige - 5);
+    c.apologised = true;
+    gain = 20;
+    c.loyalty = clamp(c.loyalty + 10, -100, 100);
+    text = `${mc.name} publicly asks ${c.name}'s forgiveness for the forced marriage.`;
+  }
+  addBond(c, mc, gain);
+  if (bond(c, mc) > 0 && c.forcedBy) {
+    c.forcedBy = null;
+    chron(`${c.name} has forgiven ${mc.name}.`, 'good', [c.id, mc.id], 'forgive');
+  } else Log.add(`${text} (bond ${gain >= 0 ? '+' : ''}${gain})`, gain >= 0 ? 'good' : 'bad', [c.id]);
+  UI.toast(`${text} Bond ${gain >= 0 ? '+' : ''}${gain} → ${Math.round(bond(c, mc))}.`);
+  this.after(true);
+};
+
+// ---- adoption: an orphan of the realm becomes a child of the House
+Game.adoptables = function () {
+  let list = Object.values(G.chars).filter((c) => c.alive && c.status === 'npc' && !isAdult(c) && (c.orphaned || c.parents.every((p) => !ch(p) || !ch(p).alive)));
+  if (list.length < 3) {
+    for (let i = list.length; i < 3; i++) {
+      const race = randomRace();
+      const k = makeChar({ race, born: G.day - R.int(0, Math.max(1, GD.RACES[race].maturity - 2)) * DAYS_PER_YEAR, birth: 'lowborn', lineageKnown: false, secret: R.weighted({ noble: 1, warrior: 1, common: 4, tainted: 0.6 }), corruption: 0 });
+      k.orphaned = true; k.foundling = true;
+      list.push(k);
+    }
+  }
+  return list.slice(0, 6);
+};
+Game.adopt = function (k) {
+  const mc = ch(G.mcId);
+  const sp = spouseOf(mc);
+  G.house.gold -= 40;
+  k.house = G.house.name;
+  k.status = 'household';
+  k.adoptedBy = [mc.id, sp ? sp.id : null].filter(Boolean);
+  k.loyalty = 45; k.corruption = 0;
+  mc.children.push(k.id);
+  if (sp) sp.children.push(k.id);
+  const legacy = Math.floor(G.house.generation / 2);
+  for (const s2 of STATS) k.bonus[s2] += legacy;
+  addBond(k, mc, 25);
+  if (sp) addBond(k, sp, 20);
+  if (!G.heirId) G.heirId = k.id;
+  chron(`${mc.name}${sp ? ' and ' + sp.name : ''} adopted ${k.name}${k.foundling ? ', a foundling' : ', an orphan'}, into House ${G.house.name}.`, 'birth', [k.id, mc.id], 'adopt');
+  this.after();
+};
+
 Game.research = function (c) {
   const cost = Math.max(10, 40 - G.house.up.library * 10);
   G.house.gold -= cost;

@@ -112,7 +112,7 @@ UI.renderTop = function () {
 
 UI.charLine = function (c) {
   const st = GD.STAGES[stageKey(c)].name;
-  return `${GD.RACES[c.race].name} · ${ageStr(c)} yrs · ${st}`;
+  return `${GD.GENDERS[c.gender || 'man'].sym} ${GD.RACES[c.race].name} · ${ageStr(c)} yrs · ${st}`;
 };
 
 UI.renderParty = function () {
@@ -186,6 +186,7 @@ UI.estatePanel = function () {
     act('Improve the Estate', () => this.showEstate(), { sub: 'tiers, upgrades, retinue' }),
     act('Household & Heir', () => this.showHousehold(), { sub: 'party, children, succession' }),
     unmarried ? act('Arranged Match', () => Game.arrangedMatch(), { sub: 'choose 1 of 3 partners', cls: 'hl' }) : null,
+    act('Adopt a Child', () => this.showAdoption(), { sub: 'give an orphan a family and a name' }),
     act('Family Tree', () => this.showTree()),
   ];
 };
@@ -331,6 +332,8 @@ UI.charBody = function (c) {
   if (parents.length) lineage = h('p', {}, 'Child of ', parents.map((p, i) => [i ? ' & ' : '', link(p)]));
   else if (c.lineageKnown) lineage = h('p', { class: 'dim' }, c.secret ? `Lineage: ${GD.SECRETS[c.secret].name}.` : 'Of common, unrecorded stock.');
   else lineage = h('p', { class: 'dim' }, 'Lineage unknown. Research it at a tavern.');
+  const adoptive = (c.adoptedBy || []).map(ch).filter(Boolean);
+  if (adoptive.length) lineage = h('div', {}, lineage, h('p', {}, 'Adopted by ', adoptive.map((p, i) => [i ? ' & ' : '', link(p)])));
   const grand = bloodline(c).filter((x) => x.depth === 2).map((x) => x.c);
   const actions = this.charActions(c);
   return h('div', { class: 'sheet' },
@@ -338,6 +341,12 @@ UI.charBody = function (c) {
       portrait(c, 140),
       h('div', { class: 'tags' }, tags),
       h('p', {}, this.charLine(c)),
+      h('p', { class: 'dim' }, `${GD.GENDERS[c.gender || 'man'].name} · ${bodyText(c)}`),
+      h('p', { class: 'dim' }, `Drawn to: ${orientationText(c)}`),
+      c.condition ? h('p', { class: 'bad', title: GD.CONDITIONS[c.condition].desc }, `Born ${GD.CONDITIONS[c.condition].name.toLowerCase()}: ${GD.CONDITIONS[c.condition].desc}`) : null,
+      c.infertileKnown ? h('p', { class: 'bad' }, 'Cannot have children.') : null,
+      c.adoptedBy && c.adoptedBy.length ? h('p', { class: 'good' }, 'Adopted into the House.') : null,
+      c.forcedBy ? h('p', { class: 'bad' }, `Forced into marriage by ${ch(c.forcedBy) ? ch(c.forcedBy).name : 'the House'}. Resentful.`) : null,
       h('p', { class: 'dim' }, `Born ${year(c.born)} · expected lifespan ~${Math.round((r.life[0] + r.life[1]) / 2)} · ${lifeLeft}`),
       c.alive ? h('p', { class: 'dim' }, `Formative ${Math.round(c.formative)}/${formativeCap(c)} · XP ×${xpMod(c).toFixed(2)}`) : null,
       ...actions),
@@ -352,7 +361,8 @@ UI.charBody = function (c) {
       grand.length ? h('p', { class: 'dim' }, 'Grandparents: ', grand.map((g, i) => [i ? ', ' : '', link(g)])) : null,
       sp ? h('p', {}, 'Spouse: ', link(sp)) : h('p', { class: 'dim' }, 'Unmarried'),
       kids.length ? h('p', {}, 'Children: ', kids.map((k, i) => [i ? ', ' : '', link(k), k.alive ? ` (${ageStr(k)})` : ''])) : null,
-      mc && c.id !== mc.id && c.alive ? h('p', { class: 'dim' }, `Bond with ${mc.name}: ${Math.round(bond(c, mc))} · Loyalty to the House: ${Math.round(c.loyalty)}`) : null,
+      mc && c.id !== mc.id && c.alive ? h('p', { class: bond(c, mc) < -40 ? 'bad' : 'dim' }, `Bond with ${mc.name}: ${Math.round(bond(c, mc))}${bond(c, mc) < -40 ? ' (resents you)' : ''} · Loyalty to the House: ${Math.round(c.loyalty)}`) : null,
+      mc && c.id !== mc.id && c.alive && isAdult(c) && c.orientKnown && !spouseOf(c) && !isDescendantOf(c, mc.id) ? h('p', { class: 'dim' }, attraction(c, mc) === 0 ? `Not drawn to ${mc.name}.` : attraction(c, mc) > 1.15 ? `Strongly drawn to ${mc.name}.` : `Could be drawn to ${mc.name}.`) : null,
       c.alive && !c.house && isAdult(c) ? h('p', { class: c.corruption > 60 ? 'bad' : 'dim' }, `Resentment: ${c.corruption > 70 ? 'dangerous' : c.corruption > 40 ? 'simmering' : 'low'}`) : null,
       this.lifeEvents(c),
     ));
@@ -379,6 +389,17 @@ UI.charActions = function (c) {
   if (!c.lineageKnown && inTown) {
     const cost = Math.max(10, 40 - G.house.up.library * 10);
     out.push(act('Research Lineage', () => { Game.research(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: `${cost}g`, disabled: G.house.gold < cost }));
+  }
+  // relationships with kin and companions
+  const close = c.house === G.house.name || c.status === 'party' || c.status === 'household';
+  if (close && c.status !== 'rival') {
+    out.push(act('Spend time together', () => { Game.interact(c, 'time'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '7 days · bond' }));
+    out.push(act('Give a gift', () => { Game.interact(c, 'gift'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '30g · bond', disabled: G.house.gold < 30 }));
+    if (bond(c, mc) < 0) out.push(act('Heart-to-heart', () => { Game.interact(c, 'talk'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '14 days · may heal old wounds, or open them' }));
+    if (c.forcedBy === mc.id && !c.apologised) out.push(act('Ask forgiveness', () => { Game.interact(c, 'apology'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '5 prestige · once' }));
+  }
+  if (c.house === G.house.name && isAdult(c) && !spouseOf(c) && c.id !== mc.id && atEstate) {
+    out.push(act('Arrange a marriage', () => { this.closeAll(); Game.matchmaker(c); }, { sub: `match ${c.name} with a suitor` }));
   }
   if (c.house === G.house.name && c.birth === 'bastard' && !c.legit) out.push(act('Legitimise', () => { Game.legitimise(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '10 prestige', disabled: G.house.prestige < 10 }));
   if (c.house === G.house.name && isDescendantOf(c, mc.id) && G.heirId !== c.id) out.push(act('Name as Heir', () => { G.heirId = c.id; chron(`${c.name} is named heir of House ${G.house.name}.`, 'good', [c.id], 'heir'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }));
@@ -435,6 +456,18 @@ UI.showMarket = function () {
   }
   rows.push(h('p', { class: 'dim' }, `Gear up to tier ${maxTier} is available. An armory and a bigger estate unlock better smiths.`));
   this.modal(rows, { title: 'Market' });
+};
+
+UI.showAdoption = function () {
+  const list = Game.adoptables();
+  this.modal([
+    h('p', { class: 'dim' }, 'Orphans and foundlings of the realm. An adopted child carries your House name, can be named heir, and inherits the House legacy, but not your blood.'),
+    h('div', { class: 'grid' }, list.map((k) => this.miniCard(k, () => { }, [
+      h('small', {}, `${bodyText(k)}${k.condition ? ' · ' + GD.CONDITIONS[k.condition].name : ''}`),
+      k.foundling ? h('small', { class: 'dim' }, 'A foundling: lineage unknown') : null,
+      act('Adopt (40g)', () => { this.closeAll(); Game.adopt(k); }, { disabled: G.house.gold < 40 }),
+    ]))),
+  ], { title: 'Adopt a Child', wide: true });
 };
 
 // ---------------------------------------------------------------- estate screens
@@ -503,7 +536,7 @@ UI.treeEl = function (opts = {}) {
       h('div', {},
         h('b', {}, (p.id === G.mcId && p.alive ? '♛ ' : p.id === G.heirId ? '★ ' : G.house.heroes.includes(p.id) ? '♔ ' : '') + p.name),
         h('small', {}, `${GD.RACES[p.race].name} · ${year(p.born)}–${p.alive ? '' : year(p.died)}`),
-        h('small', { class: p.birth === 'bastard' && !p.legit ? 'bad' : 'dim' }, GD.BIRTH[birthKey(p)].name + (G.house.heroes.includes(p.id) ? ' · Head of House' : '')),
+        h('small', { class: p.birth === 'bastard' && !p.legit ? 'bad' : 'dim' }, `${GD.GENDERS[p.gender || 'man'].sym} ` + (p.adoptedBy && p.adoptedBy.length ? 'Adopted' : GD.BIRTH[birthKey(p)].name) + (G.house.heroes.includes(p.id) ? ' · Head of House' : '')),
         !p.alive && p.cause ? h('small', { class: 'dim' }, `† ${p.cause}`) : null));
     return h('li', {},
       h('div', { class: 'couple' }, person(c), ...uniq.map((s2) => [h('span', { class: 'amp' }, '⚭'), person(s2)])),
