@@ -1,0 +1,749 @@
+// Core model: random helpers, characters, aging, genetics, world simulation, map, save/load.
+'use strict';
+
+const R = {
+  int: (a, b) => Math.floor(Math.random() * (b - a + 1)) + a,
+  float: (a, b) => a + Math.random() * (b - a),
+  pick: (arr) => arr[Math.floor(Math.random() * arr.length)],
+  chance: (p) => Math.random() < p,
+  weighted(obj) {
+    let total = 0;
+    for (const k in obj) total += obj[k];
+    let r = Math.random() * total;
+    for (const k in obj) { r -= obj[k]; if (r <= 0) return k; }
+    return Object.keys(obj)[0];
+  },
+  shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    return arr;
+  },
+};
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+let G = null; // the whole game state (serialisable)
+
+// ---------------------------------------------------------------- log
+const Log = {
+  listeners: [],
+  add(text, kind = 'info') {
+    const entry = { text, kind, year: year() };
+    G.log.push(entry);
+    if (G.log.length > 200) G.log.shift();
+    if (G.skipLog) G.skipLog.push(entry);
+    if (G.mcId) this.listeners.forEach((f) => f(entry));
+  },
+};
+
+// ---------------------------------------------------------------- time
+function year(day = G.day) { return START_YEAR + Math.floor(day / DAYS_PER_YEAR); }
+function seasonName(day = G.day) {
+  return ['Spring', 'Summer', 'Autumn', 'Winter'][Math.floor((day % DAYS_PER_YEAR) / 90)];
+}
+function advanceDays(n) {
+  const before = Math.floor(G.day / DAYS_PER_YEAR);
+  G.day += Math.round(n);
+  const after = Math.floor(G.day / DAYS_PER_YEAR);
+  for (let y = before + 1; y <= after; y++) yearTick();
+}
+
+// ---------------------------------------------------------------- characters
+function genName(race) {
+  const p = GD.NAME_PARTS[race];
+  return R.pick(p.a) + R.pick(p.b);
+}
+function randomRace(weights) {
+  return R.weighted(weights || { human: 5, orc: 2, halfling: 2, dwarf: 2, elf: 1.2 });
+}
+function rollBase(race) {
+  const b = {};
+  for (const k of STATS) b[k] = Math.max(1, GD.RACES[race].base[k] + R.int(-1, 2));
+  return b;
+}
+
+function makeChar(o = {}) {
+  const race = o.race || randomRace();
+  const r = GD.RACES[race];
+  const id = 'c' + (G.nextId++);
+  const c = {
+    id, race,
+    name: o.name || genName(race),
+    born: o.born ?? (G.day - (r.maturity + R.int(0, 8)) * DAYS_PER_YEAR),
+    lifespan: o.lifespan || R.int(r.life[0], r.life[1]),
+    parents: o.parents || [],
+    spouse: null,
+    children: [],
+    birth: o.birth || 'lowborn',
+    orphaned: false,
+    house: o.house || null,
+    status: o.status || 'npc', // party | household | npc | rival | dead
+    town: o.town ?? R.int(0, G.world.towns.length - 1),
+    base: o.base || rollBase(race),
+    bonus: { str: 0, agi: 0, int: 0, wil: 0, vit: 0 },
+    level: o.level || 1,
+    xp: 0, hp: 1, formative: 0,
+    alive: true, died: null, cause: null,
+    bonds: {},
+    loyalty: o.loyalty ?? R.int(-5, 15),
+    corruption: o.corruption ?? R.int(0, 20),
+    evil: false,
+    lineageKnown: o.lineageKnown ?? true,
+    secret: o.secret || null,
+    legit: false,
+    bastardStat: R.pick(STATS),
+    trait: o.trait !== undefined ? o.trait : (R.chance(0.6) ? R.pick(Object.keys(GD.TRAITS)) : null),
+    hair: o.hair || R.pick(GD.HAIR),
+    tunic: o.tunic || R.pick(GD.TUNIC),
+    gear: { weapon: o.weapon || 0, armor: o.armor || 0 },
+    generation: o.generation || 0,
+  };
+  G.chars[c.id] = c;
+  c.hp = maxHp(c);
+  return c;
+}
+
+function ch(id) { return id ? G.chars[id] : null; }
+function age(c) { return ((c.alive ? G.day : c.died) - c.born) / DAYS_PER_YEAR; }
+function ageStr(c) { return Math.floor(age(c)); }
+function isAdult(c) { return age(c) >= GD.RACES[c.race].maturity; }
+
+function stageKey(c) {
+  const r = GD.RACES[c.race];
+  const a = age(c);
+  if (a < r.maturity) return 'child';
+  if (a < r.maturity + (r.primeEnd - r.maturity) * 0.3) return 'youth';
+  if (a < r.primeEnd) return 'prime';
+  if (a < r.elder) return 'seasoned';
+  if (a < r.elder + (c.lifespan - r.elder) * 0.5) return 'elder';
+  return 'venerable';
+}
+function birthKey(c) {
+  if (c.birth === 'bastard' && c.legit) return 'lowborn';
+  if (c.orphaned && c.birth !== 'highborn') return 'orphan';
+  return c.birth;
+}
+function formativeCap(c) { return birthKey(c) === 'orphan' ? 30 : 20; }
+
+function ageMod(c, k) {
+  const st = GD.STAGES[stageKey(c)];
+  if (PHYS[k]) {
+    let m = st.phys;
+    if (m < 1) {
+      const protect = Math.min(0.6, c.formative * 0.03) * (c.trait === 'frail' ? 0.5 : 1);
+      m = 1 - (1 - m) * (1 - protect);
+    }
+    return m;
+  }
+  return st.mind;
+}
+
+function stat(c, k) {
+  const r = GD.RACES[c.race];
+  let v = c.base[k] + r.growth[k] * (c.level - 1) * 0.9 + (c.bonus[k] || 0);
+  const b = GD.BIRTH[birthKey(c)];
+  if (b.mods[k]) v *= b.mods[k];
+  if (birthKey(c) === 'bastard' && c.bastardStat === k) v *= 1.15;
+  v *= ageMod(c, k);
+  return Math.max(1, Math.round(v * 10) / 10);
+}
+function topStat(c) {
+  let best = 'str';
+  for (const k of STATS) if (stat(c, k) > stat(c, best)) best = k;
+  return best;
+}
+function maxHp(c) {
+  let hp = 24 + stat(c, 'vit') * 6 + c.level * 5;
+  if (c.trait === 'hardy') hp *= 1.15;
+  if (c.trait === 'frail') hp *= 0.85;
+  return Math.round(hp);
+}
+function weaponAtk(c) {
+  let a = c.gear.weapon ? GD.GEAR[c.gear.weapon - 1].atk : 0;
+  if (G.mcId === c.id && G.house.heirloom) a += G.house.heirloom.power;
+  return a;
+}
+function armorDef(c) { return c.gear.armor ? GD.GEAR[c.gear.armor - 1].def : 0; }
+function power(c) {
+  // rough combat rating for UI and matchmaking
+  return Math.round(STATS.reduce((s, k) => s + stat(c, k), 0) + c.level * 2 + weaponAtk(c) + armorDef(c));
+}
+
+function xpMod(c) {
+  let m = GD.STAGES[stageKey(c)].xp * GD.BIRTH[birthKey(c)].xp * (1 + c.formative * 0.02);
+  if (c.trait === 'wise') m *= 1.15;
+  if (c.house === G.house.name) m *= 1 + G.house.up.yard * 0.1;
+  return m;
+}
+function xpNeed(level) { return Math.round(40 * Math.pow(level, 1.5)); }
+function gainXp(c, amount) {
+  const gained = Math.round(amount * xpMod(c));
+  c.xp += gained;
+  let leveled = false;
+  while (c.xp >= xpNeed(c.level)) {
+    c.xp -= xpNeed(c.level);
+    c.level++;
+    leveled = true;
+  }
+  if (leveled) { Log.add(`${c.name} reached level ${c.level}.`, 'good'); c.hp = Math.min(maxHp(c), c.hp + 10); }
+  return gained;
+}
+function addFormative(c, n) {
+  if (stageKey(c) !== 'youth') return 0;
+  const mult = birthKey(c) === 'orphan' ? 1.5 : 1;
+  const before = c.formative;
+  c.formative = Math.min(formativeCap(c), c.formative + n * mult);
+  return c.formative - before;
+}
+
+function bond(a, b) { return a.bonds[b.id] || 0; }
+function addBond(a, b, n) {
+  if (a.id === b.id) return;
+  const mult = (a.trait === 'charming' || b.trait === 'charming') ? 1.4 : 1;
+  a.bonds[b.id] = clamp((a.bonds[b.id] || 0) + n * mult, -100, 100);
+  b.bonds[a.id] = clamp((b.bonds[a.id] || 0) + n * mult, -100, 100);
+}
+
+function kill(c, cause) {
+  if (!c.alive) return;
+  c.alive = false;
+  c.died = G.day;
+  c.cause = cause;
+  const wasStatus = c.status;
+  c.status = 'dead';
+  G.party = G.party.filter((id) => id !== c.id);
+  if (c.id === G.mcId) G.pendingSuccession = true;
+  if (c.id === G.heirId) G.heirId = null;
+  const kind = (c.house === G.house.name || wasStatus === 'party') ? 'bad' : 'dim';
+  Log.add(`${c.name} (${GD.RACES[c.race].name}, ${ageStr(c)}) died: ${cause}.`, kind);
+  // children may become orphans
+  for (const kid of c.children.map(ch)) {
+    if (kid && kid.alive && !isAdult(kid) && kid.parents.every((p) => !ch(p) || !ch(p).alive)) kid.orphaned = true;
+  }
+}
+
+function marry(a, b) {
+  a.spouse = b.id;
+  b.spouse = a.id;
+  addBond(a, b, 20);
+  Log.add(`${a.name} and ${b.name} were married.`, 'good');
+}
+function spouseOf(c) { const s = ch(c.spouse); return s && s.alive ? s : null; }
+
+function childBase(a, b, race) {
+  const r = GD.RACES[race];
+  const out = {};
+  const eff = (p, k) => p.base[k] + (p.bonus[k] || 0) * 0.5 + (p.level - 1) * GD.RACES[p.race].growth[k] * 0.25;
+  for (const k of STATS) out[k] = Math.max(1, Math.round((r.base[k] + (eff(a, k) + eff(b, k)) / 2) / 2 + R.int(-1, 2)));
+  return out;
+}
+
+function haveChild(a, b) {
+  const race = R.chance(0.5) ? a.race : b.race;
+  const married = a.spouse === b.id;
+  let birth;
+  const isHouse = a.house === G.house.name || b.house === G.house.name;
+  if (!married) birth = 'bastard';
+  else if (a.birth === 'highborn' || b.birth === 'highborn' || (isHouse && G.house.prestige >= 40)) birth = 'highborn';
+  else birth = 'lowborn';
+  const kid = makeChar({
+    race, born: G.day, parents: [a.id, b.id], birth,
+    house: isHouse ? G.house.name : null,
+    status: isHouse ? 'household' : 'npc',
+    town: a.status === 'npc' ? a.town : R.int(0, G.world.towns.length - 1),
+    base: childBase(a, b, race),
+    hair: R.chance(0.5) ? a.hair : b.hair,
+    loyalty: isHouse ? 40 : 10 + Math.round(((a.loyalty || 0) + (b.loyalty || 0)) / 4),
+    corruption: isHouse ? 0 : R.int(0, 10),
+    generation: Math.max(a.generation, b.generation) + 1,
+    trait: R.chance(0.4) ? (R.chance(0.5) && a.trait ? a.trait : b.trait) : (R.chance(0.4) ? R.pick(Object.keys(GD.TRAITS)) : null),
+  });
+  if (isHouse) {
+    const legacy = Math.floor(G.house.generation / 2);
+    for (const k of STATS) kid.bonus[k] += legacy;
+  }
+  a.children.push(kid.id);
+  b.children.push(kid.id);
+  // childhood friends: companions' children bond with House children
+  const label = birth === 'bastard' ? 'a bastard child' : 'a child';
+  Log.add(`${a.name} and ${b.name} had ${label}: ${kid.name} (${GD.RACES[race].name}).`, isHouse ? 'good' : 'dim');
+  if (isHouse && !G.heirId && G.mcId && (a.id === G.mcId || b.id === G.mcId)) G.heirId = kid.id;
+  if (isHouse) G.house.prestige += 1;
+  return kid;
+}
+
+function makeHeirloom() {
+  return { name: R.pick(['Ancestral Blade', 'Founder\'s Sword', 'Oathkeeper', 'Hearthguard']), power: 2, gens: 1 };
+}
+
+// lineage helpers
+function bloodline(c) {
+  // ancestors' names (for character sheet)
+  const out = [];
+  const walk = (id, depth) => {
+    const p = ch(id);
+    if (!p || depth > 3) return;
+    out.push({ c: p, depth });
+    p.parents.forEach((pp) => walk(pp, depth + 1));
+  };
+  c.parents.forEach((p) => walk(p, 1));
+  return out;
+}
+function isDescendantOf(c, ancestorId) {
+  const seen = new Set();
+  const stack = [...c.parents];
+  while (stack.length) {
+    const id = stack.pop();
+    if (id === ancestorId) return true;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const p = ch(id);
+    if (p) stack.push(...p.parents);
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------- world map
+function genMap(W, H) {
+  // value noise
+  const noise = (scale) => {
+    const gw = Math.ceil(W / scale) + 2, gh = Math.ceil(H / scale) + 2;
+    const g = [];
+    for (let i = 0; i < gw * gh; i++) g.push(Math.random());
+    return (x, y) => {
+      const fx = x / scale, fy = y / scale;
+      const ix = Math.floor(fx), iy = Math.floor(fy);
+      const tx = fx - ix, ty = fy - iy;
+      const s = (t) => t * t * (3 - 2 * t);
+      const v = (a, b) => g[b * gw + a];
+      const top = v(ix, iy) * (1 - s(tx)) + v(ix + 1, iy) * s(tx);
+      const bot = v(ix, iy + 1) * (1 - s(tx)) + v(ix + 1, iy + 1) * s(tx);
+      return top * (1 - s(ty)) + bot * s(ty);
+    };
+  };
+  const n1 = noise(5), n2 = noise(2.5), nf = noise(3);
+  const tiles = [];
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const dx = (x - W / 2) / (W / 2), dy = (y - H / 2) / (H / 2);
+      const edge = Math.max(Math.abs(dx), Math.abs(dy));
+      let e = n1(x, y) * 0.7 + n2(x, y) * 0.3 - Math.pow(edge, 3) * 0.55 + 0.12;
+      let h, type;
+      if (e < 0.3) { h = 0; type = 'water'; }
+      else if (e < 0.36) { h = 1; type = 'sand'; }
+      else if (e < 0.58) { h = 1 + (e > 0.48 ? 1 : 0); type = nf(x, y) > 0.55 ? 'forest' : 'grass'; }
+      else if (e < 0.7) { h = 3; type = 'hills'; }
+      else { h = 4; type = 'mountain'; }
+      tiles.push({ x, y, h, type, feature: null });
+    }
+  }
+  return { W, H, tiles };
+}
+function tileAt(x, y) {
+  const m = G.world.map;
+  if (x < 0 || y < 0 || x >= m.W || y >= m.H) return null;
+  return m.tiles[y * m.W + x];
+}
+function passable(t) { return t && t.type !== 'water'; }
+function neighbors(t) {
+  return [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => tileAt(t.x + dx, t.y + dy)).filter(passable);
+}
+function findPath(from, to) {
+  if (!passable(to)) return null;
+  const key = (t) => t.y * G.world.map.W + t.x;
+  const prev = new Map([[key(from), null]]);
+  const q = [from];
+  while (q.length) {
+    const t = q.shift();
+    if (t === to) break;
+    for (const n of neighbors(t)) if (!prev.has(key(n))) { prev.set(key(n), t); q.push(n); }
+  }
+  if (!prev.has(key(to))) return null;
+  const path = [];
+  for (let t = to; t && t !== from; t = prev.get(key(t))) path.unshift(t);
+  return path;
+}
+
+function placeFeatures(map) {
+  const land = map.tiles.filter((t) => t.type === 'grass' || t.type === 'forest');
+  // estate: land tile nearest centre
+  land.sort((a, b) => Math.hypot(a.x - map.W / 2, a.y - map.H / 2) - Math.hypot(b.x - map.W / 2, b.y - map.H / 2));
+  const estate = land[0];
+  estate.feature = 'estate'; estate.type = 'grass';
+  // reachable set
+  const seen = new Set([estate]);
+  const q = [estate];
+  while (q.length) { const t = q.shift(); for (const n of neighbors(t)) if (!seen.has(n)) { seen.add(n); q.push(n); } }
+  const reach = [...seen];
+  const far = (t, list, d) => list.every((o) => Math.abs(o.x - t.x) + Math.abs(o.y - t.y) >= d);
+  const towns = [];
+  for (const t of R.shuffle(reach.filter((t) => t.type === 'grass' || t.type === 'sand'))) {
+    if (towns.length >= 3) break;
+    if (far(t, [estate, ...towns], 5)) { t.feature = 'town'; t.type = 'grass'; t.townIdx = towns.length; towns.push(t); }
+  }
+  const ruins = [];
+  for (const t of R.shuffle(reach.filter((t) => t.type === 'hills' || t.type === 'forest' || t.type === 'mountain'))) {
+    if (ruins.length >= 3) break;
+    if (far(t, [estate, ...towns, ...ruins], 4)) { t.feature = 'ruins'; ruins.push(t); t.cleared = 0; }
+  }
+  return { estate, towns, ruins };
+}
+
+// ---------------------------------------------------------------- new game
+function newGame() {
+  G = {
+    version: 1,
+    day: 0,
+    nextId: 1,
+    chars: {},
+    party: [],
+    mcId: null,
+    heirId: null,
+    founderId: null,
+    log: [],
+    house: {
+      name: 'Ashford', color: GD.HOUSE_COLORS[0], prestige: 0, gold: 150, tier: 0,
+      up: { horses: 0, livestock: 0, yard: 0, library: 0, chapel: 0, armory: 0 },
+      retinue: 0, potions: 3, generation: 1, heirloom: null, heroes: [],
+    },
+    world: { map: null, towns: [], prosperity: 30, era: null, eras: [], victory: false },
+    pos: { x: 0, y: 0 },
+    pendingSuccession: false,
+    stats: { battles: 0, deaths: 0 },
+  };
+  let map, feats;
+  for (let tries = 0; tries < 30; tries++) {
+    map = genMap(18, 18);
+    G.world.map = map;
+    feats = placeFeatures(map);
+    if (feats.towns.length === 3 && feats.ruins.length >= 2) break;
+  }
+  G.world.map = map;
+  G.world.towns = feats.towns.map((t, i) => ({ name: GD.TOWN_NAMES[i], x: t.x, y: t.y }));
+  G.world.estate = { x: feats.estate.x, y: feats.estate.y };
+  G.pos = { x: feats.estate.x, y: feats.estate.y };
+  startEra('peace', 6);
+  seedPopulation();
+}
+
+function seedPopulation() {
+  // NPC families across the towns, so lineages exist from the start
+  for (let i = 0; i < 9; i++) {
+    const town = i % G.world.towns.length;
+    const a = makeChar({ town, birth: R.pick(['lowborn', 'lowborn', 'highborn', 'bastard']) });
+    if (R.chance(0.55)) {
+      const b = makeChar({ town, race: R.chance(0.7) ? a.race : randomRace(), birth: R.pick(['lowborn', 'lowborn', 'highborn']) });
+      marry(a, b);
+      const kids = R.int(0, 2);
+      for (let k = 0; k < kids; k++) {
+        const kid = haveChild(a, b);
+        kid.born = G.day - R.int(1, GD.RACES[kid.race].maturity + 6) * DAYS_PER_YEAR;
+      }
+    }
+  }
+  for (let i = 0; i < 5; i++) spawnWanderer();
+  G.log = [];
+}
+function spawnWanderer(town) {
+  const orphan = R.chance(0.45);
+  const c = makeChar({
+    town: town ?? R.int(0, G.world.towns.length - 1),
+    birth: orphan ? 'lowborn' : R.pick(['lowborn', 'lowborn', 'bastard', 'highborn']),
+    lineageKnown: false,
+    secret: R.weighted({ noble: 1, warrior: 1.4, common: 3, tainted: 0.8 }),
+    level: Math.max(1, Math.round(partyLevel() + R.int(-2, 1))),
+  });
+  c.orphaned = orphan;
+  if (c.secret === 'tainted') c.corruption += 15;
+  return c;
+}
+function partyLevel() {
+  if (!G.party || !G.party.length) return 1;
+  return G.party.map(ch).reduce((s, c) => s + c.level, 0) / G.party.length;
+}
+
+// ---------------------------------------------------------------- eras
+function startEra(type, years) {
+  const len = years || R.int(6, 15);
+  G.world.era = { type, start: year(), end: year() + len };
+  G.world.eras.push({ type, start: year() });
+  if (G.log && G.mcId) Log.add(`A new era dawns: the ${GD.ERAS[type].name}.`, type === 'war' || type === 'famine' ? 'bad' : 'good');
+}
+function era() { return GD.ERAS[G.world.era.type]; }
+function nextEra() {
+  const p = G.world.prosperity / 100;
+  if (G.world.prosperity >= 95) return 'golden';
+  const cur = G.world.era.type;
+  const w = { abundance: 0.4 + p * 2, peace: 0.5 + p * 2, famine: 1.4 - p * 1.3, war: 1.5 - p * 1.3 };
+  if (cur !== 'golden') w[cur] *= 0.4; // eras tend to change
+  return R.weighted(w);
+}
+function addProsperity(n) {
+  const before = G.world.prosperity;
+  G.world.prosperity = clamp(G.world.prosperity + n, 0, 100);
+  if (before < 95 && G.world.prosperity >= 95 && G.world.era.type !== 'golden') {
+    startEra('golden', 50);
+    G.world.victory = true;
+    G.pendingVictory = true;
+  }
+}
+
+// ---------------------------------------------------------------- yearly tick
+function yearTick() {
+  const h = G.house;
+  const E = era();
+  const y = year();
+  // income
+  const income = Math.round(GD.ESTATE[h.tier].income * E.income + h.up.livestock * 40);
+  h.gold += income;
+  addProsperity(E.drift + (G.world.era.type === 'golden' ? 0 : 0));
+
+  const alive = Object.values(G.chars).filter((c) => c.alive);
+  // aging and death
+  for (const c of alive) {
+    const a = age(c);
+    const st = stageKey(c);
+    if (a >= c.lifespan) { kill(c, 'old age'); continue; }
+    let risk = st === 'elder' ? 0.02 : st === 'venerable' ? 0.09 : 0.002;
+    if (c.trait === 'frail') risk *= 1.6;
+    if (G.world.era.type === 'famine' && c.house !== h.name) risk += 0.01;
+    if (R.chance(risk)) { kill(c, st === 'child' ? 'sickness' : 'illness'); continue; }
+    if (c.hp < maxHp(c)) c.hp = maxHp(c);
+    // House children grow up at the estate
+    if (c.house === h.name) {
+      const r = GD.RACES[c.race];
+      if (st === 'child' && h.up.yard) c.bonus[R.pick(['str', 'agi', 'vit'])] += 0.25 * h.up.yard;
+      if (a >= r.maturity && a - 1 < r.maturity) {
+        c.bonus.int += h.up.library; c.bonus.wil += h.up.library;
+        Log.add(`${c.name} of House ${h.name} has come of age${c.id !== G.mcId ? ' and may join the party' : ''}.`, 'good');
+        h.prestige += 2;
+      }
+    }
+  }
+
+  const living = Object.values(G.chars).filter((c) => c.alive);
+  const adults = living.filter((c) => isAdult(c) && !c.evil && stageKey(c) !== 'venerable');
+
+  // bonds grow between people who live and travel together
+  const together = living.filter((c) => c.status === 'party' || c.status === 'household');
+  for (let i = 0; i < together.length; i++) for (let j = i + 1; j < together.length; j++) {
+    const a = together[i], b = together[j];
+    addBond(a, b, R.int(0, 6) + (a.status === 'party' && b.status === 'party' ? 3 : 0));
+    if (!isAdult(a) && !isAdult(b)) addBond(a, b, 4);
+  }
+  // childhood friends: companions' kids in town bond with House kids
+  const houseKids = living.filter((c) => c.house === h.name && !isAdult(c));
+  const compKids = living.filter((c) => c.house !== h.name && !isAdult(c) && c.parents.some((p) => ch(p) && (ch(p).status === 'party' || ch(p).status === 'household')));
+  for (const a of houseKids) for (const b of compKids) addBond(a, b, R.int(3, 8));
+
+  // marriages
+  const single = adults.filter((c) => !spouseOf(c) && c.id !== G.mcId);
+  R.shuffle(single);
+  const used = new Set();
+  for (const a of single) {
+    if (used.has(a.id)) continue;
+    for (const b of single) {
+      if (b.id === a.id || used.has(b.id) || isDescendantOf(a, b.id) || isDescendantOf(b, a.id) || siblings(a, b)) continue;
+      const sameGroup = (a.status === 'npc' && b.status === 'npc' && a.town === b.town) || (a.status !== 'npc' && b.status !== 'npc');
+      if (!sameGroup) continue;
+      const bd = bond(a, b);
+      if ((bd >= 60 && R.chance(0.4)) || (a.status === 'npc' && b.status === 'npc' && R.chance(0.08))) {
+        marry(a, b); used.add(a.id); used.add(b.id); break;
+      }
+      // affairs between close companions
+      if (bd >= 45 && a.status !== 'npc' && R.chance(0.04)) { haveChild(a, b); used.add(a.id); used.add(b.id); break; }
+    }
+  }
+  // births
+  const doneCouples = new Set();
+  for (const a of adults) {
+    const b = spouseOf(a);
+    if (!b || doneCouples.has(a.id) || !adults.includes(b)) continue;
+    doneCouples.add(a.id); doneCouples.add(b.id);
+    if (['elder'].includes(stageKey(a)) || ['elder'].includes(stageKey(b))) continue;
+    const kids = a.children.filter((k) => b.children.includes(k)).length;
+    let p = 0.24 * ((GD.RACES[a.race].fertility + GD.RACES[b.race].fertility) / 2) * E.births;
+    if (a.trait === 'fertile' || b.trait === 'fertile') p *= 1.5;
+    if (kids >= 4) p *= 0.25;
+    if ((a.id === G.mcId || b.id === G.mcId) && kids === 0) p = Math.max(p, 0.55);
+    if (R.chance(p)) haveChild(a, b);
+  }
+
+  // corruption and betrayal
+  const mc = ch(G.mcId);
+  for (const c of living) {
+    if (!isAdult(c) || c.evil || c.house === h.name || c.status === 'rival') continue;
+    let d = R.float(0, 6);
+    if (G.world.era.type === 'war' || G.world.era.type === 'famine') d += 4;
+    const bk = birthKey(c);
+    if (bk === 'bastard') d += 3;
+    if (bk === 'orphan') d += 2;
+    if (c.trait === 'ambitious') d += 3;
+    if (c.trait === 'loyal') d *= 0.3;
+    if (c.status === 'party' || c.status === 'household') d -= 5;
+    d -= Math.max(c.loyalty, mc ? bond(c, mc) : 0) / 20;
+    if (c.grudge) d += 4;
+    // people with no tie to the House rarely come to hate it
+    const tied = c.grudge || c.status !== 'npc' || c.servedHouse ||
+      c.parents.some((p) => ch(p) && (ch(p).servedHouse || ch(p).house === h.name)) ||
+      Object.entries(c.bonds).some(([id, v]) => Math.abs(v) > 15 && ch(id) && ch(id).house === h.name);
+    if (!tied) d *= 0.3;
+    c.corruption = clamp(c.corruption + d, 0, 120);
+    const rivals = living.filter((x) => x.status === 'rival').length;
+    if (c.corruption >= 100 && rivals < 3) turnEvil(c);
+  }
+  // rivals grow in power
+  for (const c of living.filter((x) => x.status === 'rival')) if (R.chance(0.6)) c.level++;
+
+  // world population upkeep
+  const npcAdults = living.filter((c) => c.status === 'npc' && isAdult(c));
+  if (npcAdults.length < 14) for (let i = 0; i < 3; i++) spawnWanderer();
+
+  // era change
+  if (y >= G.world.era.end && G.world.era.type !== 'golden') startEra(nextEra());
+
+  Log.add(`— Year ${y} begins (${GD.ERAS[G.world.era.type].short}). Estate income +${income}g.`, 'year');
+}
+function siblings(a, b) { return a.parents.length && a.parents.some((p) => b.parents.includes(p)); }
+
+function turnEvil(c) {
+  const wasParty = c.status === 'party' || c.status === 'household';
+  c.evil = true;
+  c.status = 'rival';
+  G.party = G.party.filter((id) => id !== c.id);
+  c.level += 2;
+  const mc = ch(G.mcId);
+  const friend = mc && bond(c, mc) > 20 ? ` Once a friend of ${mc.name}.` : '';
+  Log.add(`${c.name} has turned against House ${G.house.name} and become a Rival!${friend}`, 'bad');
+  G.house.prestige = Math.max(0, G.house.prestige - (wasParty ? 5 : 2));
+}
+
+// ---------------------------------------------------------------- succession
+function heirCandidates() {
+  const mc = ch(G.mcId);
+  const living = Object.values(G.chars).filter((c) => c.alive && c.house === G.house.name && !c.evil);
+  const founder = G.founderId;
+  const out = [];
+  const add = (c, why) => { if (!out.find((o) => o.c.id === c.id)) out.push({ c, why }); };
+  if (mc) {
+    living.filter((c) => mc.children.includes(c.id)).sort((a, b) => a.born - b.born).forEach((c) => add(c, 'Child'));
+    living.filter((c) => isDescendantOf(c, mc.id)).forEach((c) => add(c, 'Grandchild'));
+  }
+  living.filter((c) => founder && (c.id === founder || isDescendantOf(c, founder))).forEach((c) => add(c, 'Blood relative'));
+  if (mc) { const sp = spouseOf(mc); if (sp && sp.house === G.house.name) add(sp, 'Spouse (regent)'); }
+  if (!out.length) {
+    // last resort: a sworn companion may be adopted into the House
+    Object.values(G.chars).filter((c) => c.alive && !c.evil && isAdult(c) && (c.status === 'party' || c.status === 'household') && c.loyalty >= 30)
+      .sort((a, b) => b.loyalty - a.loyalty).slice(0, 3).forEach((c) => add(c, 'Adopted companion'));
+  }
+  return out;
+}
+
+function performTimeskip(heir) {
+  const mc = ch(G.mcId);
+  const r = GD.RACES[heir.race];
+  const years = Math.max(1, Math.ceil(r.maturity - age(heir)));
+  G.skipLog = [];
+  Log.add(`House ${G.house.name} mourns. ${years} year${years > 1 ? 's' : ''} pass while ${heir.name} grows to lead.`, 'year');
+  for (let i = 0; i < years; i++) {
+    advanceDays(DAYS_PER_YEAR);
+    // leaderless companions: flat growth, risk, loyalty drift
+    for (const c of Object.values(G.chars)) {
+      if (!c.alive) continue;
+      if ((c.status === 'party' || c.status === 'household') && isAdult(c)) {
+        for (const k of STATS) c.bonus[k] += GD.RACES[c.race].growth[k] * 0.45; // flat, no xp mods/formative
+        const risk = (G.world.era.type === 'war' ? 0.06 : 0.025) * (c.status === 'party' ? 1 : 0.5);
+        if (c.house !== G.house.name && R.chance(risk)) kill(c, G.world.era.type === 'war' ? 'fell in the war while the House was leaderless' : 'lost on the road');
+        else if (c.house !== G.house.name && c.loyalty < 0 && R.chance(0.15)) {
+          c.status = 'npc'; G.party = G.party.filter((id) => id !== c.id);
+          Log.add(`${c.name} left the House's service.`, 'dim');
+        }
+      }
+      if (c.id === heir.id && isAdult(c)) for (const k of STATS) c.bonus[k] += GD.RACES[c.race].growth[k] * 0.35;
+    }
+    if (!heir.alive) break;
+  }
+  const events = G.skipLog;
+  G.skipLog = null;
+  if (!heir.alive) return { events, years, heirDied: true };
+  // hand over
+  if (heir.house !== G.house.name) {
+    heir.house = G.house.name; heir.adopted = true; heir.corruption = 0;
+    G.house.prestige = Math.max(0, G.house.prestige - 10);
+    Log.add(`${heir.name} is adopted into House ${G.house.name}. The old blood is gone, but the name lives on.`, 'bad');
+  }
+  G.mcId = heir.id;
+  heir.status = 'party';
+  G.house.generation++;
+  heir.generation = Math.max(heir.generation, G.house.generation);
+  G.house.heroes.push(heir.id);
+  if (G.house.heirloom) {
+    G.house.heirloom.power += 1 + G.house.up.armory;
+    G.house.heirloom.gens++;
+  }
+  G.party = [heir.id, ...G.party.filter((id) => id !== heir.id && ch(id) && ch(id).alive && ch(id).status === 'party')].slice(0, 4);
+  heir.hp = maxHp(heir);
+  G.heirId = null;
+  const kids = heir.children.map(ch).filter((k) => k && k.alive);
+  if (kids.length) G.heirId = kids[0].id;
+  G.pos = { ...G.world.estate };
+  G.pendingSuccession = false;
+  Log.add(`${heir.name} is now head of House ${G.house.name}. Generation ${G.house.generation} begins.`, 'good');
+  return { events, years, heirDied: false };
+}
+
+// ---------------------------------------------------------------- partners & recruits
+function genPartner(tier) {
+  const mc = ch(G.mcId);
+  const race = randomRace({ human: 4, orc: 2, halfling: 2, dwarf: 2, elf: 0.6 + tier * 0.5 });
+  const r = GD.RACES[race];
+  const mcAgeFrac = mc ? clamp((age(mc) - GD.RACES[mc.race].maturity) / (GD.RACES[mc.race].primeEnd - GD.RACES[mc.race].maturity), 0, 1) : 0.1;
+  const years = r.maturity + Math.round((r.primeEnd - r.maturity) * clamp(mcAgeFrac + R.float(-0.1, 0.2), 0.02, 0.9));
+  const birth = R.weighted({ highborn: 0.3 + tier * 1.2, lowborn: 2, bastard: 0.6, orphan: 0.4 });
+  const base = rollBase(race);
+  for (const k of STATS) base[k] += Math.floor(tier * 0.8 + R.float(0, tier * 0.6));
+  const c = makeChar({
+    race, birth, base,
+    born: G.day - years * DAYS_PER_YEAR - R.int(0, 300),
+    level: Math.max(1, Math.round((mc ? mc.level : 1) + tier - 1 + R.int(-1, 1))),
+    loyalty: 30 + tier * 5,
+    trait: R.chance(0.8) ? R.pick(Object.keys(GD.TRAITS).filter((t) => t !== 'frail' || tier === 0)) : null,
+    weapon: tier ? Math.min(tier, 5) : 0,
+    armor: tier ? Math.min(tier, 5) : 0,
+  });
+  c.orphaned = birth === 'orphan';
+  if (c.orphaned) c.birth = 'lowborn';
+  c.status = 'candidate';
+  c.dowry = Math.round(30 * Math.pow(tier + 1, 2.2));
+  return c;
+}
+function discardCandidates(list, keepId) {
+  for (const c of list) if (c.id !== keepId) delete G.chars[c.id];
+}
+function joinHouse(c, asSpouseOf) {
+  c.house = G.house.name;
+  c.loyalty = Math.max(c.loyalty, 50);
+  c.corruption = 0;
+  if (asSpouseOf) marry(asSpouseOf, c);
+  c.status = 'household';
+  if (G.party.length < 4) { c.status = 'party'; G.party.push(c.id); }
+}
+function hireCost(c) { return Math.round(30 + c.level * 18 + (c.birth === 'highborn' ? 40 : 0)); }
+function recruitPrestigeReq(c) { return Math.max(0, Math.round((c.level - partyLevel() - 1) * 6)); }
+function householdCount() { return Object.values(G.chars).filter((c) => c.alive && isAdult(c) && (c.status === 'household' || c.status === 'party')).length; }
+
+// ---------------------------------------------------------------- save / load
+const SAVE_KEY = 'generations-rpg-save-v1';
+function saveGame() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); return true; } catch (e) { return false; }
+}
+function loadGame() {
+  try {
+    const s = localStorage.getItem(SAVE_KEY);
+    if (!s) return false;
+    const data = JSON.parse(s);
+    if (!data || data.version !== 1) return false;
+    G = data;
+    return true;
+  } catch (e) { return false; }
+}
+function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
+function deleteSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ } }
