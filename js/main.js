@@ -313,7 +313,7 @@ Game.delve = function (t) {
 };
 
 Game.heraldBattle = function () {
-  const lvl = Math.max(3, Math.round(partyLevel() + 2 + (year() - START_YEAR) / 120));
+  const lvl = Math.max(3, Math.ceil(partyLevel()) + 1); // a quest foe is never far beyond the House's strength
   const enemies = [{ type: 'herald', lvl }, { type: 'cultist', lvl: lvl - 1 }, { type: 'wraith', lvl: lvl - 2 }];
   this.battle(enemies, { kind: 'dungeon', title: 'The Herald', intro: `The Herald of ${GD.VILLAIN.name} rises from the earth!`,
     after: (res) => { if (res.outcome === 'victory') completeQuest(); } });

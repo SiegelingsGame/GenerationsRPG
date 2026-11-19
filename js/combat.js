@@ -303,7 +303,9 @@ function buildEncounter(tile, opts = {}) {
   let pool = [...(GD.ENCOUNTERS[tile.feature === 'ruins' ? 'ruins' : tile.type] || GD.ENCOUNTERS.grass)];
   if (E.extra && tile.feature !== 'ruins' && !['snow', 'desert', 'swamp', 'jungle'].includes(tile.type)) pool = pool.concat(E.extra);
   const dist = Math.abs(tile.x - G.world.estate.x) + Math.abs(tile.y - G.world.estate.y);
-  const lvlBase = Math.max(1, Math.round(partyLevel() + dist / 9 + (opts.hard ? 2 : 0) - 0.5 + (year() - START_YEAR) / 150));
+  const lvlBase = tile.feature === 'ruins'
+    ? ruinLevel(tile)
+    : Math.max(1, Math.round(partyLevel() + dist / 9 + (opts.hard ? 1 : 0) - 0.5 + (year() - START_YEAR) / 150));
   const n = opts.count || clamp(R.int(1, Math.min(4, 1 + Math.ceil(G.party.length * 0.9))), 1, 4);
   const out = [];
   for (let i = 0; i < n; i++) out.push({ type: R.pick(pool), lvl: Math.max(1, lvlBase + R.int(-1, 1)) });

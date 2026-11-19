@@ -496,3 +496,16 @@ function pruneDead() {
     if (!c.alive && !keep.has(id) && c.house !== G.house.name && G.day - c.died > 40 * DAYS_PER_YEAR) delete G.chars[id];
   }
 }
+
+// Each ruin has its own fixed danger, set by distance from home and creeping up over the centuries.
+// It does not chase the party's level, so getting stronger lets you clear it.
+function ruinLevel(t) {
+  if (t.lvl == null) {
+    const d = Math.abs(t.x - G.world.estate.x) + Math.abs(t.y - G.world.estate.y);
+    t.lvl = Math.max(2, Math.round(2 + d / 3.5 + (t.land !== G.world.mainland ? 2 : 0)));
+  }
+  let lvl = t.lvl + Math.floor((year() - START_YEAR) / 90);
+  const q = G.world.doom && G.world.doom.quest;
+  if (q && q.type === 'seal' && q.x === t.x && q.y === t.y) lvl = Math.min(lvl, Math.ceil(partyLevel()) + 1);
+  return lvl;
+}

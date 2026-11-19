@@ -6,6 +6,7 @@ function h(tag, props = {}, ...kids) {
   for (const k in props) {
     const v = props[k];
     if (v === undefined || v === null || v === false) continue;
+    if ((k === 'disabled' || k === 'checked' || k === 'selected') && !v) continue;
     if (k === 'class') e.className = v;
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
     else if (k === 'html') e.innerHTML = v;
@@ -305,14 +306,17 @@ UI.spirePanel = function () {
   ];
 };
 UI.ruinsPanel = function (t) {
-  const quiet = t.cleared && year() < (t.clearedYear || 0) + 5;
-  const dist = Math.abs(t.x - G.world.estate.x) + Math.abs(t.y - G.world.estate.y);
-  const lvl = Math.max(1, Math.round(partyLevel() + dist / 9 + 1.5 + (year() - START_YEAR) / 150));
-  const ready = partyLevel() >= lvl - 1 && G.party.length >= 2;
+  const quiet = !!t.cleared && year() < (t.clearedYear || 0) + 5;
+  const lvl = ruinLevel(t);
+  const pl = partyLevel();
+  const q = G.world.doom.quest;
+  const isQuest = q && q.type === 'seal' && q.x === t.x && q.y === t.y;
+  const ready = pl >= lvl - 1 && G.party.length >= 2;
   return [
     h('h3', {}, t.ruinOf ? `Ruins of ${t.ruinOf}` : 'Ancient Ruins'),
     h('p', { class: 'dim' }, quiet ? `Cleared in ${t.clearedYear}. Something may return in time.` : 'Dark things gather here. Clearing it makes the land safer and brings great prestige.'),
-    h('p', { class: ready ? 'dim' : 'bad' }, `Foes around level ${lvl}. ${ready ? 'Your party looks ready.' : 'Your party looks outmatched. Death here is permanent.'}`),
+    h('p', { class: ready ? 'dim' : 'bad' }, `Foes around level ${lvl} (your party: ${pl.toFixed(1)}). ${ready ? 'Your party looks ready.' : `Your party looks outmatched. Train, recruit or clear nearer ruins first. Death here is permanent.`}`),
+    isQuest ? h('p', { class: 'good small' }, 'The Seal of Warding lies here. Its guardians are never far beyond your strength.') : null,
     act('Delve', () => Game.delve(t), { disabled: quiet, sub: 'hard battle · loot · prosperity', cls: 'danger' }),
   ];
 };
