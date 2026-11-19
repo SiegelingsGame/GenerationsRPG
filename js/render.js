@@ -4,6 +4,7 @@
 const Render = {
   canvas: null, ctx: null, w: 0, h: 0, dpr: 1,
   cam: { x: 0, y: 0 }, hover: null, t: 0,
+  rot: 0, zoom: 1, zoomTarget: 1, spin: 0,
   move: null, // {from:{x,y}, to:{x,y}, t0, dur}
 };
 
@@ -56,12 +57,60 @@ Render.init = function (canvas) {
     if (Battle.active) { const u = this.pickUnit(p); if (u) UI.clickUnit(u); }
     else if (G && G.mode === 'world') { const t = this.pickTile(p); if (t) Game.clickTile(t); }
   });
+  canvas.addEventListener('wheel', (e) => {
+    if (Battle.active) return;
+    e.preventDefault();
+    this.setZoom(this.zoomTarget * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+  }, { passive: false });
+  window.addEventListener('keydown', (e) => {
+    if (Battle.active || e.target.tagName === 'INPUT' || (typeof UI !== 'undefined' && UI.modalStack.length)) return;
+    if (e.key === 'q' || e.key === 'Q') this.rotate(-1);
+    if (e.key === 'e' || e.key === 'E') this.rotate(1);
+    if (e.key === '+' || e.key === '=') this.setZoom(this.zoomTarget * 1.2);
+    if (e.key === '-' || e.key === '_') this.setZoom(this.zoomTarget / 1.2);
+  });
+  // on-screen map controls
+  const btn = (label, title, fn) => { const b = document.createElement('button'); b.textContent = label; b.title = title; b.addEventListener('click', fn); return b; };
+  this.ctl = document.createElement('div');
+  this.ctl.className = 'mapctl';
+  this.ctl.append(
+    btn('⟲', 'Rotate left (Q)', () => this.rotate(-1)),
+    btn('⟳', 'Rotate right (E)', () => this.rotate(1)),
+    btn('+', 'Zoom in (+ or mouse wheel)', () => this.setZoom(this.zoomTarget * 1.25)),
+    btn('−', 'Zoom out (−)', () => this.setZoom(this.zoomTarget / 1.25)),
+    btn('⌂', 'Reset view', () => { this.rot = 0; this.setZoom(1); }),
+  );
+  canvas.parentElement.append(this.ctl);
   const loop = (ts) => { this.t = ts; try { this.frame(); } catch (err) { console.error(err); } requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
 };
 
+Render.rotate = function (dir) { this.rot = (this.rot + dir + 4) % 4; this.spin = this.t; this.lastHover = null; };
+Render.setZoom = function (z) { this.zoomTarget = clamp(z, 0.45, 2.6); };
+// screen point -> unzoomed world-screen point
+Render.unzoom = function (p) { return { x: (p.x - this.w / 2) / this.zoom + this.w / 2, y: (p.y - this.h / 2) / this.zoom + this.h / 2 }; };
+Render.rotXY = function (x, y) {
+  const N = G.world.map.W - 1;
+  switch (this.rot) {
+    case 1: return [N - y, x];
+    case 2: return [N - x, N - y];
+    case 3: return [y, N - x];
+    default: return [x, y];
+  }
+};
+Render.unrotXY = function (rx, ry) {
+  const N = G.world.map.W - 1;
+  switch (this.rot) {
+    case 1: return [ry, N - rx];
+    case 2: return [N - rx, N - ry];
+    case 3: return [N - ry, rx];
+    default: return [rx, ry];
+  }
+};
+
 Render.frame = function () {
   const c = this.ctx;
+  if (this.ctl) this.ctl.hidden = !(G && G.mode === 'world' && !Battle.active);
   c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   c.clearRect(0, 0, this.w, this.h);
   if (!G || !G.world || !G.world.map) { this.drawTitleBg(); return; }
@@ -79,7 +128,8 @@ Render.drawTitleBg = function () {
 // ---------------------------------------------------------------- world
 const TW = 64, TH = 32;
 Render.iso = function (x, y, h) {
-  return { x: (x - y) * TW / 2 + this.cam.x, y: (x + y) * TH / 2 - h * HSTEP + this.cam.y };
+  const [rx, ry] = this.rotXY(x, y);
+  return { x: (rx - ry) * TW / 2 + this.cam.x, y: (rx + ry) * TH / 2 - h * HSTEP + this.cam.y };
 };
 Render.partyWorldPos = function () {
   if (this.move) {
@@ -102,13 +152,21 @@ Render.drawWorld = function () {
 
   // camera follows party smoothly
   const pp = this.partyWorldPos();
-  const tx = this.w / 2 - (pp.x - pp.y) * TW / 2;
-  const ty = this.h / 2 - (pp.x + pp.y) * TH / 2 + pp.h * HSTEP;
+  const [prx, pry] = this.rotXY(pp.x, pp.y);
+  const tx = this.w / 2 - (prx - pry) * TW / 2;
+  const ty = this.h / 2 - (prx + pry) * TH / 2 + pp.h * HSTEP;
   this.cam.x += (tx - this.cam.x) * 0.12;
   this.cam.y += (ty - this.cam.y) * 0.12;
   if (!this.camInit) { this.cam.x = tx; this.cam.y = ty; this.camInit = true; }
+  this.zoom += (this.zoomTarget - this.zoom) * 0.18;
 
   this.hover = this.mouse && !this.move ? this.pickTile(this.mouse) : null;
+  c.save();
+  // zoom about the centre; a quick squash when the view rotates
+  const sk = this.spin ? clamp((this.t - this.spin) / 220, 0, 1) : 1;
+  c.translate(this.w / 2, this.h / 2);
+  c.scale(this.zoom * (0.75 + 0.25 * sk), this.zoom);
+  c.translate(-this.w / 2, -this.h / 2);
   const pathSet = new Set((this.hoverPath || []).map((t) => t.y * map.W + t.x));
   if (this.hover && this.hover !== this.lastHover) {
     this.lastHover = this.hover;
@@ -116,12 +174,13 @@ Render.drawWorld = function () {
   }
   if (!this.hover) this.hoverPath = [];
 
-  const partyTileOrder = Math.round(pp.x) + Math.round(pp.y);
+  const partyTileOrder = Math.round(prx) + Math.round(pry);
   let partyDrawn = false;
   for (let s = 0; s <= map.W + map.H - 2; s++) {
-    for (let x = 0; x < map.W; x++) {
-      const y = s - x;
-      if (y < 0 || y >= map.H) continue;
+    for (let rx = 0; rx < map.W; rx++) {
+      const ry = s - rx;
+      if (ry < 0 || ry >= map.H) continue;
+      const [x, y] = this.unrotXY(rx, ry);
       const t = tileAt(x, y);
       this.drawTile(t, pathSet.has(y * map.W + x));
       this.drawFeature(t);
@@ -143,11 +202,28 @@ Render.drawWorld = function () {
     c.fillStyle = t.feature === 'estate' ? '#ffd98a' : '#f2ead8';
     c.fillText(label, p.x, p.y - 57);
   }
+  c.restore();
+  // compass: which way is north on the rotated map
+  this.drawCompass();
   // vignette
   const v = c.createRadialGradient(this.w / 2, this.h / 2, this.h * 0.35, this.w / 2, this.h / 2, this.h * 0.9);
   v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.45)');
   c.fillStyle = v; c.fillRect(0, 0, this.w, this.h);
   if (G.world.era.type === 'war') this.drawEmbers();
+};
+
+Render.drawCompass = function () {
+  const c = this.ctx;
+  const cx = this.w - 44, cy = 44;
+  const [ax, ay] = this.rotXY(G.world.map.W / 2, 0);
+  const [bx, by] = this.rotXY(G.world.map.W / 2, G.world.map.H);
+  const vx = ((ax - ay) - (bx - by)) * TW / 2, vy = ((ax + ay) - (bx + by)) * TH / 2;
+  const len = Math.hypot(vx, vy) || 1;
+  c.fillStyle = 'rgba(15,13,20,0.7)'; c.beginPath(); c.arc(cx, cy, 22, 0, Math.PI * 2); c.fill();
+  c.strokeStyle = '#e6c06a'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(cx - vx / len * 14, cy - vy / len * 14); c.lineTo(cx + vx / len * 14, cy + vy / len * 14); c.stroke();
+  c.fillStyle = '#e6c06a'; c.font = 'bold 11px Georgia, serif'; c.textAlign = 'center';
+  c.fillText('N', cx + vx / len * 16, cy + vy / len * 16 + 4);
 };
 
 Render.drawEmbers = function () {
@@ -336,8 +412,11 @@ Render.drawParty = function (pp) {
 };
 
 function figLook(c) {
-  return { skin: GD.RACES[c.race].skin, hair: c.hair, tunic: c.tunic, stage: stageKey(c), race: c.race, evil: c.evil, house: c.house === G.house.name };
+  const inj = {};
+  for (const k of c.injuries || []) if (GD.INJURIES[k].look) inj[GD.INJURIES[k].look] = true;
+  return { skin: GD.RACES[c.race].skin, hair: c.hair, tunic: c.tunic, stage: stageKey(c), race: c.race, evil: c.evil, house: c.house === G.house.name, inj, armor: (c.gear && c.gear.armor) || 0 };
 }
+const ARMOR_COLORS = ['', '#7d7f84', '#a9b1b9', '#c8d0d8', '#d4b05a', '#8fd8f0'];
 
 // ---------------------------------------------------------------- figures
 Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
@@ -357,10 +436,15 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
   // shadow
   c.fillStyle = 'rgba(0,0,0,0.3)';
   c.beginPath(); c.ellipse(x, y, 11 * s * wd, 4 * s, 0, 0, Math.PI * 2); c.fill();
-  // legs
+  const inj = look.inj || {};
+  // legs (a peg leg if one was lost)
   c.fillStyle = fl ? '#fff' : '#3b2f2a';
   c.fillRect(x - 5 * s * wd, y - 14 * s + Math.max(0, bob), 4 * s * wd, 14 * s);
-  c.fillRect(x + 1 * s * wd, y - 14 * s + Math.max(0, -bob), 4 * s * wd, 14 * s);
+  if (inj.leg) {
+    c.fillRect(x + 1 * s * wd, y - 14 * s, 4 * s * wd, 6 * s);
+    c.fillStyle = fl ? '#fff' : '#8a6a45';
+    c.fillRect(x + 2.2 * s * wd, y - 8 * s, 1.6 * s, 8 * s);
+  } else c.fillRect(x + 1 * s * wd, y - 14 * s + Math.max(0, -bob), 4 * s * wd, 14 * s);
   // body
   const by = y - 14 * s;
   c.fillStyle = fl ? '#fff' : (look.evil ? '#2a1420' : look.tunic);
@@ -368,15 +452,33 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
   c.moveTo(x - 8 * s * wd, by); c.lineTo(x + 8 * s * wd, by);
   c.lineTo(x + 7 * s * wd + stoop * 0.5, by - 20 * s); c.lineTo(x - 7 * s * wd + stoop * 0.5, by - 20 * s);
   c.closePath(); c.fill();
+  // armour: a breastplate and pauldrons that change with its tier
+  if (look.armor && !fl) {
+    const ac = ARMOR_COLORS[look.armor];
+    c.fillStyle = ac;
+    c.beginPath();
+    c.moveTo(x - 6.5 * s * wd, by - 4 * s); c.lineTo(x + 6.5 * s * wd, by - 4 * s);
+    c.lineTo(x + 6 * s * wd + stoop * 0.5, by - 18 * s); c.lineTo(x - 6 * s * wd + stoop * 0.5, by - 18 * s);
+    c.closePath(); c.fill();
+    c.fillStyle = shade(ac, 0.3); c.fillRect(x - 1 * s + stoop * 0.25, by - 17 * s, 2 * s, 12 * s);
+    if (look.armor >= 2) {
+      c.fillStyle = shade(ac, -0.15);
+      c.beginPath(); c.arc(x - 8 * s * wd + stoop * 0.5, by - 18 * s, 3.5 * s, 0, Math.PI * 2); c.fill();
+      if (!inj.arm) { c.beginPath(); c.arc(x + 8 * s * wd + stoop * 0.5, by - 18 * s, 3.5 * s, 0, Math.PI * 2); c.fill(); }
+    }
+  }
   // belt / house sash
   c.fillStyle = look.house ? G.house.color : '#4a3a2a';
   c.fillRect(x - 8 * s * wd, by - 6 * s, 16 * s * wd, 3 * s);
-  // arms
+  // arms (a bound stump if one was lost)
   c.fillStyle = fl ? '#fff' : shade(look.evil ? '#2a1420' : look.tunic, -0.2);
   c.fillRect(x - 11 * s * wd, by - 19 * s, 4 * s, 14 * s);
-  c.fillRect(x + 7 * s * wd + stoop * 0.5, by - 19 * s, 4 * s, 14 * s);
+  if (inj.arm) {
+    c.fillRect(x + 7 * s * wd + stoop * 0.5, by - 19 * s, 4 * s, 5 * s);
+    c.fillStyle = '#d8d2c0'; c.fillRect(x + 7 * s * wd + stoop * 0.5, by - 14.5 * s, 4 * s, 1.5 * s);
+  } else c.fillRect(x + 7 * s * wd + stoop * 0.5, by - 19 * s, 4 * s, 14 * s);
   // weapon
-  if (o.weapon) {
+  if (o.weapon && !(inj.arm && o.weapon !== 'shield')) {
     c.strokeStyle = o.weapon === 'staff' ? '#7a5a3a' : '#cfd6dc'; c.lineWidth = 2.2 * s;
     c.beginPath();
     c.moveTo(x + 10 * s * wd, by - 6 * s);
@@ -407,10 +509,19 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
     c.fillStyle = '#f2ecd8';
     c.fillRect(hx - 3 * s, hy + 2 * s, 1.5 * s, 3 * s); c.fillRect(hx + 1.5 * s, hy + 2 * s, 1.5 * s, 3 * s);
   }
-  // eyes
+  // eyes (a patch over a lost one)
   c.fillStyle = look.evil ? '#ff3b3b' : '#1a1a1a';
-  c.fillRect(hx + 1.5 * s, hy - 1 * s, 1.6 * s, 1.6 * s);
   c.fillRect(hx - 3 * s, hy - 1 * s, 1.6 * s, 1.6 * s);
+  if (inj.eye) {
+    c.fillStyle = '#111';
+    c.beginPath(); c.ellipse(hx + 2.3 * s, hy - 0.2 * s, 2.4 * s, 2 * s, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = '#111'; c.lineWidth = 0.8 * s;
+    c.beginPath(); c.moveTo(hx - 6.5 * s, hy - 3 * s); c.lineTo(hx + 6.5 * s, hy + 0.5 * s); c.stroke();
+  } else c.fillRect(hx + 1.5 * s, hy - 1 * s, 1.6 * s, 1.6 * s);
+  if (inj.scar) {
+    c.strokeStyle = '#a03a2e'; c.lineWidth = 0.9 * s;
+    c.beginPath(); c.moveTo(hx - 4 * s, hy - 4 * s); c.lineTo(hx - 1 * s, hy + 4 * s); c.stroke();
+  }
   if (o.banner) {
     c.strokeStyle = '#3a2a1a'; c.lineWidth = 1.5;
     c.beginPath(); c.moveTo(x - 12 * s, y - 2); c.lineTo(x - 12 * s, y - 62 * s); c.stroke();
@@ -561,12 +672,14 @@ Render.pickUnit = function (p) {
   return best;
 };
 
-Render.pickTile = function (p) {
+Render.pickTile = function (p0) {
   const map = G.world.map;
+  const p = this.unzoom(p0);
   for (let s = map.W + map.H - 2; s >= 0; s--) {
-    for (let x = map.W - 1; x >= 0; x--) {
-      const y = s - x;
-      if (y < 0 || y >= map.H) continue;
+    for (let rx = map.W - 1; rx >= 0; rx--) {
+      const ry = s - rx;
+      if (ry < 0 || ry >= map.H) continue;
+      const [x, y] = this.unrotXY(rx, ry);
       const t = tileAt(x, y);
       const c = this.iso(x, y, t.h);
       const dx = Math.abs(p.x - c.x) / (TW / 2), dy = Math.abs(p.y - c.y) / (TH / 2);

@@ -25,14 +25,26 @@ let G = null; // the whole game state (serialisable)
 // ---------------------------------------------------------------- log
 const Log = {
   listeners: [],
-  add(text, kind = 'info') {
-    const entry = { text, kind, year: year() };
+  add(text, kind = 'info', ids) {
+    const entry = { text, kind, year: year(), ids: ids || [] };
     G.log.push(entry);
     if (G.log.length > 200) G.log.shift();
-    if (G.skipLog) G.skipLog.push(entry);
     if (G.mcId) this.listeners.forEach((f) => f(entry));
   },
 };
+
+// The House chronicle: a permanent ledger of everything that matters to the line.
+function relevant(c) {
+  return !!c && (c.house === G.house.name || c.status === 'party' || c.status === 'household' || c.status === 'rival' || c.servedHouse);
+}
+function chron(text, kind = 'good', ids = [], type = 'event') {
+  Log.add(text, kind, ids);
+  if (!G.ledger) G.ledger = [];
+  const e = { year: year(), day: G.day, text, kind, ids: ids.filter(Boolean), type };
+  G.ledger.push(e);
+  if (G.skipLog) G.skipLog.push(e);
+  return e;
+}
 
 // ---------------------------------------------------------------- time
 function year(day = G.day) { return START_YEAR + Math.floor(day / DAYS_PER_YEAR); }
@@ -139,6 +151,7 @@ function ageMod(c, k) {
 function stat(c, k) {
   const r = GD.RACES[c.race];
   let v = c.base[k] + r.growth[k] * (c.level - 1) * 0.9 + (c.bonus[k] || 0);
+  for (const inj of c.injuries || []) v += (GD.INJURIES[inj].mods[k] || 0);
   const b = GD.BIRTH[birthKey(c)];
   if (b.mods[k]) v *= b.mods[k];
   if (birthKey(c) === 'bastard' && c.bastardStat === k) v *= 1.15;
@@ -183,8 +196,28 @@ function gainXp(c, amount) {
     c.level++;
     leveled = true;
   }
-  if (leveled) { Log.add(`${c.name} reached level ${c.level}.`, 'good'); c.hp = Math.min(maxHp(c), c.hp + 10); }
+  if (leveled) {
+    Log.add(`${c.name} reached level ${c.level}.`, 'good', [c.id]);
+    c.hp = Math.min(maxHp(c), c.hp + 10);
+    if (c.level >= 6 && !c.extraSkill) learnSkill(c, 'through hard-won experience');
+  }
   return gained;
+}
+function learnSkill(c, how) {
+  const top = topStat(c);
+  const opts = STATS.filter((k) => k !== top).sort((a, b) => stat(c, b) - stat(c, a));
+  c.extraSkill = R.chance(0.7) ? opts[0] : R.pick(opts);
+  chron(`${c.name} learned ${GD.SKILLS[c.extraSkill].name} ${how}.`, 'skill', [c.id], 'skill');
+}
+function injure(c, cause) {
+  const have = c.injuries || (c.injuries = []);
+  const opts = Object.keys(GD.INJURIES).filter((k) => !have.includes(k) && !(GD.INJURIES[k].elderOnly && !['elder', 'venerable'].includes(stageKey(c))));
+  if (!opts.length) return null;
+  const k = R.weighted(Object.fromEntries(opts.map((o) => [o, GD.INJURIES[o].w])));
+  have.push(k);
+  c.hp = Math.min(c.hp, maxHp(c));
+  chron(`${c.name} ${GD.INJURIES[k].verb} ${cause}.`, GD.INJURIES[k].good ? 'good' : 'injury', [c.id], 'injury');
+  return k;
 }
 function addFormative(c, n) {
   if (stageKey(c) !== 'youth') return 0;
@@ -212,8 +245,11 @@ function kill(c, cause) {
   G.party = G.party.filter((id) => id !== c.id);
   if (c.id === G.mcId) G.pendingSuccession = true;
   if (c.id === G.heirId) G.heirId = null;
-  const kind = (c.house === G.house.name || wasStatus === 'party') ? 'bad' : 'dim';
-  Log.add(`${c.name} (${GD.RACES[c.race].name}, ${ageStr(c)}) died: ${cause}.`, kind);
+  const reign = (G.house.reigns || []).find((r) => r.id === c.id && r.to == null);
+  if (reign) reign.to = year();
+  const msg = `${c.name} (${GD.RACES[c.race].name}, ${ageStr(c)}) died: ${cause}.`;
+  if (relevant(c) || wasStatus === 'rival') chron(msg, wasStatus === 'rival' ? 'good' : 'death', [c.id], 'death');
+  else Log.add(msg, 'dim', [c.id]);
   // children may become orphans
   for (const kid of c.children.map(ch)) {
     if (kid && kid.alive && !isAdult(kid) && kid.parents.every((p) => !ch(p) || !ch(p).alive)) kid.orphaned = true;
@@ -224,7 +260,8 @@ function marry(a, b) {
   a.spouse = b.id;
   b.spouse = a.id;
   addBond(a, b, 20);
-  Log.add(`${a.name} and ${b.name} were married.`, 'good');
+  if (relevant(a) || relevant(b)) chron(`${a.name} and ${b.name} were married.`, 'marriage', [a.id, b.id], 'marriage');
+  else Log.add(`${a.name} and ${b.name} were married.`, 'dim', [a.id, b.id]);
 }
 function spouseOf(c) { const s = ch(c.spouse); return s && s.alive ? s : null; }
 
@@ -264,7 +301,9 @@ function haveChild(a, b) {
   b.children.push(kid.id);
   // childhood friends: companions' children bond with House children
   const label = birth === 'bastard' ? 'a bastard child' : 'a child';
-  Log.add(`${a.name} and ${b.name} had ${label}: ${kid.name} (${GD.RACES[race].name}).`, isHouse ? 'good' : 'dim');
+  const bmsg = `${a.name} and ${b.name} had ${label}: ${kid.name} (${GD.RACES[race].name}).`;
+  if (isHouse || relevant(a) || relevant(b)) chron(bmsg, 'birth', [kid.id, a.id, b.id], 'birth');
+  else Log.add(bmsg, 'dim', [kid.id]);
   if (isHouse && !G.heirId && G.mcId && (a.id === G.mcId || b.id === G.mcId)) G.heirId = kid.id;
   if (isHouse) G.house.prestige += 1;
   return kid;
@@ -399,10 +438,11 @@ function newGame() {
     heirId: null,
     founderId: null,
     log: [],
+    ledger: [],
     house: {
       name: 'Ashford', color: GD.HOUSE_COLORS[0], prestige: 0, gold: 150, tier: 0,
       up: { horses: 0, livestock: 0, yard: 0, library: 0, chapel: 0, armory: 0 },
-      retinue: 0, potions: 3, generation: 1, heirloom: null, heroes: [],
+      retinue: 0, potions: 3, generation: 1, heirloom: null, heroes: [], reigns: [],
     },
     world: { map: null, towns: [], prosperity: 30, era: null, eras: [], victory: false },
     pos: { x: 0, y: 0 },
@@ -465,7 +505,7 @@ function startEra(type, years) {
   const len = years || R.int(6, 15);
   G.world.era = { type, start: year(), end: year() + len };
   G.world.eras.push({ type, start: year() });
-  if (G.log && G.mcId) Log.add(`A new era dawns: the ${GD.ERAS[type].name}.`, type === 'war' || type === 'famine' ? 'bad' : 'good');
+  if (G.log && G.mcId) chron(`A new era dawns: the ${GD.ERAS[type].name}.`, 'era', [], 'era');
 }
 function era() { return GD.ERAS[G.world.era.type]; }
 function nextEra() {
@@ -513,7 +553,7 @@ function yearTick() {
       if (st === 'child' && h.up.yard) c.bonus[R.pick(['str', 'agi', 'vit'])] += 0.25 * h.up.yard;
       if (a >= r.maturity && a - 1 < r.maturity) {
         c.bonus.int += h.up.library; c.bonus.wil += h.up.library;
-        Log.add(`${c.name} of House ${h.name} has come of age${c.id !== G.mcId ? ' and may join the party' : ''}.`, 'good');
+        chron(`${c.name} of House ${h.name} has come of age${c.id !== G.mcId ? ' and may join the party' : ''}.`, 'good', [c.id], 'age');
         h.prestige += 2;
       }
     }
@@ -612,7 +652,7 @@ function turnEvil(c) {
   c.level += 2;
   const mc = ch(G.mcId);
   const friend = mc && bond(c, mc) > 20 ? ` Once a friend of ${mc.name}.` : '';
-  Log.add(`${c.name} has turned against House ${G.house.name} and become a Rival!${friend}`, 'bad');
+  chron(`${c.name} has turned against House ${G.house.name} and become a Rival!${friend}`, 'bad', [c.id], 'rival');
   G.house.prestige = Math.max(0, G.house.prestige - (wasParty ? 5 : 2));
 }
 
@@ -628,53 +668,91 @@ function heirCandidates() {
     living.filter((c) => isDescendantOf(c, mc.id)).forEach((c) => add(c, 'Grandchild'));
   }
   living.filter((c) => founder && (c.id === founder || isDescendantOf(c, founder))).forEach((c) => add(c, 'Blood relative'));
-  if (mc) { const sp = spouseOf(mc); if (sp && sp.house === G.house.name) add(sp, 'Spouse (regent)'); }
   if (!out.length) {
+    const sp = mc ? mc.spouse : null;
     // last resort: a sworn companion may be adopted into the House
-    Object.values(G.chars).filter((c) => c.alive && !c.evil && isAdult(c) && (c.status === 'party' || c.status === 'household') && c.loyalty >= 30)
+    Object.values(G.chars).filter((c) => c.alive && !c.evil && isAdult(c) && (c.status === 'party' || c.status === 'household') && c.loyalty >= 30 && c.id !== sp)
       .sort((a, b) => b.loyalty - a.loyalty).slice(0, 3).forEach((c) => add(c, 'Adopted companion'));
   }
   return out;
 }
 
+function snapshot(c) {
+  return { id: c.id, age: ageStr(c), level: c.level, power: power(c), injuries: [...(c.injuries || [])], skill: c.extraSkill || null, armor: c.gear.armor, weapon: c.gear.weapon };
+}
+function skipPeople() {
+  return Object.values(G.chars).filter((c) => c.alive && (c.status === 'party' || c.status === 'household'));
+}
+
+// A companion or kinsman lives one year while the House is leaderless.
+function liveAYear(c, heir) {
+  const st = stageKey(c);
+  const war = G.world.era.type === 'war';
+  const place = R.pick(G.world.towns).name;
+  if (st === 'child') {
+    const r = GD.RACES[c.race];
+    const a = age(c);
+    if (a >= r.maturity / 2 && a - 1 < r.maturity / 2) chron(`${c.name} began training at arms.`, 'dim', [c.id], 'life');
+    return;
+  }
+  // levels: a few, by chance, slower for the old
+  if (R.chance(0.55 * clamp(GD.STAGES[st].xp, 0.3, 1.4))) c.level++;
+  if (c.id === heir.id) return;
+  if (R.chance(war ? 0.09 : 0.045)) {
+    injure(c, R.pick([`holding the bridge at ${place}`, `fighting raiders near ${place}`, 'in a hunting accident', `in a duel in ${place}`, 'clearing a beast lair', 'defending the estate']));
+  }
+  if (['elder', 'venerable'].includes(st) && R.chance(0.06)) injure(c, 'as the years caught up with them');
+  if (!c.extraSkill && R.chance(0.09)) learnSkill(c, R.pick([`from a master in ${place}`, 'from an old soldier', 'on the road', 'from forbidden books']));
+  if (R.chance(0.12)) {
+    const slot = R.chance(0.5) ? 'armor' : 'weapon';
+    if (c.gear[slot] < 4) {
+      c.gear[slot]++;
+      const g = GD.GEAR[c.gear[slot] - 1];
+      chron(`${c.name} ${R.pick(['won', 'forged', 'was gifted', 'found'])} ${g.name.toLowerCase()} ${slot === 'armor' ? 'armour' : 'arms'}.`, 'gear', [c.id], 'gear');
+    }
+  }
+  if (R.chance(0.06)) {
+    chron(`${c.name} ${R.pick([`saved a family from a fire in ${place}`, `drove bandits out of ${place}`, 'escorted a caravan through the mountains', `won a tourney in ${place}`, 'brought grain to the starving'])}.`, 'good', [c.id], 'deed');
+    addProsperity(0.5);
+    c.loyalty = clamp(c.loyalty + 3, -100, 100);
+  }
+  // risk of death and desertion for companions without a leader
+  if (c.house !== G.house.name) {
+    const risk = (war ? 0.06 : 0.025) * (c.status === 'party' ? 1 : 0.5);
+    if (R.chance(risk)) kill(c, war ? 'fell in the war while the House was leaderless' : 'lost on the road');
+    else if (c.loyalty < 0 && R.chance(0.15)) {
+      c.status = 'npc'; G.party = G.party.filter((id) => id !== c.id);
+      chron(`${c.name} left the House's service.`, 'bad', [c.id], 'leave');
+    }
+  }
+}
+
 function performTimeskip(heir) {
-  const mc = ch(G.mcId);
   const r = GD.RACES[heir.race];
   const years = Math.max(1, Math.ceil(r.maturity - age(heir)));
+  const startYear = year();
   G.skipLog = [];
-  Log.add(`House ${G.house.name} mourns. ${years} year${years > 1 ? 's' : ''} pass while ${heir.name} grows to lead.`, 'year');
+  chron(`House ${G.house.name} mourns. ${years} year${years > 1 ? 's' : ''} pass while ${heir.name} grows to lead.`, 'year', [heir.id], 'mourning');
   for (let i = 0; i < years; i++) {
     advanceDays(DAYS_PER_YEAR);
-    // leaderless companions: flat growth, risk, loyalty drift
-    for (const c of Object.values(G.chars)) {
-      if (!c.alive) continue;
-      if ((c.status === 'party' || c.status === 'household') && isAdult(c)) {
-        for (const k of STATS) c.bonus[k] += GD.RACES[c.race].growth[k] * 0.45; // flat, no xp mods/formative
-        const risk = (G.world.era.type === 'war' ? 0.06 : 0.025) * (c.status === 'party' ? 1 : 0.5);
-        if (c.house !== G.house.name && R.chance(risk)) kill(c, G.world.era.type === 'war' ? 'fell in the war while the House was leaderless' : 'lost on the road');
-        else if (c.house !== G.house.name && c.loyalty < 0 && R.chance(0.15)) {
-          c.status = 'npc'; G.party = G.party.filter((id) => id !== c.id);
-          Log.add(`${c.name} left the House's service.`, 'dim');
-        }
-      }
-      if (c.id === heir.id && isAdult(c)) for (const k of STATS) c.bonus[k] += GD.RACES[c.race].growth[k] * 0.35;
-    }
+    for (const c of skipPeople()) if (c.alive) liveAYear(c, heir);
     if (!heir.alive) break;
   }
   const events = G.skipLog;
   G.skipLog = null;
-  if (!heir.alive) return { events, years, heirDied: true };
+  if (!heir.alive) return { events, years, startYear, endYear: year(), heirDied: true };
   // hand over
   if (heir.house !== G.house.name) {
     heir.house = G.house.name; heir.adopted = true; heir.corruption = 0;
     G.house.prestige = Math.max(0, G.house.prestige - 10);
-    Log.add(`${heir.name} is adopted into House ${G.house.name}. The old blood is gone, but the name lives on.`, 'bad');
+    chron(`${heir.name} is adopted into House ${G.house.name}. The old blood is gone, but the name lives on.`, 'bad', [heir.id], 'adopt');
   }
   G.mcId = heir.id;
   heir.status = 'party';
   G.house.generation++;
   heir.generation = Math.max(heir.generation, G.house.generation);
   G.house.heroes.push(heir.id);
+  (G.house.reigns || (G.house.reigns = [])).push({ id: heir.id, from: year(), to: null, gen: G.house.generation });
   if (G.house.heirloom) {
     G.house.heirloom.power += 1 + G.house.up.armory;
     G.house.heirloom.gens++;
@@ -686,8 +764,8 @@ function performTimeskip(heir) {
   if (kids.length) G.heirId = kids[0].id;
   G.pos = { ...G.world.estate };
   G.pendingSuccession = false;
-  Log.add(`${heir.name} is now head of House ${G.house.name}. Generation ${G.house.generation} begins.`, 'good');
-  return { events, years, heirDied: false };
+  chron(`${heir.name} is now head of House ${G.house.name}. Generation ${G.house.generation} begins.`, 'head', [heir.id], 'head');
+  return { events, years, startYear, endYear: year(), heirDied: false };
 }
 
 // ---------------------------------------------------------------- partners & recruits
@@ -742,6 +820,8 @@ function loadGame() {
     const data = JSON.parse(s);
     if (!data || data.version !== 1) return false;
     G = data;
+    G.ledger = G.ledger || [];
+    G.house.reigns = G.house.reigns || [];
     return true;
   } catch (e) { return false; }
 }

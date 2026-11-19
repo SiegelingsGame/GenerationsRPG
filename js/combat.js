@@ -18,9 +18,10 @@ function unitFromChar(c, side, slot, boss) {
     spd: stat(c, 'agi'),
     agi: stat(c, 'agi'),
     maxHp: maxHp(c), hp: Math.max(1, Math.round(c.hp)),
-    skill: topStat(c), focus: 1, defending: false, taunt: 0,
+    skill: topStat(c), skill2: c.extraSkill && c.extraSkill !== topStat(c) ? c.extraSkill : null,
+    focus: 1, defending: false, taunt: 0,
     brave: c.trait === 'brave', alive: true,
-    look: { skin: GD.RACES[c.race].skin, hair: c.hair, tunic: c.tunic, stage: stageKey(c), race: c.race, house: c.house === G.house.name },
+    look: figLook(c),
     anim: null, flash: 0,
   };
   if (boss) {
@@ -113,6 +114,13 @@ Battle.ai = function (u) {
   if (!foes.length) return this.next();
   let target;
   const taunter = foes.find((f) => f.taunt > 0);
+  if (u.skill2 && u.focus >= 2 && R.chance(0.4)) {
+    const s2 = u.skill2;
+    if (s2 === 'wil') {
+      const hurt = friends.filter((f) => f.hp < f.maxHp * 0.6);
+      if (hurt.length) return this.act('skill', hurt[0].uid, 'wil');
+    } else return this.act('skill', (taunter || R.pick(foes)).uid, s2);
+  }
   if (u.skill && u.focus >= 2) {
     if (u.skill === 'wil') {
       const hurt = friends.filter((f) => f.hp < f.maxHp * 0.6);
@@ -148,7 +156,7 @@ Battle.damage = function (src, t, dmg, crit, label) {
   }
 };
 
-Battle.act = function (action, targetUid) {
+Battle.act = function (action, targetUid, skillKey) {
   const u = this.cur;
   if (!u || this.over) return;
   this.waiting = false;
@@ -174,23 +182,24 @@ Battle.act = function (action, targetUid) {
     this.say(`${u.name} uses a potion on ${t.name}.`);
   } else if (action === 'skill') {
     u.focus -= 2;
-    const sk = GD.SKILLS[u.skill].name;
-    u.anim = { type: u.skill === 'int' || u.skill === 'wil' ? 'cast' : 'lunge', to: t ? t.uid : null, t0: performance.now() };
-    if (u.skill === 'str') {
+    const key = skillKey || u.skill;
+    const sk = GD.SKILLS[key].name;
+    u.anim = { type: key === 'int' || key === 'wil' ? 'cast' : 'lunge', to: t ? t.uid : null, t0: performance.now() };
+    if (key === 'str') {
       for (const f of foes) { const r = this.physical(u, f, 0.7); this.damage(u, f, r.dmg, r.crit); }
       this.say(`${u.name} uses ${sk} on all foes!`);
-    } else if (u.skill === 'agi') {
+    } else if (key === 'agi') {
       if (!t || !t.alive || t.side === u.side) t = foes[0];
       let total = 0;
       for (let i = 0; i < 2 && t.alive; i++) { const r = this.physical(u, t, 0.65, 0.2); this.damage(u, t, r.dmg, r.crit); total += r.dmg; }
       this.say(`${u.name} uses ${sk} on ${t.name} for ${total}.`);
-    } else if (u.skill === 'int') {
+    } else if (key === 'int') {
       if (!t || !t.alive || t.side === u.side) t = foes[0];
       const dmg = Math.max(1, Math.round(u.mag * 1.7 * R.float(0.9, 1.1) - t.def * 0.15) * (t.defending ? 0.5 : 1));
       this.damage(u, t, dmg, false);
       this.fx.push({ uid: t.uid, burst: '#ff8a3d', t0: performance.now() });
       this.say(`${u.name} casts ${sk} at ${t.name} for ${dmg}.`);
-    } else if (u.skill === 'wil') {
+    } else if (key === 'wil') {
       const allies = this.alive(u.side);
       if (!t || !t.alive || t.side !== u.side) t = allies.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
       const amt = Math.round(u.heal * R.float(0.9, 1.1));
@@ -198,7 +207,7 @@ Battle.act = function (action, targetUid) {
       this.fx.push({ uid: t.uid, text: '+' + amt, color: '#6fe08a', t0: performance.now() });
       this.fx.push({ uid: t.uid, burst: '#7dffa8', t0: performance.now() });
       this.say(`${u.name} uses ${sk} on ${t.name} (+${amt}).`);
-    } else if (u.skill === 'vit') {
+    } else if (key === 'vit') {
       u.defending = true; u.taunt = 2;
       this.fx.push({ uid: u.uid, text: 'Bulwark', color: '#8fd3ff', t0: performance.now() });
       this.say(`${u.name} raises a Bulwark and draws the enemy's attacks.`);
@@ -270,7 +279,11 @@ function resolveBattle(outcome, b) {
         kill(c, wiped ? 'slain in a lost battle' : 'fell in battle');
         G.stats.deaths++;
         res.dead.push(c);
-      } else { c.hp = Math.max(1, Math.round(maxHp(c) * 0.15)); res.survived.push(c); }
+      } else {
+        c.hp = Math.max(1, Math.round(maxHp(c) * 0.15));
+        res.survived.push(c);
+        if (R.chance(0.18)) { const k = injure(c, 'when struck down in battle'); if (k) res.injured = (res.injured || []).concat(`${c.name}: ${GD.INJURIES[k].name}`); }
+      }
     }
   }
   if (wiped) {

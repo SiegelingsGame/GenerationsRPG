@@ -105,6 +105,7 @@ UI.renderTop = function () {
     h('div', { class: 'tb' }, h('small', {}, 'Gold'), h('b', { class: 'gold' }, Math.round(hs.gold))),
     h('div', { class: 'tb' }, h('small', {}, 'Potions'), h('b', {}, hs.potions)),
     h('button', { class: 'small', onclick: () => this.showTree() }, 'Family Tree'),
+    h('button', { class: 'small', onclick: () => this.showChronicle() }, 'Chronicle'),
     h('button', { class: 'small', onclick: () => this.showMenu() }, 'Menu'),
   );
 };
@@ -143,7 +144,7 @@ UI.heirBox = function () {
     const cands = heirCandidates();
     const blood = cands.filter((x) => !x.why.startsWith('Spouse'));
     if (blood.length) return h('div', { class: 'heirbox warn' }, 'No heir named. Pick one in the Household.');
-    return h('div', { class: 'heirbox warn' }, cands.length ? 'No blood heir yet. If you die, your spouse rules as regent.' : '⚠ No heir! If you die, the House ends.');
+    return h('div', { class: 'heirbox warn' }, cands.length ? 'No blood heir. A loyal companion would be adopted if you die.' : '⚠ No heir! If you die, the House ends. Have children.');
   }
   return h('div', { class: 'heirbox', onclick: () => this.showChar(heir) }, portrait(heir, 36), h('div', {}, h('small', {}, 'Heir'), h('div', {}, heir.name), h('small', {}, this.charLine(heir))));
 };
@@ -235,19 +236,21 @@ UI.battleChanged = function () {
   const u = Battle.cur;
   const kids = [h('h3', {}, Battle.title)];
   if (Battle.waiting && u && u.side === 'party') {
-    const sk = GD.SKILLS[u.skill];
     kids.push(h('p', {}, h('b', {}, `${u.name}'s turn`), h('br'), h('small', { class: 'dim' }, `Focus ${u.focus}/3`)));
     if (this.targeting) {
-      kids.push(h('p', { class: 'dim' }, `Choose a target for ${this.targeting === 'skill' ? sk.name : this.targeting}: click on the field or below.`));
+      kids.push(h('p', { class: 'dim' }, `Choose a target for ${this.targeting === 'skill' ? GD.SKILLS[this.targetSkill].name : this.targeting}: click on the field or below.`));
       const targets = Battle.units.filter((x) => this.validTarget(x));
       kids.push(...targets.map((x) => act(`${x.name} (${x.hp}/${x.maxHp})`, () => this.chooseTarget(x))));
       kids.push(act('Back', () => { this.targeting = null; this.battleChanged(); }));
     } else {
       kids.push(act('Attack', () => this.beginTarget('attack')));
-      kids.push(act(`${sk.name}`, () => {
-        if (u.skill === 'str' || u.skill === 'vit') Battle.act('skill');
-        else this.beginTarget('skill');
-      }, { disabled: u.focus < 2, sub: `2 focus · ${sk.desc}` }));
+      for (const key of [u.skill, u.skill2].filter(Boolean)) {
+        const sk = GD.SKILLS[key];
+        kids.push(act(`${sk.name}${key === u.skill2 ? ' (learned)' : ''}`, () => {
+          if (key === 'str' || key === 'vit') Battle.act('skill', null, key);
+          else { this.targetSkill = key; this.beginTarget('skill'); }
+        }, { disabled: u.focus < 2, sub: `2 focus · ${sk.desc}` }));
+      }
       kids.push(act('Defend', () => Battle.act('defend'), { sub: 'halve damage, +1 focus' }));
       kids.push(act(`Potion (${G.house.potions})`, () => this.beginTarget('potion'), { disabled: G.house.potions <= 0 }));
       if (Battle.kind === 'wild') kids.push(act('Flee', () => Battle.act('flee'), { cls: 'danger' }));
@@ -263,13 +266,13 @@ UI.beginTarget = function (kind) { this.targeting = kind; this.battleChanged(); 
 UI.validTarget = function (x) {
   const u = Battle.cur;
   if (!u || !x.alive || !this.targeting) return false;
-  const friendly = this.targeting === 'potion' || (this.targeting === 'skill' && u.skill === 'wil');
+  const friendly = this.targeting === 'potion' || (this.targeting === 'skill' && this.targetSkill === 'wil');
   return friendly ? x.side === u.side : x.side !== u.side;
 };
 UI.chooseTarget = function (x) {
   const kind = this.targeting;
   this.targeting = null;
-  Battle.act(kind, x.uid);
+  Battle.act(kind, x.uid, kind === 'skill' ? this.targetSkill : undefined);
 };
 UI.clickUnit = function (u) {
   if (this.targeting && this.validTarget(u)) this.chooseTarget(u);
@@ -290,6 +293,7 @@ UI.battleResults = function (res, done) {
     rows.push(h('p', {}, `The survivors limp home. ${res.goldLost}g lost.`));
   }
   for (const c of res.survived) rows.push(h('p', { class: 'dim' }, `${c.name} was struck down but survives.`));
+  for (const t of res.injured || []) rows.push(h('p', { class: 'bad' }, `Lasting injury: ${t}.`));
   for (const c of res.dead) rows.push(h('div', { class: 'row bad' }, portrait(c, 32), `${c.name} has died at ${ageStr(c)}.`));
   rows.push(act('Continue', () => { this.closeModal(); done(); }));
   this.modal(rows, { title: 'Battle Over', locked: true });
@@ -311,7 +315,8 @@ UI.charBody = function (c) {
   const r = GD.RACES[c.race];
   const lifeLeft = c.alive ? `${Math.max(0, Math.round(r.elder - age(c)))} yrs until elder` : `Died ${year(c.died)}: ${c.cause}`;
   const statRows = STATS.map((k) => h('tr', {}, h('td', {}, STAT_NAMES[k]), h('td', {}, stat(c, k).toFixed(1)),
-    h('td', { class: 'dim' }, ageMod(c, k) !== 1 ? `age ×${ageMod(c, k).toFixed(2)}` : ''), h('td', { class: 'dim' }, c.bonus[k] ? `+${c.bonus[k].toFixed(1)} flat` : '')));
+    h('td', { class: 'dim' }, ageMod(c, k) !== 1 ? `age ×${ageMod(c, k).toFixed(2)}` : ''), h('td', { class: 'dim' }, c.bonus[k] ? `+${c.bonus[k].toFixed(1)} flat` : ''),
+    h('td', { class: 'bad' }, (c.injuries || []).reduce((t, i) => t + (GD.INJURIES[i].mods[k] || 0), 0) < 0 ? `${(c.injuries || []).reduce((t, i) => t + (GD.INJURIES[i].mods[k] || 0), 0)} injury` : '')));
   const tags = [
     h('span', { class: 'tag' }, GD.BIRTH[bk].name),
     c.birth === 'bastard' && c.legit ? h('span', { class: 'tag good' }, 'Legitimised') : null,
@@ -337,7 +342,8 @@ UI.charBody = function (c) {
       c.alive ? h('p', { class: 'dim' }, `Formative ${Math.round(c.formative)}/${formativeCap(c)} · XP ×${xpMod(c).toFixed(2)}`) : null,
       ...actions),
     h('div', { class: 'sheet-right' },
-      h('p', {}, h('b', {}, `Level ${c.level}`), ` · Power ${power(c)} · Signature: ${GD.SKILLS[topStat(c)].name}`),
+      h('p', {}, h('b', {}, `Level ${c.level}`), ` · Power ${power(c)} · Signature: ${GD.SKILLS[topStat(c)].name}`, c.extraSkill ? ` · Learned: ${GD.SKILLS[c.extraSkill].name}` : ''),
+      (c.injuries || []).length ? h('div', { class: 'tags' }, c.injuries.map((k) => h('span', { class: 'tag ' + (GD.INJURIES[k].good ? 'good' : 'bad'), title: Object.entries(GD.INJURIES[k].mods).map(([s2, v]) => `${STAT_NAMES[s2]} ${v > 0 ? '+' : ''}${v}`).join(', ') }, GD.INJURIES[k].name))) : null,
       c.alive ? h('div', {}, bar(c.xp, xpNeed(c.level), 'xp'), h('small', { class: 'dim' }, `XP ${Math.round(c.xp)}/${xpNeed(c.level)}`)) : null,
       h('table', { class: 'stats' }, statRows),
       h('p', { class: 'dim' }, `Max HP ${maxHp(c)} · Weapon ${c.gear.weapon ? GD.GEAR[c.gear.weapon - 1].name : 'none'}${G.mcId === c.id && G.house.heirloom ? ` + ${G.house.heirloom.name} (+${G.house.heirloom.power})` : ''} · Armour ${c.gear.armor ? GD.GEAR[c.gear.armor - 1].name : 'none'}`),
@@ -348,6 +354,7 @@ UI.charBody = function (c) {
       kids.length ? h('p', {}, 'Children: ', kids.map((k, i) => [i ? ', ' : '', link(k), k.alive ? ` (${ageStr(k)})` : ''])) : null,
       mc && c.id !== mc.id && c.alive ? h('p', { class: 'dim' }, `Bond with ${mc.name}: ${Math.round(bond(c, mc))} · Loyalty to the House: ${Math.round(c.loyalty)}`) : null,
       c.alive && !c.house && isAdult(c) ? h('p', { class: c.corruption > 60 ? 'bad' : 'dim' }, `Resentment: ${c.corruption > 70 ? 'dangerous' : c.corruption > 40 ? 'simmering' : 'low'}`) : null,
+      this.lifeEvents(c),
     ));
 };
 
@@ -374,7 +381,7 @@ UI.charActions = function (c) {
     out.push(act('Research Lineage', () => { Game.research(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: `${cost}g`, disabled: G.house.gold < cost }));
   }
   if (c.house === G.house.name && c.birth === 'bastard' && !c.legit) out.push(act('Legitimise', () => { Game.legitimise(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '10 prestige', disabled: G.house.prestige < 10 }));
-  if (c.house === G.house.name && isDescendantOf(c, mc.id) && G.heirId !== c.id) out.push(act('Name as Heir', () => { G.heirId = c.id; Log.add(`${c.name} is named heir of House ${G.house.name}.`, 'good'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }));
+  if (c.house === G.house.name && isDescendantOf(c, mc.id) && G.heirId !== c.id) out.push(act('Name as Heir', () => { G.heirId = c.id; chron(`${c.name} is named heir of House ${G.house.name}.`, 'good', [c.id], 'heir'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }));
   if (atEstate && (c.status === 'household') && isAdult(c)) out.push(act('Add to Party', () => { Game.toParty(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { disabled: G.party.length >= 4 }));
   if (atEstate && c.status === 'party') out.push(act('Leave at Estate', () => { Game.toHousehold(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }));
   if ((c.status === 'party' || c.status === 'household') && !c.house) out.push(act('Dismiss', () => { Game.dismiss(c); this.closeModal(); }, { cls: 'danger' }));
@@ -479,31 +486,177 @@ UI.showHousehold = function () {
 };
 
 // ---------------------------------------------------------------- family tree
-UI.showTree = function () {
+UI.treeEl = function (opts = {}) {
   const root = ch(G.founderId);
-  if (!root) return;
+  if (!root) return h('p', { class: 'dim' }, 'No line recorded.');
   const seen = new Set();
+  const open = (p) => (opts.static ? this.modal(this.charBody(p), { title: p.name, wide: true }) : this.replaceModalChar(p));
   const node = (c) => {
     if (!c || seen.has(c.id)) return null;
     seen.add(c.id);
     const spouses = Object.values(G.chars).filter((o) => o.spouse === c.id || c.spouse === o.id || (o.children.some((k) => c.children.includes(k)) && o.id !== c.id));
-    const uniq = [...new Map(spouses.map((s) => [s.id, s])).values()];
-    uniq.forEach((s) => seen.add(s.id));
-    const kids = c.children.map(ch).filter(Boolean).sort((a, b) => a.born - b.born);
-    const person = (p) => h('div', { class: 'tnode' + (p.alive ? '' : ' dead') + (p.id === G.mcId ? ' mc' : '') + (p.id === G.heirId ? ' heir' : ''), onclick: () => this.replaceModalChar(p) },
+    const uniq = [...new Map(spouses.map((s2) => [s2.id, s2])).values()];
+    uniq.forEach((s2) => seen.add(s2.id));
+    const kids = c.children.map(ch).filter(Boolean).sort((a2, b2) => a2.born - b2.born);
+    const person = (p) => h('div', { class: 'tnode' + (p.alive ? '' : ' dead') + (p.id === G.mcId ? ' mc' : '') + (p.id === G.heirId ? ' heir' : '') + (G.house.heroes.includes(p.id) ? ' head' : ''), onclick: () => open(p) },
       portrait(p, 40),
       h('div', {},
-        h('b', {}, (p.id === G.mcId ? '♛ ' : p.id === G.heirId ? '★ ' : '') + p.name),
+        h('b', {}, (p.id === G.mcId && p.alive ? '♛ ' : p.id === G.heirId ? '★ ' : G.house.heroes.includes(p.id) ? '♔ ' : '') + p.name),
         h('small', {}, `${GD.RACES[p.race].name} · ${year(p.born)}–${p.alive ? '' : year(p.died)}`),
-        h('small', { class: p.birth === 'bastard' && !p.legit ? 'bad' : 'dim' }, GD.BIRTH[birthKey(p)].name + (G.house.heroes.includes(p.id) ? ' · Head of House' : ''))));
+        h('small', { class: p.birth === 'bastard' && !p.legit ? 'bad' : 'dim' }, GD.BIRTH[birthKey(p)].name + (G.house.heroes.includes(p.id) ? ' · Head of House' : '')),
+        !p.alive && p.cause ? h('small', { class: 'dim' }, `† ${p.cause}`) : null));
     return h('li', {},
-      h('div', { class: 'couple' }, person(c), ...uniq.map((s) => [h('span', { class: 'amp' }, '⚭'), person(s)])),
+      h('div', { class: 'couple' }, person(c), ...uniq.map((s2) => [h('span', { class: 'amp' }, '⚭'), person(s2)])),
       kids.length ? h('ul', {}, kids.map(node)) : null);
   };
-  const tree = h('div', { class: 'tree' }, h('ul', {}, node(root)));
-  this.modal([h('p', { class: 'dim' }, 'Your bloodline. ♛ is the current head, ★ is the heir, faded entries are dead. Click anyone to see their sheet.'), tree], { title: `The Line of House ${G.house.name}`, wide: true });
+  return h('div', { class: 'tree' }, h('ul', {}, node(root)));
+};
+UI.showTree = function () {
+  this.modal([h('p', { class: 'dim' }, 'Your bloodline. ♛ is the current head, ♔ past heads, ★ the heir; faded entries are dead. Click anyone to see their sheet.'), this.treeEl()], { title: `The Line of House ${G.house.name}`, wide: true });
 };
 
+// ---------------------------------------------------------------- chronicle (the House ledger)
+const KIND_ICON = { birth: '✦', death: '†', marriage: '⚭', injury: '✚', skill: '✧', gear: '⚔', era: '◈', head: '♛', year: '⌛', good: '•', bad: '!', dim: '·' };
+UI.ledgerRow = function (e) {
+  const who = e.ids && e.ids.length ? ch(e.ids[0]) : null;
+  return h('div', { class: 'lrow k-' + e.kind },
+    h('span', { class: 'lyear' }, e.year),
+    h('span', { class: 'licon' }, KIND_ICON[e.kind] || '•'),
+    who ? portrait(who, 28) : h('span', { class: 'lspace' }),
+    h('span', { class: 'ltext' }, e.text));
+};
+UI.chronicleEl = function (filterId, kinds) {
+  let rows = (G.ledger || []).filter((e) => (!filterId || (e.ids || []).includes(filterId)) && (!kinds || kinds.includes(e.kind)));
+  if (!rows.length) return h('p', { class: 'dim' }, 'Nothing recorded yet.');
+  const out = [];
+  let lastYear = null;
+  for (const e of rows) {
+    if (e.year !== lastYear) {
+      const eraAt = [...G.world.eras].reverse().find((x) => x.start <= e.year);
+      out.push(h('div', { class: 'lyhead' }, h('b', {}, e.year), eraAt ? h('small', { style: `color:${GD.ERAS[eraAt.type].color}` }, GD.ERAS[eraAt.type].short) : null));
+      lastYear = e.year;
+    }
+    out.push(this.ledgerRow(e));
+  }
+  return h('div', { class: 'ledger' }, out);
+};
+UI.lifeEvents = function (c) {
+  const ev = (G.ledger || []).filter((e) => (e.ids || []).includes(c.id));
+  if (!ev.length) return null;
+  return h('details', { class: 'life' }, h('summary', {}, `Life events (${ev.length})`), h('div', { class: 'ledger small' }, ev.map((e) => this.ledgerRow(e))));
+};
+UI.showChronicle = function () {
+  const people = Object.values(G.chars).filter((c) => (G.ledger || []).some((e) => (e.ids || []).includes(c.id)) && (c.house === G.house.name || c.servedHouse || c.status === 'party' || c.status === 'household'))
+    .sort((a, b) => a.born - b.born);
+  const holder = h('div', {}, this.chronicleEl());
+  const update = () => holder.replaceChildren(this.chronicleEl(sel.value || null, kindSel.value ? kindSel.value.split(',') : null));
+  const sel = h('select', { id: 'chron-filter', onchange: update },
+    h('option', { value: '' }, 'Everyone'),
+    people.map((c) => h('option', { value: c.id }, `${c.name}${c.alive ? '' : ' †'}${c.house === G.house.name ? '' : ' (companion)'}`)));
+  const kindSel = h('select', { id: 'chron-kind', onchange: update },
+    h('option', { value: '' }, 'All events'),
+    h('option', { value: 'birth,death,marriage,head' }, 'Births, marriages, deaths'),
+    h('option', { value: 'injury,skill,gear' }, 'Scars, skills & gear'),
+    h('option', { value: 'era,head,year' }, 'Eras & successions'));
+  this.modal([h('div', { class: 'row' }, h('label', { class: 'dim' }, 'Person ', sel), h('label', { class: 'dim' }, 'Show ', kindSel)), holder], { title: `Chronicle of House ${G.house.name}`, wide: true });
+};
+
+// ---------------------------------------------------------------- time skip timeline
+UI.timeline = function (d, onDone) {
+  this.refresh();
+  const span = Math.max(1, d.endYear - d.startYear);
+  const dur = clamp(span * 650, 3500, 15000);
+  const events = [...d.events].sort((a, b) => a.year - b.year || a.day - b.day);
+  const people = d.people.map(ch).filter(Boolean);
+  const yearEl = h('div', { class: 'tl-year' }, d.startYear);
+  const fill = h('div', { class: 'tl-fill' });
+  const track = h('div', { class: 'tl-track' }, fill,
+    events.filter((e) => ['death', 'birth', 'marriage', 'injury', 'head'].includes(e.kind)).map((e) => h('span', { class: 'tl-dot k-' + e.kind, style: `left:${((e.year - d.startYear) / span) * 100}%`, title: e.text })));
+  const feed = h('div', { class: 'tl-feed' });
+  const roster = h('div', { class: 'tl-roster' });
+  const drawRoster = (yr) => {
+    roster.replaceChildren(...people.map((c) => {
+      const dead = !c.alive && year(c.died) <= yr;
+      const a = Math.floor(age(c) - ((c.alive ? year() : year(c.died)) - Math.min(yr, c.alive ? yr : year(c.died))));
+      // draw them as they looked in that year: shift their birth so the stage matches
+      const shift = ((c.alive ? year() : year(c.died)) - Math.min(yr, c.alive ? yr : year(c.died))) * DAYS_PER_YEAR;
+      const then = { ...c, born: c.born + shift };
+      return h('div', { class: 'tl-person' + (dead ? ' dead' : '') + (c.id === d.heir.id ? ' heir' : '') }, portrait(then, 48), h('b', {}, c.name), h('small', {}, dead ? `† ${year(c.died)}` : `age ${Math.max(0, a)}`));
+    }));
+  };
+  const skipBtn = act('Skip ▸▸', () => { t0 = -1e9; });
+  const body = h('div', { class: 'timeline' },
+    h('div', { class: 'row' }, portrait(d.dead, 70), h('div', {},
+      h('p', { class: 'big' }, `† ${d.dead.name}`),
+      h('p', { class: 'dim' }, `Head of House ${G.house.name}, died ${year(d.dead.died)} aged ${ageStr(d.dead)}: ${d.dead.cause}.`),
+      h('p', {}, `The House waits for its heir to come of age. The years turn…`))),
+    yearEl, track, roster, feed, h('div', { class: 'tl-actions' }, skipBtn));
+  this.modal(body, { title: 'The Years Turn', wide: true, locked: true });
+  let t0 = performance.now();
+  let shown = 0;
+  let lastYr = null;
+  const frame = () => {
+    const k = clamp((performance.now() - t0) / dur, 0, 1);
+    const yr = Math.floor(d.startYear + span * k);
+    yearEl.textContent = yr;
+    fill.style.width = `${k * 100}%`;
+    if (yr !== lastYr) { drawRoster(yr); lastYr = yr; }
+    while (shown < events.length && events[shown].year <= yr) {
+      const row = this.ledgerRow(events[shown]);
+      row.classList.add('pop');
+      feed.prepend(row);
+      shown++;
+    }
+    if (k < 1) requestAnimationFrame(frame);
+    else finish();
+  };
+  const finish = () => {
+    skipBtn.remove();
+    const rows = people.map((c) => {
+      const b = d.before[c.id];
+      if (!b) return null;
+      const newInj = (c.injuries || []).filter((x) => !b.injuries.includes(x)).map((x) => GD.INJURIES[x].name);
+      const changes = [];
+      if (c.level > b.level) changes.push(`+${c.level - b.level} levels`);
+      if (newInj.length) changes.push(newInj.join(', '));
+      if (c.extraSkill && c.extraSkill !== b.skill) changes.push(`learned ${GD.SKILLS[c.extraSkill].name}`);
+      if (c.gear.armor > b.armor || c.gear.weapon > b.weapon) changes.push('new gear');
+      return h('tr', { class: c.alive ? '' : 'bad' },
+        h('td', {}, c.name), h('td', {}, c.alive ? `${b.age} → ${ageStr(c)}` : `† at ${ageStr(c)}`), h('td', {}, `L${b.level} → L${c.level}`),
+        h('td', { class: 'dim' }, c.alive ? (changes.join(' · ') || 'a quiet life') : c.cause));
+    }).filter(Boolean);
+    feed.after(h('div', {}, h('h4', {}, 'How the years treated them'), h('div', { class: 'tablewrap' }, h('table', { class: 'stats sum' }, h('tr', {}, h('th', {}, 'Name'), h('th', {}, 'Age'), h('th', {}, 'Level'), h('th', {}, 'Changes')), rows)),
+      act(d.lineEnded ? 'See the history of your House' : `Lead as ${d.heir.name}`, () => { this.closeModal(); onDone(); }, { cls: 'hl' })));
+  };
+  requestAnimationFrame(frame);
+};
+
+// ---------------------------------------------------------------- end of a line (or a Golden Age)
+UI.endScreen = function (opts) {
+  const reigns = G.house.reigns || [];
+  const heads = h('div', { class: 'heads' }, reigns.map((r, i) => {
+    const c = ch(r.id);
+    if (!c) return null;
+    return h('div', { class: 'head-card', onclick: () => this.modal(this.charBody(c), { title: c.name, wide: true }) }, portrait(c, 64),
+      h('b', {}, c.name), h('small', {}, `Generation ${i + 1}`), h('small', {}, `${r.from}–${r.to ?? (c.alive ? 'now' : year(c.died))}`),
+      h('small', { class: 'dim' }, c.alive ? `L${c.level}, still living` : `† ${c.cause}`));
+  }));
+  const all = Object.values(G.chars).filter((c) => c.house === G.house.name);
+  const body = h('div', { class: 'endscreen' },
+    h('div', { class: 'title' }, h('h1', {}, opts.title), h('p', {}, opts.text)),
+    h('div', { class: 'endstats' },
+      h('div', {}, h('b', {}, G.house.generation), h('small', {}, 'generations')),
+      h('div', {}, h('b', {}, `${START_YEAR}–${year()}`), h('small', {}, 'years of the House')),
+      h('div', {}, h('b', {}, all.length), h('small', {}, 'born or wed into the line')),
+      h('div', {}, h('b', {}, Math.round(G.house.prestige)), h('small', {}, 'prestige')),
+      h('div', {}, h('b', {}, Math.round(G.world.prosperity)), h('small', {}, 'prosperity')),
+      h('div', {}, h('b', {}, G.stats.battles), h('small', {}, 'battles'))),
+    h('h4', {}, 'Heads of the House'), heads,
+    h('h4', {}, 'Family tree'), this.treeEl({ static: true }),
+    h('h4', {}, 'Timeline of the House'), this.chronicleEl(),
+    h('div', { class: 'tl-actions' }, opts.actions));
+  this.modal(body, { wide: true, locked: true });
+};
 // ---------------------------------------------------------------- menu
 UI.showMenu = function () {
   this.modal([
@@ -524,7 +677,9 @@ UI.showHelp = function () {
       <li><b>Time matters.</b> Travel, battles and rest all cost days. Every new year everyone ages, and people are born, marry, die or turn bad.</li>
       <li><b>Age:</b> youths level ×1.5 and earn <i>formative points</i> (permanent XP bonus and protection from old-age debuffs). Elders are wiser but weaker, and level slowly.</li>
       <li><b>Races</b> mature and age at different speeds. An elf heir takes 30 years to come of age; an orc heir takes 11.</li>
-      <li><b>Death:</b> fallen fighters may die for good. When your head of house dies, choose an heir. Time skips until they come of age. Companions gain only flat stats while you are gone.</li>
+      <li><b>Death:</b> fallen fighters may die for good. When your head of House dies, your named heir (or the eldest of the blood) takes over and the years turn until they come of age. Everyone lives those years: they level up, marry, have children, gain scars, lose limbs, learn skills and sometimes die.</li>
+      <li><b>Chronicle:</b> every birth, death, marriage, injury and succession is kept in the House ledger. When your line ends you get its full family tree and timeline.</li>
+      <li><b>Map:</b> drag the wheel or use + and − to zoom, and Q / E or the buttons to rotate.</li>
       <li><b>Birth:</b> Highborn, Lowborn, Bastard and Orphan each carry bonuses and drawbacks. Research unknown lineages in taverns.</li>
       <li><b>Prestige</b> unlocks better partners, recruits and estate tiers. Invest gold in your estate. Upgrades and the heirloom pass down.</li>
       <li><b>Betrayal:</b> resentful companions and their children can become <b>Rivals</b> who hunt your line. Keep bonds and loyalty high.</li>

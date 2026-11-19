@@ -4,6 +4,8 @@ A 2.5D roguelike, turn-based RPG about a family line. You play the head of a Hou
 
 **Play:** open `index.html` in a browser. No build step and no dependencies. Everything is drawn procedurally with Canvas 2D.
 
+**Controls:** click a tile to travel; mouse wheel or + / − to zoom; Q / E or the on-screen buttons to rotate the map.
+
 **Design:** see [`docs/DESIGN.md`](docs/DESIGN.md) for the full concept (pillars, systems, numbers and roadmap).
 
 ## What's in the playable concept

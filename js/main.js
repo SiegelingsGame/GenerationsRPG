@@ -70,6 +70,7 @@ Game.found = function (sel) {
   G.founderId = mc.id;
   G.party = [mc.id];
   G.house.heroes = [mc.id];
+  G.house.reigns = [{ id: mc.id, from: year(), to: null, gen: 1 }];
   G.house.heirloom = makeHeirloom();
   this.choosePartner(true);
 };
@@ -118,7 +119,7 @@ Game.enterWorld = function (fresh) {
   G.mode = 'world';
   Render.camInit = false;
   if (fresh) {
-    Log.add(`House ${G.house.name} is founded in the ${era().name}. The ${G.house.heirloom.name} is its first heirloom.`, 'good');
+    chron(`${ch(G.mcId).name} founds House ${G.house.name} in the ${era().name}. The ${G.house.heirloom.name} is its first heirloom.`, 'head', [G.mcId], 'head');
     Log.add('Tip: travel to towns to recruit and court, clear ruins for prestige, and invest at your estate.', 'dim');
   }
   UI.refresh();
@@ -209,7 +210,7 @@ Game.delve = function (t) {
       G.house.potions += 1;
       addProsperity(5);
       G.party.map(ch).forEach((c) => addFormative(c, 2));
-      Log.add(`The ruins are cleared! Treasure: ${loot}g and a potion. Prestige +6, Prosperity +5.`, 'good');
+      chron(`${ch(G.mcId).name}'s party cleared the ruins. Treasure: ${loot}g and a potion. Prestige +6, Prosperity +5.`, 'good', G.party.slice(), 'deed');
     },
   });
 };
@@ -248,7 +249,7 @@ Game.deed = function (town, kind) {
     addProsperity(pros);
     G.house.prestige += pres + hb + amb;
     G.party.map(ch).forEach((c) => { addFormative(c, 2); c.loyalty = clamp(c.loyalty + 3, -100, 100); });
-    Log.add(`${text} Prosperity +${pros}, Prestige +${pres + hb + amb}.`, 'good');
+    chron(`${text} Prosperity +${pros}, Prestige +${pres + hb + amb}.`, 'good', G.party.slice(), 'deed');
   };
   if (kind === 'aid') { G.house.gold -= 120; advanceDays(10); finish(4, 3, `House ${G.house.name} feeds the starving of ${town.name}.`); }
   if (kind === 'festival') {
@@ -278,7 +279,7 @@ Game.recruit = function (c) {
   const parentComp = c.parents.map(ch).find((p) => p && p.alive && (p.status === 'party' || p.status === 'household'));
   if (parentComp) { addBond(c, parentComp, 15); c.loyalty += 10; }
   if (c.lineageKnown && c.secret === 'noble') G.house.prestige += 2;
-  Log.add(`${c.name} joins House ${G.house.name}${c.status === 'household' ? ' (waiting at the estate)' : ''}.`, 'good');
+  chron(`${c.name} joins House ${G.house.name}${c.status === 'household' ? ' (waiting at the estate)' : ''}.`, 'good', [c.id], 'join');
   this.after();
 };
 Game.court = function (c) {
@@ -314,7 +315,7 @@ Game.research = function (c) {
 Game.legitimise = function (c) {
   G.house.prestige -= 10;
   c.legit = true;
-  Log.add(`${c.name} is legitimised and recognised as a true child of House ${G.house.name}.`, 'good');
+  chron(`${c.name} is legitimised and recognised as a true child of House ${G.house.name}.`, 'good', [c.id], 'legit');
   this.after(true);
 };
 Game.toParty = function (c) { if (G.party.length >= 4) return; c.status = 'party'; G.party.push(c.id); this.after(true); };
@@ -326,7 +327,7 @@ Game.dismiss = function (c) {
   c.status = 'npc'; c.town = R.int(0, G.world.towns.length - 1);
   G.party = G.party.filter((id) => id !== c.id);
   c.loyalty -= 20; c.grudge = true;
-  Log.add(`${c.name} was dismissed and leaves bitter.`, 'dim');
+  chron(`${c.name} was dismissed and leaves bitter.`, 'bad', [c.id], 'leave');
   this.after();
 };
 Game.buyGear = function (c, slot, cost) { G.house.gold -= cost; c.gear[slot]++; this.after(true); };
@@ -336,7 +337,7 @@ Game.upgradeEstate = function () {
   G.house.gold -= next.cost;
   G.house.tier++;
   G.house.prestige += next.gain || 0;
-  Log.add(`House ${G.house.name} raises a ${next.name}! Prestige +${next.gain}.`, 'good');
+  chron(`House ${G.house.name} raises a ${next.name}! Prestige +${next.gain}.`, 'good', [G.mcId], 'estate');
   this.after(true);
 };
 Game.buyUpgrade = function (k) {
@@ -353,11 +354,12 @@ Game.hireRetinue = function (cost) { G.house.gold -= cost; G.house.retinue++; Lo
 Game.after = function (quiet) {
   if (G.pendingVictory) {
     G.pendingVictory = false;
-    UI.modal(h('div', { class: 'title' },
-      h('h1', {}, 'A Golden Age'),
-      h('p', {}, `Through ${G.house.generation} generation(s), House ${G.house.name} has healed the land. Prosperity has reached ${Math.round(G.world.prosperity)}, and a Golden Age begins.`),
-      h('p', { class: 'dim' }, `${G.stats.battles} battles fought, ${G.stats.deaths} fallen in battle. Your line goes on.`),
-      act('Continue the line', () => { UI.closeModal(); this.after(); }, { cls: 'hl' })), { locked: true });
+    UI.closeAll();
+    UI.endScreen({
+      title: 'A Golden Age',
+      text: `Through ${G.house.generation} generation(s), House ${G.house.name} has healed the land. Prosperity has reached ${Math.round(G.world.prosperity)}, and a Golden Age begins. This is the story of your line so far.`,
+      actions: act('Continue the line', () => { UI.closeModal(); this.after(); }, { cls: 'hl' }),
+    });
     return;
   }
   if (G.pendingSuccession) return this.succession();
@@ -365,60 +367,54 @@ Game.after = function (quiet) {
   if (!quiet) saveGame();
 };
 
+// The head of House is dead: no choosing, no regency. The heir is named by
+// custom (the designated heir, else the eldest of the blood) and the years turn.
 Game.succession = function () {
   const dead = ch(G.mcId);
-  const cands = heirCandidates();
   UI.closeAll();
-  if (!cands.length) {
-    deleteSave();
-    UI.modal(h('div', { class: 'title' },
-      h('h1', {}, 'The Line Ends'),
-      h('p', {}, `${dead.name} died (${dead.cause}) with no heir. House ${G.house.name} lasted ${G.house.generation} generation(s), from ${START_YEAR} to ${year()}.`),
-      h('p', { class: 'dim' }, `The world's prosperity stands at ${Math.round(G.world.prosperity)}.`),
-      act('Begin anew', () => location.reload(), { cls: 'hl' })), { locked: true, title: '' });
-    return;
+  if (!heirCandidates().length) return this.lineEnd(dead);
+  const startYear = year();
+  const before = {};
+  const watch = new Set();
+  const note = (c) => { if (c && !before[c.id]) { before[c.id] = snapshot(c); watch.add(c.id); } };
+  heirCandidates().slice(0, 2).forEach((x) => note(x.c));
+  G.party.map(ch).forEach(note);
+  skipPeople().filter((c) => c.house === G.house.name).forEach(note);
+  skipPeople().forEach(note);
+  let events = [];
+  let heir = null;
+  let lineEnded = false;
+  for (let guard = 0; guard < 8; guard++) {
+    const cands = heirCandidates();
+    if (!cands.length) { lineEnded = true; break; }
+    const next = (cands.find((x) => x.c.id === G.heirId) || cands[0]).c;
+    note(next);
+    heir = next;
+    const res = performTimeskip(heir);
+    events = events.concat(res.events);
+    if (!res.heirDied) break;
   }
-  const preferred = cands.find((x) => x.c.id === G.heirId) || cands[0];
-  UI.modal(h('div', {},
-    h('div', { class: 'row' }, portrait(dead, 90), h('div', {},
-      h('p', { class: 'big' }, `${dead.name} is dead.`),
-      h('p', { class: 'dim' }, `${dead.cause[0].toUpperCase() + dead.cause.slice(1)}, aged ${ageStr(dead)}. Head of House ${G.house.name} in generation ${G.house.generation}.`))),
-    h('p', {}, 'Who will lead the House? Time will pass until they come of age, and the world will not wait for them.'),
-    h('div', { class: 'choices' }, cands.map((x) => {
-      const years = Math.max(1, Math.ceil(GD.RACES[x.c.race].maturity - age(x.c)));
-      return h('div', { class: 'choice' + (x === preferred ? ' on' : '') },
-        portrait(x.c, 80), h('b', {}, x.c.name), h('small', {}, `${x.why} · ${UI.charLine(x.c)}`),
-        h('small', {}, `${GD.BIRTH[birthKey(x.c)].name} · L${x.c.level} · Power ${power(x.c)}`),
-        h('small', { class: years > 10 ? 'bad' : 'dim' }, `Timeskip: ${years} year${years > 1 ? 's' : ''}`),
-        act('Choose', () => this.doSkip(x.c), { cls: 'hl' }));
-    })),
-  ), { title: 'Succession', wide: true, locked: true });
+  const people = [...watch].map(ch).filter(Boolean)
+    .sort((a, b) => (b.id === heir.id) - (a.id === heir.id) || (b.house === G.house.name) - (a.house === G.house.name) || a.born - b.born)
+    .slice(0, 10);
+  G.mode = 'world';
+  saveGame();
+  UI.timeline({ dead, heir, startYear, endYear: year(), events, before, people: people.map((c) => c.id), lineEnded }, () => {
+    if (lineEnded) return this.lineEnd(dead);
+    Render.camInit = false;
+    if (!spouseOf(heir) && isAdult(heir)) this.choosePartner(false);
+    else this.after();
+  });
 };
 
-Game.doSkip = function (heir) {
+Game.lineEnd = function (dead) {
+  deleteSave();
   UI.closeAll();
-  const res = performTimeskip(heir);
-  const important = res.events.filter((e) => e.kind !== 'dim');
-  if (res.heirDied) {
-    UI.modal(h('div', {}, h('p', { class: 'bad big' }, `${heir.name} did not survive to lead.`), h('div', { class: 'events' }, important.map((e) => h('div', { class: 'le ' + e.kind }, h('span', { class: 'ly' }, e.year), ' ', e.text))),
-      act('Choose another heir', () => { UI.closeModal(); this.succession(); }, { cls: 'hl' })), { title: 'Tragedy', wide: true, locked: true });
-    return;
-  }
-  const party = G.party.map(ch);
-  UI.modal(h('div', {},
-    h('p', { class: 'big' }, `${res.years} year${res.years > 1 ? 's' : ''} pass…`),
-    h('div', { class: 'row' }, party.map((c) => h('div', { class: 'mini' }, portrait(c, 56), h('div', {}, h('b', {}, c.name), h('div', { class: 'psub' }, UI.charLine(c)), h('div', { class: 'psub' }, `L${c.level} · Power ${power(c)}`))))),
-    h('h4', {}, 'What happened'),
-    h('div', { class: 'events' }, important.length ? important.map((e) => h('div', { class: 'le ' + e.kind }, h('span', { class: 'ly' }, e.year), ' ', e.text)) : h('p', { class: 'dim' }, 'The years were quiet.')),
-    act(`Lead as ${heir.name}`, () => {
-      UI.closeModal();
-      G.mode = 'world';
-      Render.camInit = false;
-      if (!spouseOf(heir) && isAdult(heir)) this.choosePartner(false);
-      else this.after();
-    }, { cls: 'hl' }),
-  ), { title: `Generation ${G.house.generation}`, wide: true, locked: true });
-  saveGame();
+  UI.endScreen({
+    title: 'The Line Ends',
+    text: `${dead.name} died (${dead.cause}) and no one of the blood remains. House ${G.house.name} lasted ${G.house.generation} generation(s), from ${START_YEAR} to ${year()}. This is its story.`,
+    actions: act('Found a new House', () => location.reload(), { cls: 'hl' }),
+  });
 };
 
 window.addEventListener('load', () => Game.boot());

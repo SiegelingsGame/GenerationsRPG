@@ -156,3 +156,13 @@ GD.GEAR = [
   { name: 'Masterwork', atk: 11, def: 8,  cost: 800 },
   { name: 'Mythril',    atk: 16, def: 12, cost: 1800 },
 ];
+
+// Lasting injuries and marks. mods are flat stat changes; look drives the 2.5D figure.
+GD.INJURIES = {
+  lostArm:  { name: 'Lost an arm',     verb: 'lost an arm',          mods: { str: -3, agi: -1 }, w: 1,   look: 'arm' },
+  lostEye:  { name: 'Lost an eye',     verb: 'lost an eye',          mods: { agi: -2 },          w: 1.4, look: 'eye' },
+  lostLeg:  { name: 'Lost a leg',      verb: 'lost a leg',           mods: { agi: -3, vit: -1 }, w: 0.8, look: 'leg' },
+  scarred:  { name: 'Battle-scarred',  verb: 'came back scarred but harder', mods: { wil: 1, vit: 1 }, w: 2, look: 'scar', good: true },
+  badKnee:  { name: 'Ruined knee',     verb: 'ruined a knee',        mods: { agi: -1.5 },        w: 1.5 },
+  weakLungs:{ name: 'Weak lungs',      verb: 'developed weak lungs', mods: { vit: -2 },          w: 1,   elderOnly: true },
+};
