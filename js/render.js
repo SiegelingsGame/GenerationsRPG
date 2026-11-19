@@ -234,13 +234,21 @@ Render.drawLandscape = function () {
     if (!view(s.x, s.y)) continue;
     if (t.feature || ['forest', 'jungle', 'mountain', 'snow', 'hills', 'desert', 'swamp'].includes(t.type)) items.push({ y: s.y, t });
   }
-  for (const a of Living.visibleAgents()) { const s = this.iso(a.x, a.y, 0); items.push({ y: s.y, a }); }
+  for (const a of Living.visibleAgents()) { const s = this.iso(a.x, a.y, 0); items.push({ y: s.y + (LS.bridgeLift(a.x, a.y) ? 30 : 0), a }); }
+  // bridges sort by their farthest point, so whatever stands on or in front of them draws after
+  for (const b of LS.bridges || []) {
+    const e1 = this.iso(b.x - b.dx * b.len / 2, b.y - b.dy * b.len / 2, 0), e2 = this.iso(b.x + b.dx * b.len / 2, b.y + b.dy * b.len / 2, 0);
+    const mid = this.iso(b.x, b.y, 0);
+    if (!view(mid.x, mid.y)) continue;
+    items.push({ y: Math.min(e1.y, e2.y) - 4, bridge: b });
+  }
   for (const a of G.world.parties || []) if (!Living.visible(a)) a._sx = null;
   const ps = this.iso(pp.x, pp.y, 0);
-  items.push({ y: ps.y + 0.1, party: true });
+  items.push({ y: ps.y + 0.1 + (LS.bridgeLift(pp.x, pp.y) ? 30 : 0), party: true });
   items.sort((p, q) => p.y - q.y);
   for (const it of items) {
     if (it.t) this.drawFeature(it.t);
+    else if (it.bridge) LS.drawBridge(this, it.bridge);
     else if (it.a) Living.drawAgent(this, it.a);
     else { Living.drawDest(this); this.drawParty(pp); }
   }
@@ -654,6 +662,7 @@ Render.drawRuins = function (p, cleared) {
 
 Render.drawParty = function (pp) {
   const p = this.iso(pp.x, pp.y, pp.h);
+  if (this.flat && LS.ready) p.y -= LS.bridgeLift(pp.x, pp.y); // up and over a bridge
   const mc = ch(G.mcId);
   if (!mc) return;
   const party = G.party.map(ch).filter(Boolean);

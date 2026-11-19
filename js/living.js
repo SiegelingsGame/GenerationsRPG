@@ -363,6 +363,7 @@ Living.drawAgent = function (r, a) {
   const c = r.ctx;
   const t = tileAt(Math.round(a.x), Math.round(a.y));
   const p = r.iso(a.x, a.y, t ? t.h : 1);
+  if (r.flat && LS.ready) p.y -= LS.bridgeLift(a.x, a.y);
   const kind = AGENTS[a.kind];
   const look = (tunic, o = {}) => ({ skin: o.skin || '#d9a77e', hair: '#3a2a1a', tunic, race: o.race || 'human', stage: 'prime', gender: o.g || 'man', hairStyle: 'short', beard: !!o.beard });
   if (a.kind === 'caravan') {

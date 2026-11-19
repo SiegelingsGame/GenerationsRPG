@@ -79,6 +79,7 @@ LS.build = function () {
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const n = (bj + dj) * W + (bi + di); if (n >= 0 && n < W * H && this.river[n] !== 1 && !this.road[n]) this.road[n] = 1; }
   }
   this.buildCost();
+  this.collectBridges();
   this.paint();
   this.ready = true;
 };
@@ -365,12 +366,11 @@ LS.paint = function () {
     stroke(r.cells, wid(r.cells.length), eraTint('#4a8cc0'));
     for (const f of r.fords || []) { const [x, y] = toPx(f); c.fillStyle = eraTint('#c9b98a'); c.beginPath(); c.arc(x, y, S * 0.22, 0, Math.PI * 2); c.fill(); }
   }
+  // the bridge itself is a raised model (see LS.drawBridge); the land only carries its shadow
   const bridgeAt = (x, y, ang) => {
-    c.save(); c.translate(x, y); c.rotate(ang);
-    c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(-S * 0.5, -S * 0.17, S * 1.0, S * 0.44);
-    c.fillStyle = '#4a3020'; c.fillRect(-S * 0.48, -S * 0.21, S * 0.96, S * 0.42);
-    c.fillStyle = '#9a7a52'; for (let q = -4; q <= 4; q++) c.fillRect(q * S * 0.105 - S * 0.04, -S * 0.18, S * 0.08, S * 0.36);
-    c.fillStyle = '#3a2416'; c.fillRect(-S * 0.48, -S * 0.23, S * 0.96, S * 0.05); c.fillRect(-S * 0.48, S * 0.18, S * 0.96, S * 0.05);
+    c.save(); c.translate(x + S * 0.12, y + S * 0.1); c.rotate(ang);
+    c.fillStyle = 'rgba(10,20,30,0.28)';
+    c.beginPath(); c.ellipse(0, 0, S * 0.55, S * 0.2, 0, 0, Math.PI * 2); c.fill();
     c.restore();
   };
   for (const r of G.world.landscape.rivers) {
@@ -404,4 +404,126 @@ LS.hfAt = function (wx, wy) {
   const hf = this.hf;
   const a = hf[j * W + i], b = hf[j * W + Math.min(W - 1, i + 1)], c2 = hf[Math.min(H - 1, j + 1) * W + i], d = hf[Math.min(H - 1, j + 1) * W + Math.min(W - 1, i + 1)];
   return (a * (1 - fx) + b * fx) * (1 - fy) + (c2 * (1 - fx) + d * fx) * fy;
+};
+
+// ---------------------------------------------------------------- raised bridge models
+// Each bridge spans the river along `dir` (unit vector, world units); `kind` is stone or wood.
+LS.collectBridges = function () {
+  const { W } = this;
+  const L = G.world.landscape;
+  const at = (idx) => this.cellCenter(idx % W, Math.floor(idx / W));
+  const out = [];
+  const add = (idx, ax, ay, kind) => {
+    const len = Math.hypot(ax, ay) || 1;
+    const p = at(idx);
+    if (out.some((b) => Math.hypot(b.x - p.x, b.y - p.y) < 0.5)) return;
+    out.push({ x: p.x, y: p.y, dx: ax / len, dy: ay / len, len: kind === 'stone' ? 1.35 : 1.15, half: kind === 'stone' ? 0.2 : 0.14, kind });
+  };
+  for (const rd of L.roads) {
+    for (let k = 1; k < rd.length - 1; k++) {
+      if (this.river[rd[k]] !== 1) continue;
+      const a = at(rd[Math.max(0, k - 2)]), b = at(rd[Math.min(rd.length - 1, k + 2)]);
+      add(rd[k], b.x - a.x, b.y - a.y, 'stone');
+    }
+  }
+  for (const r of L.rivers) {
+    for (const b of r.bridges || []) {
+      const k = r.cells.indexOf(b);
+      const a = at(r.cells[Math.max(0, k - 1)]), z = at(r.cells[Math.min(r.cells.length - 1, k + 1)]);
+      add(b, -(z.y - a.y), z.x - a.x, 'wood');
+    }
+  }
+  this.bridges = out;
+};
+// how high a point stands on a bridge deck (in screen pixels at zoom 1), 0 if not on one
+LS.ARCH = { stone: 17, wood: 10 };
+LS.bridgeLift = function (x, y) {
+  if (!this.bridges) return 0;
+  for (const b of this.bridges) {
+    const rx = x - b.x, ry = y - b.y;
+    const along = rx * b.dx + ry * b.dy, side = -rx * b.dy + ry * b.dx;
+    if (Math.abs(along) <= b.len / 2 && Math.abs(side) <= b.half + 0.08) {
+      const t = along / b.len + 0.5;
+      return this.ARCH[b.kind] * Math.sin(Math.PI * t);
+    }
+  }
+  return 0;
+};
+LS.drawBridge = function (r, b) {
+  const c = r.ctx;
+  const n = 10;
+  const H = this.ARCH[b.kind];
+  const px = -b.dy, py = b.dx; // across the deck
+  const pt = (t, side, lift) => {
+    const wx = b.x + b.dx * (t - 0.5) * b.len + px * side, wy = b.y + b.dy * (t - 0.5) * b.len + py * side;
+    const s = r.iso(wx, wy, 0);
+    return { x: s.x, y: s.y - lift };
+  };
+  const deck = (t) => H * Math.sin(Math.PI * t);
+  const stone = b.kind === 'stone';
+  const wall = eraTint(stone ? '#a39a8a' : '#6b4a2a');
+  const dark = shade(wall, -0.35), top = eraTint(stone ? '#c2b8a4' : '#9a7a52');
+  // which side faces the viewer: the edge drawn lower on screen
+  const nearSide = pt(0.5, b.half, 0).y > pt(0.5, -b.half, 0).y ? b.half : -b.half;
+  const farSide = -nearSide;
+  const poly = (pts, fill) => { c.fillStyle = fill; c.beginPath(); c.moveTo(pts[0].x, pts[0].y); for (const q of pts.slice(1)) c.lineTo(q.x, q.y); c.closePath(); c.fill(); };
+  // supports down into the water
+  if (stone) {
+    for (const t of [0.34, 0.66]) {
+      const a = pt(t - 0.05, nearSide, 0), z = pt(t + 0.05, nearSide, 0);
+      poly([a, z, { x: z.x, y: z.y - deck(t) }, { x: a.x, y: a.y - deck(t) }], shade(wall, -0.2));
+    }
+  } else {
+    c.strokeStyle = dark; c.lineWidth = 2;
+    for (const t of [0.25, 0.5, 0.75]) for (const sd of [nearSide, farSide]) {
+      const g = pt(t, sd * 0.9, 0), d = pt(t, sd * 0.9, deck(t));
+      c.beginPath(); c.moveTo(g.x, g.y + 3); c.lineTo(d.x, d.y); c.stroke();
+    }
+  }
+  // the far railing first
+  const rail = (side, h0, col, w) => {
+    c.strokeStyle = col; c.lineWidth = w;
+    c.beginPath();
+    for (let k = 0; k <= n; k++) { const t = k / n; const q = pt(t, side, deck(t) + h0); k ? c.lineTo(q.x, q.y) : c.moveTo(q.x, q.y); }
+    c.stroke();
+  };
+  if (stone) {
+    const far = [], farTop = [];
+    for (let k = 0; k <= n; k++) { const t = k / n; far.push(pt(t, farSide, deck(t))); farTop.push(pt(t, farSide, deck(t) + 4)); }
+    poly([...far, ...farTop.reverse()], shade(wall, -0.1));
+  } else rail(farSide, 5, dark, 1.6);
+  // deck surface
+  const L = [], Rr = [];
+  for (let k = 0; k <= n; k++) { const t = k / n; L.push(pt(t, farSide, deck(t))); Rr.push(pt(t, nearSide, deck(t))); }
+  poly([...L, ...Rr.slice().reverse()], top);
+  // planks or paving lines across the deck
+  c.strokeStyle = stone ? 'rgba(60,50,40,0.25)' : 'rgba(40,25,10,0.45)'; c.lineWidth = 1;
+  for (let k = 1; k < (stone ? 6 : 12); k++) {
+    const t = k / (stone ? 6 : 12);
+    const a = pt(t, farSide, deck(t)), z = pt(t, nearSide, deck(t));
+    c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(z.x, z.y); c.stroke();
+  }
+  // near face: the arch wall with an opening beneath
+  if (stone) {
+    const face = [], under = [];
+    for (let k = 0; k <= n; k++) { const t = k / n; face.push(pt(t, nearSide, deck(t))); }
+    for (let k = n; k >= 0; k--) { const t = k / n; const lift = Math.max(0, deck(t) - 5 - 3 * Math.sin(Math.PI * t)); under.push(pt(t, nearSide, t > 0.12 && t < 0.88 ? lift : deck(t) - 3)); }
+    poly([...face, ...under], wall);
+    // parapet on the near side
+    const par = [], parTop = [];
+    for (let k = 0; k <= n; k++) { const t = k / n; par.push(pt(t, nearSide, deck(t))); parTop.push(pt(t, nearSide, deck(t) + 4)); }
+    poly([...par, ...parTop.reverse()], shade(wall, 0.08));
+    rail(nearSide, 4, shade(wall, 0.25), 1);
+    // abutments on each bank
+    for (const t of [0, 1]) {
+      const a = pt(t, farSide, 0), z = pt(t, nearSide, 0);
+      c.fillStyle = shade(wall, -0.15); c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(z.x, z.y); c.lineTo(z.x, z.y - 3); c.lineTo(a.x, a.y - 3); c.closePath(); c.fill();
+    }
+  } else {
+    // timber edge beam and the near handrail with posts
+    rail(nearSide, 0, dark, 2.4);
+    rail(nearSide, 5, dark, 1.6);
+    c.strokeStyle = dark; c.lineWidth = 1.4;
+    for (let k = 0; k <= 6; k++) { const t = k / 6; const a = pt(t, nearSide, deck(t)), z = pt(t, nearSide, deck(t) + 5); c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(z.x, z.y); c.stroke(); }
+  }
 };
