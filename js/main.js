@@ -195,21 +195,21 @@ Game.enterWorld = function (fresh) {
 // ---------------------------------------------------------------- travel
 Game.clickTile = function (t) {
   if (this.busy || UI.modalStack.length || Battle.active) return;
-  if (t.x === G.pos.x && t.y === G.pos.y) return;
+  if (t.x === G.pos.x && t.y === G.pos.y && !Living.moving) return;
   const dist = Math.abs(t.x - G.pos.x) + Math.abs(t.y - G.pos.y);
   if (hasTech('flight') && dist > 3) return this.fly(t);
-  const path = findPath(tileAt(G.pos.x, G.pos.y), t);
-  if (!path || !path.length) return UI.toast(isWater(t) || (isLand(t) && t.land !== tileAt(G.pos.x, G.pos.y).land) ? 'You need boats to cross the sea. Sailing has not been invented yet.' : 'You cannot travel there.');
-  this.travel(path);
+  Living.go(t); // seamless travel: the world moves only while you do
 };
 
 Game.fly = function (t) {
   this.busy = true;
+  Living.stop();
   const dist = Math.abs(t.x - G.pos.x) + Math.abs(t.y - G.pos.y);
   Render.move = { from: { ...G.pos }, to: { x: t.x, y: t.y }, t0: performance.now(), dur: 900, fly: true };
   setTimeout(() => {
     Render.move = null;
     G.pos = { x: t.x, y: t.y };
+    G.ppos = { x: t.x, y: t.y };
     advanceDays(Math.max(2, dist * 1.5));
     this.busy = false;
     if (G.pendingSuccession || G.pendingVictory || G.pendingDoom) return this.after();
@@ -272,6 +272,7 @@ Game.arrive = function () {
 // ---------------------------------------------------------------- battle
 Game.battle = function (enemies, opts) {
   UI.targeting = null;
+  Living.stop();
   if (TownView.open) TownView.close();
   Battle.start({
     enemies, kind: opts.kind, title: opts.title,

@@ -354,3 +354,10 @@ p.small { font-size: 12px; }
   #menuBtn { bottom: calc(10px + env(safe-area-inset-bottom, 0px) - var(--xb)); }
 }
 .campfire, .townview { bottom: calc(0px - var(--xb)); }
+
+/* living map encounter cards */
+.enc-danger { margin: 0 0 6px; font-weight: bold; }
+.enc-danger.good { color: var(--good); }
+.enc-danger.dim { color: var(--gold); }
+.enc-danger.warn { color: #e0904a; }
+.enc-danger.bad { color: var(--bad); }

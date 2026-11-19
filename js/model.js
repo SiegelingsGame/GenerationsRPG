@@ -53,7 +53,7 @@ function seasonName(day = G.day) {
 }
 function advanceDays(n) {
   const before = Math.floor(G.day / DAYS_PER_YEAR);
-  G.day += Math.round(n);
+  G.day += n; // fractions are fine: travel advances time continuously
   const after = Math.floor(G.day / DAYS_PER_YEAR);
   for (let y = before + 1; y <= after; y++) yearTick();
 }

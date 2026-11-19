@@ -3,7 +3,7 @@
 'use strict';
 
 // ---------------------------------------------------------------- map generation
-const WORLD_SIZE = 44;
+const WORLD_SIZE = 64;
 
 function makeNoise(W, H, scale) {
   const gw = Math.ceil(W / scale) + 2, gh = Math.ceil(H / scale) + 2;
@@ -117,20 +117,20 @@ function placeFeatures(map) {
   const towns = [];
   const shuffled = R.shuffle(map.tiles.filter(settle));
   for (const t of shuffled) {
-    if (towns.filter((x) => x.land === mainland).length >= 5) break;
+    if (towns.filter((x) => x.land === mainland).length >= Math.round(5 * map.W / 44)) break;
     if (t.land === mainland && far(t, [estate, ...towns], 6)) { t.feature = 'town'; towns.push(t); }
   }
   // island towns, one per sizeable island
   const islandIds = Object.keys(map.lands).map(Number).filter((id) => id !== mainland && map.lands[id] >= 8);
-  for (const id of R.shuffle(islandIds).slice(0, 4)) {
+  for (const id of R.shuffle(islandIds).slice(0, Math.round(4 * map.W / 44))) {
     const t = shuffled.find((x) => x.land === id && !x.feature && far(x, towns, 4));
     if (t) { t.feature = 'town'; towns.push(t); }
   }
   const ruins = [];
   for (const t of R.shuffle(map.tiles.filter((t) => isLand(t) && !t.feature && t.type !== 'sand'))) {
-    if (ruins.length >= 11) break;
+    if (ruins.length >= Math.round(11 * map.W / 44)) break;
     const onMain = t.land === mainland;
-    if (onMain && ruins.filter((r) => r.land === mainland).length >= 7) continue;
+    if (onMain && ruins.filter((r) => r.land === mainland).length >= Math.round(7 * map.W / 44)) continue;
     if (far(t, [estate, ...towns, ...ruins], 5)) { t.feature = 'ruins'; t.cleared = 0; ruins.push(t); }
   }
   // the Black Spire: the land tile farthest from home, ideally on an island
@@ -142,7 +142,7 @@ function placeFeatures(map) {
   // beacon shrines on far coasts and islands
   const shrines = [];
   for (const t of R.shuffle(map.tiles.filter((t) => isLand(t) && !t.feature))) {
-    if (shrines.length >= 4) break;
+    if (shrines.length >= Math.round(4 * map.W / 44)) break;
     if (far(t, [estate, ...towns, ...ruins, spire, ...shrines], 7)) { t.feature = 'shrine'; t.lit = false; shrines.push(t); }
   }
   return { estate, towns, ruins, spire, mainland };
@@ -154,7 +154,7 @@ function initWorld() {
     map = genMap(WORLD_SIZE, WORLD_SIZE);
     G.world.map = map;
     f = placeFeatures(map);
-    if (f.towns.filter((t) => t.land === f.mainland).length >= 4 && f.ruins.length >= 6) break;
+    if (f.towns.filter((t) => t.land === f.mainland).length >= 5 && f.ruins.length >= 8) break;
   }
   G.world.mainland = f.mainland;
   G.world.towns = f.towns.map((t, i) => {

@@ -25,6 +25,7 @@ A 2.5D roguelike, turn-based RPG about a family line. You play the head of a Hou
 | Big biome map, islands, technology, towns rising and falling, culture, kinship and taboo, attractiveness, the 1,000-year doom and its quests | `js/world.js` |
 | Road events (traders, people in need, mines, cave and dungeon crawls, bandit camps that grow) and the first-person campfire | `js/events.js` |
 | First-person town streets: buildings, residents to talk to, recruiting, rumors and intel | `js/town.js` |
+| Living map: seamless movement, caravans, bandit war bands, refugees and rivals that move only when you do; sight, danger and encounter cards | `js/living.js` |
 | Static data: races, eras, enemies, estate, gear | `js/data.js` |
 
 ## Quick tips

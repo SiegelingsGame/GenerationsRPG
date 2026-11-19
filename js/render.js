@@ -56,7 +56,11 @@ Render.init = function (canvas) {
     const r = canvas.getBoundingClientRect();
     const p = { x: e.clientX - r.left, y: e.clientY - r.top };
     if (Battle.active) { const u = this.pickUnit(p); if (u) UI.clickUnit(u); }
-    else if (G && G.mode === 'world' && !this.pinching) { const t = this.pickTile(p); if (t) Game.clickTile(t); }
+    else if (G && G.mode === 'world' && !this.pinching) {
+      const ag = Living.pick(this.unzoom(p));
+      if (ag) return Living.go(tileAt(Math.round(ag.x), Math.round(ag.y)), ag);
+      const t = this.pickTile(p); if (t) Game.clickTile(t);
+    }
   });
   // touch: pinch with two fingers to zoom the world map (a tap still travels)
   let pinch = null;
@@ -162,6 +166,10 @@ Render.partyWorldPos = function () {
     const hop = Math.sin(k * Math.PI) * (this.move.fly ? 8 : 0.5);
     return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, h: a.h + (b.h - a.h) * k + hop, k };
   }
+  if (G.ppos) {
+    const t = tileAt(Math.round(G.ppos.x), Math.round(G.ppos.y)) || tileAt(G.pos.x, G.pos.y);
+    return { x: G.ppos.x, y: G.ppos.y, h: t.h, k: 1 };
+  }
   const t = tileAt(G.pos.x, G.pos.y);
   return { x: t.x, y: t.y, h: t.h, k: 1 };
 };
@@ -184,7 +192,7 @@ Render.drawWorld = function () {
   if (!this.camInit) { this.cam.x = tx; this.cam.y = ty; this.camInit = true; }
   this.zoom += (this.zoomTarget - this.zoom) * 0.18;
 
-  this.hover = this.mouse && !this.move ? this.pickTile(this.mouse) : null;
+  this.hover = this.mouse && !this.move && !Living.moving ? this.pickTile(this.mouse) : null;
   c.save();
   // zoom about the centre; a quick squash when the view rotates
   const sk = this.spin ? clamp((this.t - this.spin) / 220, 0, 1) : 1;
@@ -200,6 +208,15 @@ Render.drawWorld = function () {
 
   const partyTileOrder = Math.round(prx) + Math.round(pry);
   let partyDrawn = false;
+  // other parties on the road, drawn in depth order with the tiles
+  const agentsAt = new Map();
+  for (const a of Living.visibleAgents()) {
+    const [ax, ay] = this.rotXY(a.x, a.y);
+    const k = Math.round(ax) + Math.round(ay);
+    if (!agentsAt.has(k)) agentsAt.set(k, []);
+    agentsAt.get(k).push(a);
+  }
+  for (const a of G.world.parties || []) if (!Living.visible(a)) a._sx = null;
   for (let s = 0; s <= map.W + map.H - 2; s++) {
     for (let rx = 0; rx < map.W; rx++) {
       const ry = s - rx;
@@ -212,8 +229,9 @@ Render.drawWorld = function () {
       this.drawTile(t, pathSet.has(y * map.W + x));
       this.drawFeature(t);
     }
+    for (const a of agentsAt.get(s) || []) Living.drawAgent(this, a);
     if (s === partyTileOrder || (s === map.W + map.H - 2 && !partyDrawn)) {
-      if (!partyDrawn) { this.drawParty(pp); partyDrawn = true; }
+      if (!partyDrawn) { Living.drawDest(this); this.drawParty(pp); partyDrawn = true; }
     }
   }
   // labels
@@ -234,6 +252,7 @@ Render.drawWorld = function () {
     c.fillStyle = t.feature === 'estate' ? '#ffd98a' : '#f2ead8';
     c.fillText(label, p.x, p.y - 57);
   }
+  Living.drawLabels(this);
   const q = G.world.doom && G.world.doom.quest;
   if (q && q.x != null) {
     const qt = tileAt(q.x, q.y);
@@ -275,7 +294,8 @@ Render.drawMinimap = function () {
   const q = G.world.doom.quest;
   if (q && q.x != null) dot(q.x, q.y, '#ffd76a', 2.5);
   dot(G.world.estate.x, G.world.estate.y, G.house.color, 3);
-  dot(G.pos.x, G.pos.y, '#ffffff', 2.5);
+  for (const a of Living.visibleAgents()) dot(a.x, a.y, AGENTS[a.kind].hostile ? '#ff5c5c' : '#e6c06a', 1.8);
+  dot(G.ppos ? G.ppos.x : G.pos.x, G.ppos ? G.ppos.y : G.pos.y, '#ffffff', 2.5);
   c.fillStyle = '#a59c8e'; c.font = '10px Georgia, serif'; c.textAlign = 'left';
   c.fillText('N ↑ (map)', x0, y0 + size + 13);
   c.restore();
@@ -545,9 +565,9 @@ Render.drawParty = function (pp) {
   }
   // followers behind leader
   party.slice(1).forEach((c, i) => {
-    this.drawFigure(p.x - 10 - i * 7, p.y + 2 - i * 3, figLook(c), 0.55, { bob: this.move ? Math.sin(this.t / 90 + i) : 0 });
+    this.drawFigure(p.x - 10 - i * 7, p.y + 2 - i * 3, figLook(c), 0.55, { bob: (this.move || Living.moving) ? Math.sin(this.t / 90 + i) : 0 });
   });
-  this.drawFigure(p.x + 4, p.y + 6, figLook(mc), 0.62, { bob: this.move ? Math.sin(this.t / 90) : 0, banner: G.house.color });
+  this.drawFigure(p.x + 4, p.y + 6, figLook(mc), 0.62, { bob: (this.move || Living.moving) ? Math.sin(this.t / 90) : 0, banner: G.house.color });
 };
 
 function figLook(c) {

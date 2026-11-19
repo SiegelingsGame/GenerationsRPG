@@ -222,6 +222,20 @@ The land goes through **eras**, each 6–15 years long:
   - hint at inventions to come, or how other towns are faring
 - The quick town options stay in the side panel for speed.
 
+## 7d. The living map
+
+The world moves only when your party moves.
+- **Moving:** tap a destination and the party walks there smoothly along the best path. Days pass in proportion to the ground covered and its terrain. Standing still freezes everything: the calendar, caravans, bandits and rivals.
+- **Visible parties** share the road:
+  - **Caravans** travel between towns and feed their growth. You can trade with them or rob them (gold, but prestige, reputation and charity suffer).
+  - **Bandit war bands** come out of camps (more as a camp grows), prowl around it, hunt down caravans (starving the towns they were bound for), and chase your party if they think they can win. They flee if you're stronger.
+  - **Refugees** walk the roads in war and famine and can be given aid.
+  - **Rivals** hunt your House across the land.
+- **Sight:** you only see parties within your party's sight range (longer on hills, shorter in forests). Anything outside it is unseen.
+- **Choosing your battles:** each party shows a label with its danger (Weak, Even, Strong, Deadly) and a red "!" when it's hunting you. Tap a party to pursue it; meeting one opens a card: fight, bribe, flee (better with horses), trade, rob, help or leave.
+- **Unseen dangers:** ambushes and road events (traders, people in need, mines, caves, camps) can still strike as you cross the land.
+- **Map size:** new worlds are 64×64 tiles with proportionally more towns, ruins and shrines.
+
 ## 8. Combat (turn-based)
 
 - Up to 4 party members against 1–4 enemies, in initiative order by AGI.
