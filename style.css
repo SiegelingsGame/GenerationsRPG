@@ -324,3 +324,9 @@ p.small { font-size: 12px; }
 .camp-btn.done { opacity: 0.6; }
 .camp-btn.leave { border-color: #a8781e; }
 .camp-btn[disabled] { opacity: 0.4; cursor: default; }
+
+/* town: first-person street */
+.townview { position: fixed; inset: 0; z-index: 9; background: #15131c; display: flex; flex-direction: column; }
+.town-canvas { flex: 1; width: 100%; min-height: 0; display: block; touch-action: manipulation; }
+.town-ui { background: linear-gradient(transparent, rgba(12, 10, 8, 0.9) 28%); }
+.town-ui .camp-say small { font-weight: normal; }

@@ -253,7 +253,7 @@ UI.estatePanel = function () {
   ];
 };
 
-UI.townPanel = function (t) {
+UI.townDeeds = function (t) {
   const town = G.world.towns[t.townIdx];
   const E = G.world.era.type;
   const deedDone = town.deedYear === year();
@@ -264,9 +264,15 @@ UI.townPanel = function (t) {
     deeds.push(act('Hold a Festival', () => Game.deed(town, 'festival'), { sub: '80g · prestige, loyalty', disabled: deedDone || G.house.gold < 80 }));
   }
   deeds.push(act('Fund Roads & Wells', () => Game.deed(town, 'roads'), { sub: '160g · prosperity', disabled: deedDone || G.house.gold < 160 }));
+  return { deeds, deedDone };
+};
+UI.townPanel = function (t) {
+  const town = G.world.towns[t.townIdx];
+  const { deeds, deedDone } = this.townDeeds(t);
   return [
     h('h3', {}, town.name), h('p', { class: 'dim' }, `${GD.TOWN_SIZES[town.size]} · founded ${town.founded}`),
-    h('p', { class: 'dim' }, `${this.townPeople(t.townIdx).length} people of note live here.`),
+    act('Enter Town', () => TownView.start(t), { cls: 'hl', sub: 'walk the streets, talk to people, hear rumors' }),
+    h('p', { class: 'dim' }, `${this.townPeople(t.townIdx).length} people of note live here. Quick options:`),
     act('Tavern', () => this.showTavern(t.townIdx), { sub: 'recruit, court, lineage' }),
     act('Market', () => this.showMarket(), { sub: 'gear & potions' }),
     act('Rest at the Inn', () => Game.inn(), { sub: '10g · 7 days · heal', disabled: G.house.gold < 10 }),

@@ -272,6 +272,7 @@ Game.arrive = function () {
 // ---------------------------------------------------------------- battle
 Game.battle = function (enemies, opts) {
   UI.targeting = null;
+  if (TownView.open) TownView.close();
   Battle.start({
     enemies, kind: opts.kind, title: opts.title,
     intro: opts.intro,
@@ -576,6 +577,7 @@ Game.hireRetinue = function (cost) { G.house.gold -= cost; G.house.retinue++; Lo
 
 // ---------------------------------------------------------------- after every action
 Game.after = function (quiet) {
+  if (TownView.open && (G.pendingSuccession || G.pendingVictory || G.pendingSaved || G.pendingWorldEnd || G.pendingDoom)) TownView.close();
   if (G.pendingVictory) {
     G.pendingVictory = false;
     UI.closeAll();
@@ -608,6 +610,7 @@ Game.after = function (quiet) {
       act('Face the end', () => { UI.closeModal(); this.finalBattle(true); }, { cls: 'hl' })), { locked: true });
     return;
   }
+  TownView.sync();
   if (G.pendingSuccession) return this.succession();
   const q = G.world.doom && G.world.doom.quest;
   if (q && q.type === 'champion' && G.party.map(ch).some((c) => c && c.level >= q.count)) completeQuest();

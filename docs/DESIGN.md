@@ -210,6 +210,18 @@ The land goes through **eras**, each 6–15 years long:
 - **Other actions:** share stories (bonds and formative growth), sleep, or rest with a watch (less healing, safer from night attacks).
 - **Sound:** an optional fire crackle.
 
+**Entering a town (first person):** *Enter Town* walks you into a street drawn in perspective. Its size, mood and light follow the town and the era: banners and smoke in war, thin stalls in famine, a distant keep in cities.
+- Tap the **Tavern**, **Market**, **Inn** or **Notice Board** (deeds for the realm and the current prophecy task) to use them.
+- **Residents:** the town's actual residents stand in the street. Tap one to hear them speak in their own voice (lineage, grudges, traits, the era, how the people of this era see your House), then recruit, court, propose, research their lineage, or **ask for news**.
+- **Rumors:** *Buy rumors* (a round of drinks) gives intel that changes what you know. It can:
+  - reveal hidden bandit camps and caves
+  - tell you which way the current task lies
+  - report where rivals are
+  - expose someone's secret lineage
+  - tip you off to who fancies you
+  - hint at inventions to come, or how other towns are faring
+- The quick town options stay in the side panel for speed.
+
 ## 8. Combat (turn-based)
 
 - Up to 4 party members against 1–4 enemies, in initiative order by AGI.
