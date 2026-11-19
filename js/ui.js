@@ -849,6 +849,7 @@ UI.showMenu = function () {
 };
 UI.showHelp = function () {
   this.modal(h('div', { class: 'help', html: `
+    <p class="dim">Play on any device: <a href="https://siegelingsgame.github.io/GenerationsRPG/" target="_blank" rel="noopener">siegelingsgame.github.io/GenerationsRPG</a>. On a phone, add it to your home screen to play full screen.</p>
     <p><b>Generations</b> is a roguelike about a family line. Your goal is to build a better world for future generations and bring about a <b>Golden Age</b> (95 prosperity).</p>
     <ul>
       <li><b>Time matters.</b> Travel, battles and rest all cost days. Every new year everyone ages, and people are born, marry, die or turn bad.</li>
