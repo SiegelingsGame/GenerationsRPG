@@ -171,8 +171,10 @@ table.stats td:first-child { color: var(--gold); }
   #stage { position: absolute; inset: 0; height: auto; }
   #view { touch-action: none; }
   #log { left: max(8px, env(safe-area-inset-left, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); width: auto; right: 104px; max-height: 58px; font-size: 11px; padding: 4px 6px; opacity: 0.88; }
-  .mapctl { top: calc(64px + env(safe-area-inset-top, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); bottom: auto; flex-direction: column; }
-  .mapctl button { width: 40px; height: 40px; }
+  #stage .mapctl { top: calc(64px + env(safe-area-inset-top, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); bottom: auto; flex-direction: column; }
+  #stage .mapctl button { width: 40px; height: 40px; }
+  #stage .mapctl[hidden], #hudchip:empty, body:not(.has-game) #log { display: none; }
+  body:not(.has-game) #menuBtn { display: none; }
 
   #mobilebar { display: block; }
   #hudchip { position: fixed; z-index: 6; top: calc(8px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100% - 24px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -209,7 +211,7 @@ table.stats td:first-child { color: var(--gold); }
   body.in-battle #stage { bottom: 40vh; }
 
   html, body { background: #0f1a26; }
-  .modal-wrap { align-items: start; z-index: 12;
+  .modal-wrap { align-items: center; z-index: 12;
     padding: calc(8px + env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
   .modal { padding: 14px; max-height: calc(100vh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
@@ -222,7 +224,6 @@ table.stats td:first-child { color: var(--gold); }
   button.act { padding: 10px 12px; }
   .camp-btn { padding: 9px 12px; }
   .camp-say p { font-size: 14px; }
-}
 }
 
 /* map controls */
@@ -342,3 +343,14 @@ p.small { font-size: 12px; }
 .town-ui .camp-say small { font-weight: normal; }
 
 .campfire, .townview { padding-top: env(safe-area-inset-top, 0px); }
+
+/* iPhone home-screen apps lay the page out shorter than the screen (by --xb, measured in ui.js).
+   Stretch every full-screen layer down to the real bottom edge. */
+:root { --xb: 0px; }
+@media (max-width: 900px) {
+  #game, #backdrop, .modal-wrap, .campfire, .townview { bottom: calc(0px - var(--xb)); }
+  #drawer { bottom: calc(0px - var(--xb)); }
+  #sheet { bottom: calc(0px - var(--xb)); }
+  #menuBtn { bottom: calc(10px + env(safe-area-inset-bottom, 0px) - var(--xb)); }
+}
+.campfire, .townview { bottom: calc(0px - var(--xb)); }

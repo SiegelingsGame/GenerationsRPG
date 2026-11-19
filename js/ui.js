@@ -74,8 +74,24 @@ UI.buildMobile = function () {
     sheet: h('div', { id: 'sheet' }),
   };
   document.body.append(this.mob.bar, this.mob.backdrop, this.mob.drawer, this.mob.sheet);
-  window.addEventListener('resize', () => this.placeLayout());
+  window.addEventListener('resize', () => { this.fixStandalone(); this.placeLayout(); });
+  window.addEventListener('orientationchange', () => setTimeout(() => this.fixStandalone(), 300));
+  this.fixStandalone();
   this.placeLayout();
+};
+// iOS home-screen apps report a viewport shorter than the screen they actually draw on, leaving an
+// unpainted strip at the bottom. Measure the shortfall and let the layout extend over it.
+UI.fixStandalone = function () {
+  let xb = 0;
+  const standalone = window.navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  if (standalone && /iP(hone|od|ad)/.test(navigator.userAgent) || (standalone && navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent))) {
+    const landscape = window.innerWidth > window.innerHeight;
+    const full = landscape ? Math.max(screen.width, screen.height) : Math.max(screen.height, screen.width);
+    const fullH = landscape ? Math.min(screen.width, screen.height) : full;
+    const gap = fullH - window.innerHeight;
+    if (gap > 0 && gap < 120) xb = gap;
+  }
+  document.documentElement.style.setProperty('--xb', xb + 'px');
 };
 UI.openDrawer = function () { document.body.classList.add('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'false'); this.placeLayout(); };
 UI.closeDrawer = function () { document.body.classList.remove('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'true'); };
@@ -100,6 +116,7 @@ UI.placeLayout = function () {
   this.updateChip();
 };
 UI.updateChip = function () {
+  document.body.classList.toggle('has-game', !!(G && G.mcId));
   if (!this.mob || !G || !G.mcId || !G.world || !G.world.map) return;
   const t = tileAt(G.pos.x, G.pos.y);
   const place = t.feature === 'town' ? G.world.towns[t.townIdx].name : t.feature === 'estate' ? 'Your estate' : t.feature === 'ruins' ? 'Ruins'
