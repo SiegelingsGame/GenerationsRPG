@@ -71,14 +71,36 @@ LS.build = function () {
   this.river = new Uint8Array(W * H); // 1 river, 2 ford
   this.road = new Uint8Array(W * H); // 1 road, 2 bridge
   for (const r of L.rivers) for (const idx of r.cells) this.river[idx] = 1;
-  for (const r of L.rivers) for (const idx of r.fords || []) this.river[idx] = 2;
-  for (const r of L.rivers) for (const idx of r.bridges || []) this.river[idx] = 3;
-  for (const rd of L.roads) for (const idx of rd) this.road[idx] = this.river[idx] === 1 ? 2 : 1;
-  for (const r of L.rivers) for (const b of r.bridges || []) {
-    const bi = b % W, bj = Math.floor(b / W);
-    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const n = (bj + dj) * W + (bi + di); if (n >= 0 && n < W * H && this.river[n] !== 1 && !this.road[n]) this.road[n] = 1; }
+  // seal each river into a solid, edge-connected wall: where it steps diagonally, fill the corner
+  // so nothing can slip between two river cells that only touch at a point
+  for (const r of L.rivers) for (let k = 0; k < r.cells.length - 1; k++) {
+    const a = r.cells[k], b = r.cells[k + 1];
+    const ai = a % W, aj = Math.floor(a / W), bi = b % W, bj = Math.floor(b / W);
+    if (ai !== bi && aj !== bj) { const f = aj * W + bi; if (hf[f] >= 0) this.river[f] = 1; }
   }
+  // crossings are bridges only (the old fords are wooden bridges now): open a clean gap through
+  // the river at each one, and keep its banks walkable
+  this.crossings = [];
+  for (const r of L.rivers) for (const idx of [...(r.bridges || []), ...(r.fords || [])]) this.crossings.push(idx);
+  this.roadCross = new Set();
+  for (const rd of L.roads) for (const idx of rd) if (this.river[idx] === 1) { this.crossings.push(idx); this.roadCross.add(idx); }
+  // rivers running through a place of note get a bridge there
+  this.extraCross = [];
+  for (const t of map.tiles) {
+    if (!t.feature) continue;
+    const c = this.cellAt(t.x, t.y);
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const n = (c.j + dj) * W + (c.i + di);
+      if (this.river[n] === 1 && !this.extraCross.includes(n)) { this.extraCross.push(n); break; }
+    }
+  }
+  this.crossings.push(...this.extraCross);
+  for (const c0 of this.crossings) this.openCrossing(c0);
+  for (const rd of L.roads) for (const idx of rd) this.road[idx] = this.river[idx] === 3 ? 2 : (this.river[idx] ? this.road[idx] : 1);
   this.buildCost();
+  this.passes = new Set();
+  // no land may be fenced off by rivers: bridge any river that cuts a settled area off from the rest
+  for (let pass = 0; pass < 16; pass++) { if (!this.bridgeCutOff()) break; this.buildCost(); }
   this.collectBridges();
   this.paint();
   this.ready = true;
@@ -97,9 +119,10 @@ LS.buildCost = function () {
     if (hf[idx] < 0) c = boats ? (hasTech('steam') ? 1 : 1.8) : Infinity;
     else {
       c = GD.BIOMES[t.type].water ? 1.2 : GD.BIOMES[t.type].cost;
-      if (t.type === 'mountain' && hf[idx] > 0.78 && !t.feature) c = Infinity; // sheer peaks
+      if (t.type === 'mountain' && hf[idx] > 0.78 && !t.feature && !(this.passes && this.passes.has(idx))) c = Infinity; // sheer peaks
+      else if (t.type === 'mountain' && this.passes && this.passes.has(idx)) c = 2.6; // a mountain pass
       if (this.river[idx] === 1) c = boats ? 2.2 : Infinity;
-      if (this.river[idx] === 2) c = 2.4; // ford
+
       if (this.river[idx] === 3) c = 0.8; // bridge
       if (this.road[idx]) c = 0.6; // roads and bridges
     }
@@ -268,16 +291,33 @@ LS.path = function (from, to) {
   return out;
 };
 LS.clear = function (a, b) {
-  const d = Math.hypot(b.x - a.x, b.y - a.y);
-  const n = Math.max(2, Math.ceil(d / 0.12));
   const ca = this.costAt(a.x, a.y), cb = this.costAt(b.x, b.y);
   const limit = Math.max(isFinite(ca) ? ca : 1, isFinite(cb) ? cb : 1) * 1.35;
-  for (let k = 1; k < n; k++) {
-    const x = a.x + (b.x - a.x) * k / n, y = a.y + (b.y - a.y) * k / n;
-    const c = this.costAt(x, y);
-    if (!isFinite(c) || c > limit) return false;
+  // grid traversal (Amanatides-Woo) in fine-cell space, including cells clipped at a corner
+  const N = this.N, W = this.W;
+  const x0 = (a.x + 0.5) * N, y0 = (a.y + 0.5) * N, x1 = (b.x + 0.5) * N, y1 = (b.y + 0.5) * N;
+  let i = Math.floor(x0), j = Math.floor(y0);
+  const ti = Math.floor(x1), tj = Math.floor(y1);
+  const dx = x1 - x0, dy = y1 - y0;
+  const si = Math.sign(dx), sj = Math.sign(dy);
+  const tdx = si ? Math.abs(1 / dx) : Infinity, tdy = sj ? Math.abs(1 / dy) : Infinity;
+  let tmx = si > 0 ? (i + 1 - x0) * tdx : si < 0 ? (x0 - i) * tdx : Infinity;
+  let tmy = sj > 0 ? (j + 1 - y0) * tdy : sj < 0 ? (y0 - j) * tdy : Infinity;
+  const bad = (ii, jj) => {
+    if (ii < 0 || jj < 0 || ii >= W || jj >= this.H) return true;
+    const c = this.cost[jj * W + ii];
+    return !isFinite(c) || c > limit;
+  };
+  for (let guard = 0; guard < 4000; guard++) {
+    if (bad(i, j)) return false;
+    if (i === ti && j === tj) return true;
+    if (Math.abs(tmx - tmy) < 1e-9) {
+      // passing exactly through a corner: both side cells must be open
+      if (bad(i + si, j) || bad(i, j + sj)) return false;
+      i += si; j += sj; tmx += tdx; tmy += tdy;
+    } else if (tmx < tmy) { i += si; tmx += tdx; } else { j += sj; tmy += tdy; }
   }
-  return true;
+  return false;
 };
 
 // ---------------------------------------------------------------- painting the land
@@ -364,7 +404,7 @@ LS.paint = function () {
     const wid = (k) => S * (0.16 + Math.min(0.22, k / r.cells.length * 0.22));
     stroke(r.cells, wid(r.cells.length) + 2, eraTint('#2b5f88'));
     stroke(r.cells, wid(r.cells.length), eraTint('#4a8cc0'));
-    for (const f of r.fords || []) { const [x, y] = toPx(f); c.fillStyle = eraTint('#c9b98a'); c.beginPath(); c.arc(x, y, S * 0.22, 0, Math.PI * 2); c.fill(); }
+
   }
   // the bridge itself is a raised model (see LS.drawBridge); the land only carries its shadow
   const bridgeAt = (x, y, ang) => {
@@ -374,7 +414,7 @@ LS.paint = function () {
     c.restore();
   };
   for (const r of G.world.landscape.rivers) {
-    for (const b of r.bridges || []) {
+    for (const b of [...(r.bridges || []), ...(r.fords || [])]) {
       const k = r.cells.indexOf(b);
       const [x, y] = toPx(b);
       const [xa, ya] = toPx(r.cells[Math.max(0, k - 1)]), [xb, yb] = toPx(r.cells[Math.min(r.cells.length - 1, k + 1)]);
@@ -389,7 +429,7 @@ LS.paint = function () {
   for (const rd of G.world.landscape.roads) { stroke(rd, S * 0.2, 'rgba(90,64,36,0.55)'); stroke(rd, S * 0.12, eraTint('#b8996a')); }
   for (const rd of G.world.landscape.roads) {
     for (let k = 1; k < rd.length - 1; k++) {
-      if (this.river[rd[k]] !== 1) continue;
+      if (!this.roadCross.has(rd[k])) continue;
       const [x, y] = toPx(rd[k]); const [xa, ya] = toPx(rd[k - 1]); const [xb, yb] = toPx(rd[k + 1]);
       bridgeAt(x, y, Math.atan2(yb - ya, xb - xa));
     }
@@ -421,17 +461,25 @@ LS.collectBridges = function () {
   };
   for (const rd of L.roads) {
     for (let k = 1; k < rd.length - 1; k++) {
-      if (this.river[rd[k]] !== 1) continue;
+      if (!this.roadCross.has(rd[k])) continue;
       const a = at(rd[Math.max(0, k - 2)]), b = at(rd[Math.min(rd.length - 1, k + 2)]);
       add(rd[k], b.x - a.x, b.y - a.y, 'stone');
     }
   }
   for (const r of L.rivers) {
-    for (const b of r.bridges || []) {
+    for (const b of [...(r.bridges || []), ...(r.fords || [])]) {
       const k = r.cells.indexOf(b);
       const a = at(r.cells[Math.max(0, k - 1)]), z = at(r.cells[Math.min(r.cells.length - 1, k + 1)]);
       add(b, -(z.y - a.y), z.x - a.x, 'wood');
     }
+  }
+  for (const b of this.extraCross || []) {
+    // find the river cell it belongs to (or the nearest) to read the flow direction
+    let best = null, bd = Infinity;
+    for (const r of L.rivers) r.cells.forEach((cc, k) => { const d = Math.hypot((cc % W) - (b % W), Math.floor(cc / W) - Math.floor(b / W)); if (d < bd) { bd = d; best = { r, k }; } });
+    if (!best) continue;
+    const a = at(best.r.cells[Math.max(0, best.k - 1)]), z = at(best.r.cells[Math.min(best.r.cells.length - 1, best.k + 1)]);
+    add(b, -(z.y - a.y), z.x - a.x, 'wood');
   }
   this.bridges = out;
 };
@@ -526,4 +574,83 @@ LS.drawBridge = function (r, b) {
     c.strokeStyle = dark; c.lineWidth = 1.4;
     for (let k = 0; k <= 6; k++) { const t = k / 6; const a = pt(t, nearSide, deck(t)), z = pt(t, nearSide, deck(t) + 5); c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(z.x, z.y); c.stroke(); }
   }
+};
+
+LS.openCrossing = function (c0) {
+  const { W, H, hf } = this;
+  const ci = c0 % W, cj = Math.floor(c0 / W);
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    const i = ci + di, j = cj + dj;
+    if (i < 0 || j < 0 || i >= W || j >= H) continue;
+    const n = j * W + i;
+    if (this.river[n] === 1) this.river[n] = 3;
+    else if (!this.river[n] && hf[n] >= 0) this.road[n] = this.road[n] || 1;
+  }
+};
+// Flood each landmass from its settlements; if a river walls off a pocket that matters (a place of
+// note, or a sizeable stretch of land), build a bridge across at the first spot that joins them.
+LS.bridgeCutOff = function () {
+  const { W, H } = this;
+  const map = G.world.map;
+  const landOf = (idx) => { const p = this.cellCenter(idx % W, Math.floor(idx / W)); return tileAt(clamp(Math.round(p.x), 0, map.W - 1), clamp(Math.round(p.y), 0, map.H - 1)).land; };
+  const walk = (idx) => isFinite(this.cost[idx]) && this.hf[idx] >= 0;
+  const seeds = {};
+  for (const t of map.tiles) if (t.feature && t.land != null && seeds[t.land] == null) { const c = this.cellAt(t.x, t.y); seeds[t.land] = c.j * W + c.i; }
+  const est = this.cellAt(G.world.estate.x, G.world.estate.y);
+  seeds[G.world.mainland] = est.j * W + est.i;
+  for (const [land, seed] of Object.entries(seeds)) {
+    const seen = new Uint8Array(W * H);
+    const q = [seed]; seen[seed] = 1;
+    while (q.length) {
+      const c = q.pop(); const ci = c % W, cj = Math.floor(c / W);
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
+        const n = nj * W + ni; if (!seen[n] && walk(n)) { seen[n] = 1; q.push(n); }
+      }
+    }
+    // what is left unreached on this landmass, and does it matter?
+    let left = 0, important = false;
+    for (let idx = 0; idx < W * H; idx++) if (!seen[idx] && walk(idx) && String(landOf(idx)) === land) left++;
+    for (const t of map.tiles) if (t.feature && String(t.land) === land) { const c = this.cellAt(t.x, t.y); if (!seen[c.j * W + c.i]) important = true; }
+    if (!important && left < 40) continue;
+    // a river cell with reached ground on one side and unreached ground just across
+    for (let idx = 0; idx < W * H; idx++) {
+      if (this.river[idx] !== 1) continue;
+      const ci = idx % W, cj = Math.floor(idx / W);
+      let a = false, b = false;
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+        const ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
+        const n = nj * W + ni;
+        if (!walk(n) || this.river[n]) continue;
+        if (seen[n]) a = true; else if (String(landOf(n)) === land) b = true;
+      }
+      if (a && b) { this.extraCross.push(idx); this.crossings.push(idx); this.openCrossing(idx); return true; }
+    }
+    // no river to bridge: it must be sheer peaks, so open a pass through them
+    for (let idx = 0; idx < W * H; idx++) {
+      if (isFinite(this.cost[idx]) || this.hf[idx] < 0 || this.river[idx] || this.passes.has(idx)) continue;
+      const ci = idx % W, cj = Math.floor(idx / W);
+      let a = false, b = false;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ni = ci + di, nj = cj + dj; if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue;
+        const n = nj * W + ni;
+        if (seen[n]) a = true;
+      }
+      if (!a) continue;
+      // carve straight on until we reach unreached open ground (at most a few cells)
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const cut = [];
+        for (let k = 0; k < 8; k++) {
+          const ni = ci + di * k, nj = cj + dj * k; if (ni < 0 || nj < 0 || ni >= W || nj >= H) break;
+          const n = nj * W + ni;
+          if (this.hf[n] < 0 || this.river[n] === 1) break;
+          if (walk(n) && !seen[n] && String(landOf(n)) === land) { b = true; break; }
+          if (seen[n] && k > 0) break;
+          cut.push(n);
+        }
+        if (b) { cut.forEach((n) => this.passes.add(n)); return true; }
+      }
+    }
+  }
+  return false;
 };
