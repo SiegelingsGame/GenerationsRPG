@@ -45,6 +45,7 @@ Render.init = function (canvas) {
     canvas.height = Math.round(r.height * this.dpr);
   };
   window.addEventListener('resize', resize);
+  this.resize = resize;
   resize();
   canvas.addEventListener('mousemove', (e) => {
     const r = canvas.getBoundingClientRect();
@@ -55,7 +56,28 @@ Render.init = function (canvas) {
     const r = canvas.getBoundingClientRect();
     const p = { x: e.clientX - r.left, y: e.clientY - r.top };
     if (Battle.active) { const u = this.pickUnit(p); if (u) UI.clickUnit(u); }
-    else if (G && G.mode === 'world') { const t = this.pickTile(p); if (t) Game.clickTile(t); }
+    else if (G && G.mode === 'world' && !this.pinching) { const t = this.pickTile(p); if (t) Game.clickTile(t); }
+  });
+  // touch: pinch with two fingers to zoom the world map (a tap still travels)
+  let pinch = null;
+  canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      const [a, b] = e.touches;
+      pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z: this.zoomTarget };
+      this.pinching = true;
+    }
+  }, { passive: true });
+  canvas.addEventListener('touchmove', (e) => {
+    if (pinch && e.touches.length === 2 && !Battle.active) {
+      e.preventDefault();
+      const [a, b] = e.touches;
+      const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      this.setZoom(pinch.z * d / pinch.d);
+      this.zoom = this.zoomTarget;
+    }
+  }, { passive: false });
+  canvas.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2 && pinch) { pinch = null; setTimeout(() => { this.pinching = false; }, 350); }
   });
   canvas.addEventListener('wheel', (e) => {
     if (Battle.active) return;
@@ -110,6 +132,8 @@ Render.unrotXY = function (rx, ry) {
 
 Render.frame = function () {
   const c = this.ctx;
+  const box = this.canvas.getBoundingClientRect();
+  if (Math.abs(box.width - this.w) > 0.5 || Math.abs(box.height - this.h) > 0.5) this.resize();
   if (this.ctl) this.ctl.hidden = !(G && G.mode === 'world' && !Battle.active);
   c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   c.clearRect(0, 0, this.w, this.h);
@@ -231,7 +255,7 @@ Render.drawWorld = function () {
 
 Render.drawMinimap = function () {
   const c = this.ctx, map = G.world.map;
-  const size = Math.min(150, this.w * 0.22), px = size / map.W;
+  const size = Math.min(150, this.w * (this.w < 500 ? 0.26 : 0.22)), px = size / map.W;
   const x0 = 10, y0 = 10;
   if (!this.mini || this.miniKey !== G.world.towns.length + ':' + Math.floor(G.day / 360) + ':' + this.rot) {
     const cv = this.mini || document.createElement('canvas');
@@ -259,7 +283,7 @@ Render.drawMinimap = function () {
 
 Render.drawCompass = function () {
   const c = this.ctx;
-  const cx = this.w - 44, cy = 44;
+  const cx = this.w - (this.w < 700 ? 84 : 44), cy = this.w < 700 ? 100 : 44;
   const [ax, ay] = this.rotXY(G.world.map.W / 2, 0);
   const [bx, by] = this.rotXY(G.world.map.W / 2, G.world.map.H);
   const vx = ((ax - ay) - (bx - by)) * TW / 2, vy = ((ax + ay) - (bx + by)) * TH / 2;
@@ -723,6 +747,11 @@ Render.drawBattle = function () {
   const g = c.createLinearGradient(0, 0, 0, this.h);
   g.addColorStop(0, eraTint('#1a2433')); g.addColorStop(1, eraTint('#2b2420'));
   c.fillStyle = g; c.fillRect(0, 0, this.w, this.h);
+  // shrink the arena to fit small screens
+  const bs = this.bscale = Math.min(1, this.w / 820, this.h / 560);
+  const bm = this.mouse ? this.unbattle(this.mouse) : null;
+  c.save();
+  c.translate(this.w / 2, this.h / 2); c.scale(bs, bs); c.translate(-this.w / 2, -this.h / 2);
   const ruins = Battle.kind === 'dungeon';
   // arena tiles
   for (let s = 0; s <= 7 + 5 - 2; s++) for (let gx = 0; gx < 7; gx++) {
@@ -750,8 +779,8 @@ Render.drawBattle = function () {
       c.strokeStyle = u.side === 'party' ? '#ffd98a' : '#ff7a7a'; c.lineWidth = 2;
       c.beginPath(); c.ellipse(p.x, p.y, 26, 11, 0, 0, Math.PI * 2); c.stroke();
     }
-    if (UI.targeting && UI.validTarget(u) && this.mouse) {
-      const d = Math.hypot(this.mouse.x - p.x, this.mouse.y - (p.y - 30));
+    if (UI.targeting && UI.validTarget(u) && bm) {
+      const d = Math.hypot(bm.x - p.x, bm.y - (p.y - 30));
       if (d < 40) { c.fillStyle = 'rgba(255,230,120,0.25)'; c.beginPath(); c.ellipse(p.x, p.y, 30, 13, 0, 0, Math.PI * 2); c.fill(); }
     }
     const o = { flash: u.flash, dead: !u.alive };
@@ -800,12 +829,18 @@ Render.drawBattle = function () {
     c.fillStyle = f.color; c.fillText(f.text, p.x, p.y - 90 - k * 40 + (f.small ? 18 : 0));
     c.globalAlpha = 1;
   }
+  c.restore();
   // title
-  c.font = '600 18px Georgia, serif'; c.textAlign = 'center'; c.fillStyle = '#f2ead8';
-  c.fillText(`${Battle.title} — Round ${Math.max(1, Battle.round)}`, this.w / 2, 34);
+  c.font = `600 ${bs < 0.7 ? 14 : 18}px Georgia, serif`; c.textAlign = 'center'; c.fillStyle = '#f2ead8';
+  c.fillText(`${Battle.title} — Round ${Math.max(1, Battle.round)}`, this.w / 2, bs < 0.7 ? 22 : 34);
+};
+Render.unbattle = function (p) {
+  const bs = this.bscale || 1;
+  return { x: (p.x - this.w / 2) / bs + this.w / 2, y: (p.y - this.h / 2) / bs + this.h / 2 };
 };
 
-Render.pickUnit = function (p) {
+Render.pickUnit = function (p0) {
+  const p = this.unbattle(p0);
   let best = null, bd = 50;
   for (const u of Battle.units) {
     const s = this.unitScreen(u);

@@ -51,9 +51,60 @@ const UI = {
 
 UI.init = function () {
   Log.listeners.push(() => this.renderLog());
+  this.buildMobile();
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && this.modalStack.length && !this.modalStack[this.modalStack.length - 1].locked) this.closeModal();
   });
+};
+
+// ---------------------------------------------------------------- phone layout
+// On a phone the map fills the screen. A Menu button opens a drawer holding the location's actions,
+// the party and heir, and the House's stats and buttons. In battle, the battle actions rise as a sheet.
+UI.isMobile = () => window.matchMedia('(max-width: 900px)').matches;
+UI.buildMobile = function () {
+  this.mob = {
+    bar: h('div', { id: 'mobilebar' },
+      h('button', { id: 'hudchip', onclick: () => this.openDrawer() }, ''),
+      h('button', { id: 'menuBtn', 'aria-label': 'Open menu', onclick: () => this.openDrawer() }, '☰ Menu')),
+    backdrop: h('div', { id: 'backdrop', onclick: () => this.closeDrawer() }),
+    drawer: h('aside', { id: 'drawer', 'aria-hidden': 'true' },
+      h('div', { class: 'drawer-head' }, h('b', {}, 'Generations'), h('button', { class: 'drawer-x', 'aria-label': 'Close menu', onclick: () => this.closeDrawer() }, '×')),
+      h('div', { id: 'drawer-body' })),
+    sheet: h('div', { id: 'sheet' }),
+  };
+  document.body.append(this.mob.bar, this.mob.backdrop, this.mob.drawer, this.mob.sheet);
+  window.addEventListener('resize', () => this.placeLayout());
+  this.placeLayout();
+};
+UI.openDrawer = function () { document.body.classList.add('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'false'); this.placeLayout(); };
+UI.closeDrawer = function () { document.body.classList.remove('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'true'); };
+UI.placeLayout = function () {
+  if (!this.mob) return;
+  const topbar = $('#topbar'), party = $('#party'), panel = $('#panel'), game = $('#game'), stage = $('#stage');
+  const body = $('#drawer-body');
+  const mobile = this.isMobile();
+  document.body.classList.toggle('mobile', mobile);
+  document.body.classList.toggle('in-battle', mobile && Battle.active);
+  if (mobile) {
+    if (Battle.active) { if (panel.parentNode !== this.mob.sheet) this.mob.sheet.append(panel); this.closeDrawer(); }
+    else if (panel.parentNode !== body) body.prepend(panel);
+    if (party.parentNode !== body) body.insertBefore(party, panel.parentNode === body ? panel.nextSibling : body.firstChild);
+    if (topbar.parentNode !== body) body.append(topbar);
+  } else {
+    if (topbar.parentNode !== document.body || topbar.nextElementSibling !== game) document.body.insertBefore(topbar, game);
+    if (party.parentNode !== game) game.insertBefore(party, stage);
+    if (panel.parentNode !== game) game.append(panel);
+    this.closeDrawer();
+  }
+  this.updateChip();
+};
+UI.updateChip = function () {
+  if (!this.mob || !G || !G.mcId || !G.world || !G.world.map) return;
+  const t = tileAt(G.pos.x, G.pos.y);
+  const place = t.feature === 'town' ? G.world.towns[t.townIdx].name : t.feature === 'estate' ? 'Your estate' : t.feature === 'ruins' ? 'Ruins'
+    : t.feature === 'spire' ? 'The Black Spire' : (Events.label && Events.label(t)) || (isWater(t) ? 'At sea' : GD.BIOMES[t.type].name);
+  const mc = ch(G.mcId);
+  $('#hudchip').replaceChildren(h('b', {}, place), h('small', {}, ` · ${seasonName()} ${year()} · ${Math.round(G.house.gold)}g${mc ? ` · ${mc.name} ${Math.round(mc.hp)}/${maxHp(mc)}` : ''}`));
 };
 
 // ---------------------------------------------------------------- modal
@@ -86,6 +137,7 @@ UI.toast = function (text) {
 // ---------------------------------------------------------------- HUD
 UI.refresh = function () {
   if (!G || !G.mcId) return;
+  this.placeLayout();
   this.renderTop();
   this.renderParty();
   if (!Battle.active) this.renderPanel();
@@ -173,7 +225,9 @@ UI.renderPanel = function () {
   else body.push(h('h3', {}, isWater(t) ? 'At Sea' : GD.BIOMES[t.type].name), h('p', { class: 'dim' }, isWater(t) ? 'Your boat rides the waves.' : 'Click a tile to travel. Every step costs time, and danger is everywhere.'));
   if (!isWater(t) && t.feature !== 'town' && t.feature !== 'estate') body.push(act('Make camp', () => Campfire.start(), { sub: 'sit by the fire with your party · rest the night' }));
   body.push(this.questBox());
-  body.push(h('div', { class: 'hint' }, `Click the map to travel${hasTech('flight') ? ' (or fly to far tiles)' : ''}. Wheel to zoom, Q/E to rotate.`));
+  body.push(h('div', { class: 'hint' }, this.isMobile()
+    ? `Tap the map to travel${hasTech('flight') ? ' (or fly to far tiles)' : ''}. Pinch to zoom; use the buttons to rotate.`
+    : `Click the map to travel${hasTech('flight') ? ' (or fly to far tiles)' : ''}. Wheel to zoom, Q/E to rotate.`));
   p.replaceChildren(...body.filter(Boolean));
 };
 
@@ -260,6 +314,7 @@ UI.ruinsPanel = function (t) {
 // ---------------------------------------------------------------- battle panel
 UI.battleChanged = function () {
   if (!Battle.active) return;
+  if (this.isMobile() && !document.body.classList.contains('in-battle')) this.placeLayout();
   this.renderParty();
   const p = $('#panel');
   const u = Battle.cur;

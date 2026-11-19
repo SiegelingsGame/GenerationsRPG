@@ -1,0 +1,16 @@
+{
+  "name": "Generations",
+  "short_name": "Generations",
+  "description": "A 2.5D roguelike RPG about a family line across a thousand years.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#15131c",
+  "theme_color": "#15131c",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

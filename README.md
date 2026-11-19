@@ -2,7 +2,9 @@
 
 A 2.5D roguelike, turn-based RPG about a family line. You play the head of a House, choose a partner, raise heirs, and try to leave a better world for the next generation. You will die. Time skips ahead. Your heir takes your place.
 
-**Play:** open `index.html` in a browser. No build step and no dependencies. Everything is drawn procedurally with Canvas 2D.
+**Play online (phone or desktop):** https://siegelingsgame.github.io/GenerationsRPG/. It's published by `.github/workflows/pages.yml` on every push. On a phone, use your browser's "Add to Home Screen" to install it like an app.
+
+**Play locally:** open `index.html` in a browser. No build step and no dependencies. Everything is drawn procedurally with Canvas 2D.
 
 **Controls:** click a tile to travel; mouse wheel or + / − to zoom; Q / E or the on-screen buttons to rotate the map.
 
