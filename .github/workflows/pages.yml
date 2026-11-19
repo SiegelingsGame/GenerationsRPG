@@ -2,9 +2,11 @@
 # One-time setup: repository Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
 name: Deploy to GitHub Pages
 
+# Deploys from the repository's current default branch (the only branch the github-pages
+# environment allows). If the default branch changes to main, change the branch below to match.
 on:
   push:
-    branches: ["claude/practical-meitner-7hs56r", "main"]
+    branches: ["claude/practical-meitner-7hs56r"]
   workflow_dispatch:
 
 permissions:
@@ -14,7 +16,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
