@@ -509,7 +509,12 @@ UI.showMenu = function () {
   this.modal([
     act('Save Game', () => { UI.toast(saveGame() ? 'Game saved.' : 'Could not save (storage unavailable).'); this.closeModal(); }),
     act('Concept & How to Play', () => { this.closeModal(); this.showHelp(); }),
-    act('Abandon & Start Over', () => { if (confirm('Start a new House? Your current save will be erased.')) { deleteSave(); location.reload(); } }, { cls: 'danger' }),
+    act('Abandon & Start Over', () => {
+      this.closeModal();
+      this.modal([h('p', {}, 'Start a new House? Your current save will be erased.'),
+        act('Erase and start over', () => { deleteSave(); location.reload(); }, { cls: 'danger' }),
+        act('Keep playing', () => this.closeModal())], { title: 'Start Over' });
+    }, { cls: 'danger' }),
   ], { title: 'Menu' });
 };
 UI.showHelp = function () {
