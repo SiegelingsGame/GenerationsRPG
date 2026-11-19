@@ -157,6 +157,36 @@ The land goes through **eras**, each 6–15 years long:
 
 **Prosperity (0–100)** is the world's long-term health. Deeds, cleared ruins and defeated rivals raise it. War and famine wear it down. Prosperity weights which era comes next, so each generation's work makes the next era more likely to be a good one. Reaching 95 prosperity starts the **Golden Age**, which is the goal of the whole game.
 
+## 7b. The thousand years
+
+- **The doom:** the world ends 1,000 years after the House is founded, when the Hollow King comes forth from the Black Spire, unless the House destroys it first.
+- **Quests:** each generation gets a quest: recover a Seal from a ruin, slay a Herald, rally three towns with deeds, raise a champion, or relight a beacon shrine on a far island.
+- **Wards:** every quest completed raises a Ward, and each Ward takes 3 levels off the Hollow King, which otherwise grows stronger every year. Seven Wards make it beatable.
+- **The final battle:** you can assault the Spire at any time. When the 1,000 years run out, the final battle happens wherever the House stands.
+- **The map:** a 44×44 world of mainland and islands, with grassland, forest, jungle, swamp, desert, tundra, hills and mountains.
+- **Technology** arrives at thresholds whose timing differs every run, and some inventions never arrive at all:
+  - sailing boats (~70–140 years in), needed to reach the islands
+  - paved roads
+  - carriages
+  - steamships
+  - railways
+  - flying machines (fly straight to any tile)
+- **Towns** grow and shrink with the era and the world's prosperity. They can fall to ruin (and become delvable ruins), be resettled in good times, or be founded anew. This happens during time skips too, so the heir may inherit a different realm.
+
+## 6c. Culture, kinship and attractiveness
+
+- **Attractiveness** (0–10) comes from inherited looks, youth, scars, conditions and inbreeding. It raises everyone's attraction toward a person.
+- **Kinship:** the game computes real kinship, both the relationship (parent, sibling, half-sibling, grandparent, aunt or uncle, first or second cousin and so on) and how much blood a pair shares, using Wright's coefficient.
+- **Taboo:** each era's people tolerate unions up to a certain closeness.
+  - Townsfolk only marry within that limit, and even then they mostly look beyond the family.
+  - Parents and grandparents never pair off on their own.
+  - The House can still arrange a match within the family, at the cost of a scandal if the era forbids it.
+- **Inbreeding:** children of close kin carry that inbreeding, which raises their chance of conditions and infertility and lowers their stats and looks.
+- **Culture:** the House records every choice: love or duty in marriage, close kin or outsiders, martial or scholarly, open or insular, charitable or ambitious, accepting or rigid.
+  - Each person's influence is weighted by the years they lived as an adult.
+  - Once 5 people have belonged to the House, its culture forms and gets a name.
+  - Culture only changes how the people of each era see the House. Its distance from the era's own values, minus lingering scandal, sets a reputation (Revered to Scorned), which scales courting, hiring, matches and prestige.
+
 ## 8. Combat (turn-based)
 
 - Up to 4 party members against 1–4 enemies, in initiative order by AGI.

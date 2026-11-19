@@ -100,12 +100,15 @@ UI.renderTop = function () {
     h('div', { class: 'house' }, h('b', {}, `House ${hs.name}`), h('small', {}, `Generation ${hs.generation} · ${GD.ESTATE[hs.tier].name}`)),
     h('div', { class: 'tb' }, h('small', {}, 'Year'), h('b', {}, `${seasonName()} ${year()}`)),
     h('div', { class: 'tb' }, h('small', {}, 'Era'), h('b', { style: `color:${E.color}` }, E.name), h('small', {}, w.era.type === 'golden' ? 'Victory!' : `${yearsLeft} yr left`)),
-    h('div', { class: 'tb grow' }, h('small', {}, `Prosperity ${Math.round(w.prosperity)} / 95 for a Golden Age`), bar(w.prosperity, 100, 'pros')),
+    h('div', { class: 'tb grow' }, h('small', {}, `Prosperity ${Math.round(w.prosperity)} / 95`), bar(w.prosperity, 100, 'pros')),
+    h('div', { class: 'tb doom', title: `${GD.VILLAIN.name} will end the world in ${w.doom.year}` }, h('small', {}, 'Doom'), h('b', { class: doomYearsLeft() < 100 ? 'bad' : '' }, `${Math.max(0, doomYearsLeft())} yrs`), h('small', {}, `Wards ${w.doom.wards}/${GD.WARDS_NEEDED}`)),
+    h('div', { class: 'tb' }, h('small', {}, 'Reputation'), h('b', { style: `color:${reputationInfo().color}` }, reputationInfo().name)),
     h('div', { class: 'tb' }, h('small', {}, 'Prestige'), h('b', {}, Math.round(hs.prestige))),
     h('div', { class: 'tb' }, h('small', {}, 'Gold'), h('b', { class: 'gold' }, Math.round(hs.gold))),
     h('div', { class: 'tb' }, h('small', {}, 'Potions'), h('b', {}, hs.potions)),
     h('button', { class: 'small', onclick: () => this.showTree() }, 'Family Tree'),
     h('button', { class: 'small', onclick: () => this.showChronicle() }, 'Chronicle'),
+    h('button', { class: 'small', onclick: () => this.showWorld() }, 'World'),
     h('button', { class: 'small', onclick: () => this.showMenu() }, 'Menu'),
   );
 };
@@ -164,8 +167,11 @@ UI.renderPanel = function () {
   if (t.feature === 'estate') body.push(...this.estatePanel());
   else if (t.feature === 'town') body.push(...this.townPanel(t));
   else if (t.feature === 'ruins') body.push(...this.ruinsPanel(t));
-  else body.push(h('h3', {}, 'The Wilds'), h('p', { class: 'dim' }, `${t.type[0].toUpperCase() + t.type.slice(1)}. Click a tile to travel. Every step costs time, and danger is everywhere.`));
-  body.push(h('div', { class: 'hint' }, 'Click the map to travel. Hover a tile to see the path.'));
+  else if (t.feature === 'spire') body.push(...this.spirePanel());
+  else if (t.feature === 'shrine') body.push(h('h3', {}, 'Beacon Shrine'), h('p', { class: 'dim' }, t.lit ? 'The beacon burns again, a ward against the dark.' : 'A cold beacon from an older age.'));
+  else body.push(h('h3', {}, isWater(t) ? 'At Sea' : GD.BIOMES[t.type].name), h('p', { class: 'dim' }, isWater(t) ? 'Your boat rides the waves.' : 'Click a tile to travel. Every step costs time, and danger is everywhere.'));
+  body.push(this.questBox());
+  body.push(h('div', { class: 'hint' }, `Click the map to travel${hasTech('flight') ? ' (or fly to far tiles)' : ''}. Wheel to zoom, Q/E to rotate.`));
   p.replaceChildren(...body.filter(Boolean));
 };
 
@@ -203,7 +209,7 @@ UI.townPanel = function (t) {
   }
   deeds.push(act('Fund Roads & Wells', () => Game.deed(town, 'roads'), { sub: '160g · prosperity', disabled: deedDone || G.house.gold < 160 }));
   return [
-    h('h3', {}, town.name),
+    h('h3', {}, town.name), h('p', { class: 'dim' }, `${GD.TOWN_SIZES[town.size]} · founded ${town.founded}`),
     h('p', { class: 'dim' }, `${this.townPeople(t.townIdx).length} people of note live here.`),
     act('Tavern', () => this.showTavern(t.townIdx), { sub: 'recruit, court, lineage' }),
     act('Market', () => this.showMarket(), { sub: 'gear & potions' }),
@@ -216,13 +222,33 @@ UI.townPeople = function (idx) {
   return Object.values(G.chars).filter((c) => c.alive && c.status === 'npc' && c.town === idx && !c.evil);
 };
 
+UI.questBox = function () {
+  const d = G.world.doom;
+  const q = d.quest;
+  return h('div', { class: 'quest' },
+    h('h4', {}, `The Prophecy · ${Math.max(0, doomYearsLeft())} years left`),
+    q ? [h('b', {}, q.title), h('p', { class: 'small' }, q.desc),
+      q.type === 'rally' ? h('small', { class: 'dim' }, `${q.progress.length}/${q.count} towns: ${q.progress.join(', ') || 'none yet'}`) : null,
+      q.x != null ? h('small', { class: 'dim' }, `Marked on the map with a gold ◆.${!reachable(tileAt(q.x, q.y)) ? ' You need boats to reach it.' : ''}`) : null]
+      : h('p', { class: 'dim small' }, 'No task yet.'),
+    h('small', { class: 'dim' }, `Wards ${d.wards}/${GD.WARDS_NEEDED} · the Black Spire waits`));
+};
+UI.spirePanel = function () {
+  const d = G.world.doom;
+  return [
+    h('h3', {}, 'The Black Spire'),
+    h('p', { class: 'dim' }, `The seat of ${GD.VILLAIN.name}. It will end the world in ${d.year} unless it is destroyed first. Each ward raised weakens it.`),
+    h('p', { class: d.wards >= GD.WARDS_NEEDED ? 'good' : 'bad' }, `Wards ${d.wards}/${GD.WARDS_NEEDED}. ${GD.VILLAIN.name} is around level ${villainLevel()}.`),
+    act('Assault the Spire', () => Game.finalBattle(false), { cls: 'danger', sub: 'the final battle; it can be tried again if you survive', disabled: G.world.saved }),
+  ];
+};
 UI.ruinsPanel = function (t) {
   const quiet = t.cleared && year() < (t.clearedYear || 0) + 5;
   const dist = Math.abs(t.x - G.world.estate.x) + Math.abs(t.y - G.world.estate.y);
-  const lvl = Math.max(1, Math.round(partyLevel() + dist / 5 + 1.5));
+  const lvl = Math.max(1, Math.round(partyLevel() + dist / 9 + 1.5 + (year() - START_YEAR) / 150));
   const ready = partyLevel() >= lvl - 1 && G.party.length >= 2;
   return [
-    h('h3', {}, 'Ancient Ruins'),
+    h('h3', {}, t.ruinOf ? `Ruins of ${t.ruinOf}` : 'Ancient Ruins'),
     h('p', { class: 'dim' }, quiet ? `Cleared in ${t.clearedYear}. Something may return in time.` : 'Dark things gather here. Clearing it makes the land safer and brings great prestige.'),
     h('p', { class: ready ? 'dim' : 'bad' }, `Foes around level ${lvl}. ${ready ? 'Your party looks ready.' : 'Your party looks outmatched. Death here is permanent.'}`),
     act('Delve', () => Game.delve(t), { disabled: quiet, sub: 'hard battle · loot · prosperity', cls: 'danger' }),
@@ -343,6 +369,8 @@ UI.charBody = function (c) {
       h('p', {}, this.charLine(c)),
       h('p', { class: 'dim' }, `${GD.GENDERS[c.gender || 'man'].name} · ${bodyText(c)}`),
       h('p', { class: 'dim' }, `Drawn to: ${orientationText(c)}`),
+      (() => { const k = ch(G.mcId) && c.id !== G.mcId ? kinship(ch(G.mcId), c) : null; return k && k.rel ? h('p', { class: 'dim' }, `${ch(G.mcId).name}'s ${k.rel}`) : null; })(),
+      c.inbred > 0.05 ? h('p', { class: 'bad' }, `Born of close kin (blood ${Math.round(c.inbred * 100)}% shared).`) : null,
       c.condition ? h('p', { class: 'bad', title: GD.CONDITIONS[c.condition].desc }, `Born ${GD.CONDITIONS[c.condition].name.toLowerCase()}: ${GD.CONDITIONS[c.condition].desc}`) : null,
       c.infertileKnown ? h('p', { class: 'bad' }, 'Cannot have children.') : null,
       c.adoptedBy && c.adoptedBy.length ? h('p', { class: 'good' }, 'Adopted into the House.') : null,
@@ -381,7 +409,7 @@ UI.charActions = function (c) {
     const cost = hireCost(c), req = recruitPrestigeReq(c);
     out.push(act('Recruit', () => { Game.recruit(c); this.closeModal(); }, { sub: `${cost}g${req ? ` · needs ${req} prestige` : ''}`, disabled: G.house.gold < cost || G.house.prestige < req }));
   }
-  const canRomance = isAdult(c) && !spouseOf(mc) && !spouseOf(c) && !isDescendantOf(c, mc.id) && !isDescendantOf(mc, c.id) && !siblings(c, mc) && c.status !== 'rival';
+  const canRomance = isAdult(c) && !spouseOf(mc) && !spouseOf(c) && c.status !== 'rival';
   if (canRomance && (inTown || c.status !== 'npc')) {
     out.push(act('Court', () => { Game.court(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '20g · 10 days', disabled: G.house.gold < 20 }));
     if (bond(c, mc) >= 70) out.push(act('Propose Marriage', () => { Game.propose(c); this.closeModal(); }, { cls: 'hl' }));
@@ -690,6 +718,65 @@ UI.endScreen = function (opts) {
     h('div', { class: 'tl-actions' }, opts.actions));
   this.modal(body, { wide: true, locked: true });
 };
+// ---------------------------------------------------------------- the world: prophecy, culture, technology, towns
+UI.showWorld = function (tab = 'prophecy') {
+  const tabs = { prophecy: 'Prophecy', culture: 'Culture', tech: 'Technology', towns: 'Towns' };
+  const nav = h('div', { class: 'tabs' }, Object.entries(tabs).map(([k, v]) => h('button', { class: 'tab' + (k === tab ? ' on' : ''), onclick: () => { this.closeModal(); this.showWorld(k); } }, v)));
+  let body;
+  const d = G.world.doom;
+  if (tab === 'prophecy') {
+    const span = GD.DOOM_YEARS, now = year() - START_YEAR;
+    body = h('div', {},
+      h('p', {}, `In the year ${d.year}, ${GD.VILLAIN.name} will come forth from ${GD.VILLAIN.seat} and end the world. Each generation can raise wards against it: ${GD.WARDS_NEEDED} wards weaken it enough to be beaten. You may assault the Spire at any time, or face it when the years run out.`),
+      h('div', { class: 'doomline' },
+        h('div', { class: 'dl-fill', style: `width:${clamp(now / span * 100, 0, 100)}%` }),
+        (G.world.tech || []).filter((t) => t.got).map((t) => h('span', { class: 'dl-mark' + (t.got ? ' got' : ''), style: `left:${(t.year - START_YEAR) / span * 100}%`, title: t.got ? `${GD.TECH.find((x) => x.key === t.key).name} (${t.year})` : 'An invention yet to come' })),
+        d.done.map((w) => h('span', { class: 'dl-ward', style: `left:${(w.year - START_YEAR) / span * 100}%`, title: `${w.title} (${w.year})` })),
+        h('span', { class: 'dl-now', style: `left:${clamp(now / span * 100, 0, 100)}%` })),
+      h('div', { class: 'row spread' }, h('small', {}, START_YEAR), h('small', {}, `now: ${year()}`), h('small', { class: 'bad' }, `${d.year}: the end`)),
+      h('h4', {}, `Wards raised: ${d.wards}/${GD.WARDS_NEEDED}`),
+      d.done.length ? h('div', { class: 'ledger small' }, d.done.map((w) => h('div', { class: 'lrow k-head' }, h('span', { class: 'lyear' }, w.year), h('span', { class: 'licon' }, '✦'), ch(w.by) ? portrait(ch(w.by), 28) : null, h('span', { class: 'ltext' }, `${w.title}, by ${ch(w.by) ? ch(w.by).name : 'the House'} (generation ${w.gen})`)))) : h('p', { class: 'dim' }, 'None yet.'),
+      h('h4', {}, 'Current task'), this.questBox(),
+      h('p', { class: 'dim' }, `${GD.VILLAIN.name} is around level ${villainLevel()} now. It grows stronger every year; every ward takes 3 levels from it.`));
+  } else if (tab === 'culture') {
+    const cu = G.house.culture;
+    const w = G.world.era.values || {};
+    const members = houseMembersEver();
+    const rows = Object.entries(GD.CULTURE_AXES).map(([k, ax]) => {
+      const hv = cultureValue(k), wv = w[k] || 0;
+      const pos = (v) => `${(v + 1) * 50}%`;
+      return h('div', { class: 'axis' },
+        h('div', { class: 'axis-label' }, h('small', {}, ax.neg), h('b', {}, ax.label), h('small', {}, ax.pos)),
+        h('div', { class: 'axis-bar' }, h('span', { class: 'ax-era', style: `left:${pos(wv)}`, title: `The people of this era: ${wv.toFixed(2)}` }),
+          cu.formed ? h('span', { class: 'ax-house', style: `left:${pos(hv)}`, title: `House ${G.house.name}: ${hv.toFixed(2)}` }) : null));
+    });
+    body = h('div', {},
+      cu.formed
+        ? h('p', {}, h('b', {}, `The ${cu.name}`), ` (since ${cu.since}). ${cultureTenets().join(' · ') || 'No strong tenets yet.'}`)
+        : h('p', { class: 'dim' }, `Your House is still too small to have a culture of its own (${members}/${GD.CULTURE_MEMBERS} members). The choices made now will shape it.`),
+      h('p', { class: 'dim small' }, 'Every choice the House makes (who marries whom, forcing or allowing love, fighting or studying, charity or ambition, welcoming or turning away outsiders) shapes its culture. A person\'s choices weigh more the longer they lived. Culture changes only how the people of each era see the House.'),
+      h('div', { class: 'legend' }, h('span', { class: 'ax-house' }), ' House', h('span', { class: 'ax-era' }), ` People of the ${GD.ERAS[G.world.era.type].name}`),
+      rows,
+      h('p', {}, 'Reputation in this era: ', h('b', { style: `color:${reputationInfo().color}` }, reputationInfo().name),
+        cu.formed ? h('small', { class: 'dim' }, ` · courting, hiring, matches and prestige ×${repMult().toFixed(2)}${G.house.scandal > 0.05 ? ' · lingering scandal' : ''}`) : null),
+      h('p', { class: 'dim small' }, `Close-kin unions this era will accept: ${eraKinTolerance() < 1 ? 'none closer than distant kin' : eraKinTolerance() < 1.5 ? 'up to second cousins' : eraKinTolerance() < 2 ? 'up to first cousins once removed' : eraKinTolerance() < 3 ? 'up to first cousins' : eraKinTolerance() < 4 ? 'up to aunts, uncles, nieces and nephews' : 'even siblings'}.`),
+      h('h4', {}, 'Who shaped the House most'),
+      h('div', { class: 'row' }, topInfluencers().map((x) => h('div', { class: 'mini' }, portrait(x.c, 40), h('div', {}, h('b', {}, x.c.name), h('small', {}, `${Math.round(x.w)} years of influence`))))));
+  } else if (tab === 'tech') {
+    body = h('div', {}, h('p', { class: 'dim' }, 'Inventions arrive at different times in every world, and some never arrive at all.'),
+      (G.world.tech || []).map((t) => {
+        const d2 = GD.TECH.find((x) => x.key === t.key);
+        return h('div', { class: 'row up' }, h('div', { class: 'grow' }, h('b', {}, t.got ? d2.name : '???'), h('br'), h('small', { class: 'dim' }, t.got ? `${d2.desc} (since ${t.year})` : 'Not yet discovered.')), h('small', { class: t.got ? 'good' : 'dim' }, t.got ? 'Known' : 'Unknown'));
+      }));
+  } else {
+    body = h('div', {}, h('div', { class: 'tablewrap' }, h('table', { class: 'stats sum' },
+      h('tr', {}, h('th', {}, 'Town'), h('th', {}, 'Size'), h('th', {}, 'Founded'), h('th', {}, 'Where')),
+      G.world.towns.map((t) => h('tr', { class: t.fallen ? 'dim' : '' }, h('td', {}, t.name), h('td', {}, t.fallen ? 'Fallen' : GD.TOWN_SIZES[t.size]), h('td', {}, t.founded),
+        h('td', {}, tileAt(t.x, t.y).land === G.world.mainland ? 'Mainland' : 'Island'))))));
+  }
+  this.modal([nav, body], { title: 'The World', wide: true });
+};
+
 // ---------------------------------------------------------------- menu
 UI.showMenu = function () {
   this.modal([

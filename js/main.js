@@ -104,17 +104,25 @@ Game.matchmaker = function (who, opts = {}) {
   const forHeir = !!opts.forHeir;
   const tier = opening ? 0 : maxPartnerTier();
   const genders = forHeir ? [who.gender === 'man' ? 'woman' : 'man'] : compatibleGenders(who);
-  const cands = [genPartner(tier, who, genders), genPartner(Math.max(0, tier - 1), who, genders), genPartner(tier, who, genders)];
+  const kinMode = !!opts.kin;
+  const kinList = Object.values(G.chars).filter((c) => c.alive && c.id !== who.id && isAdult(c) && !c.evil && !spouseOf(c) && c.status !== 'candidate' && kinship(who, c).sev > 0)
+    .sort((a, b) => kinship(who, b).sev - kinship(who, a).sev);
+  const cands = kinMode ? kinList.slice(0, 9) : [genPartner(tier, who, genders), genPartner(Math.max(0, tier - 1), who, genders), genPartner(tier, who, genders)];
+  const discard = (keep) => { if (!kinMode) discardCandidates(cands, keep); };
   const canSwitch = who.orientation !== 'straight';
   const done = (chosen) => {
-    discardCandidates(cands, chosen ? chosen.id : null);
+    discard(chosen ? chosen.id : null);
     UI.closeAll();
     if (chosen) {
-      if (!opening) G.house.gold -= chosen.dowry;
-      chosen.status = 'npc';
-      joinHouse(chosen, who);
+      if (!opening && !kinMode) G.house.gold -= chosen.dowry;
+      if (kinMode && chosen.status !== 'npc') marry(who, chosen);
+      else { chosen.status = 'npc'; joinHouse(chosen, who); }
       if (chosen.birth === 'highborn') G.house.prestige += 5;
       const against = attraction(who, chosen) === 0;
+      if (kinship(who, chosen).sev) kinScandal(who, chosen);
+      recordChoice('love', against ? -1 : 0.4, mc ? mc.id : who.id);
+      if (against && who.orientation !== 'straight' && who.gender !== chosen.gender) recordChoice('accept', -1, mc ? mc.id : who.id);
+      if (!kinship(who, chosen).sev) recordChoice('kin', -0.3, mc ? mc.id : who.id);
       if (against) {
         who.forced = true; chosen.forced = true;
         addBond(who, chosen, -15);
@@ -131,9 +139,11 @@ Game.matchmaker = function (who, opts = {}) {
     else this.after();
   };
   const note = (c) => {
+    const k = kinship(who, c);
+    const kinNote = k.sev ? h('small', { class: k.sev > eraKinTolerance() ? 'bad' : 'dim' }, `${who.name}'s ${k.rel} · ${k.sev > eraKinTolerance() ? 'taboo in this era: a scandal' : 'accepted in this era'} · shared blood ${Math.round(k.coef * 100)}%`) : null;
     const kids = canConceive(who, c) ? null : (who.gender === c.gender ? 'No children together. Adoption is possible.' : null);
     const love = attraction(who, c) === 0 ? (self ? 'A marriage of duty: no love on your side.' : `Against ${who.name}'s heart: they will resent you.`) : (attraction(who, c) > 1.15 ? `${who.name} is strongly drawn to them.` : null);
-    return [kids ? h('small', { class: 'bad' }, kids) : null, love ? h('small', { class: attraction(who, c) === 0 ? 'bad' : 'good' }, love) : null];
+    return [kinNote, kids ? h('small', { class: 'bad' }, kids) : null, love ? h('small', { class: attraction(who, c) === 0 ? 'bad' : 'good' }, love) : null];
   };
   const intro = opening
     ? 'Every House begins with a union. Choose who will be the other parent of your line. Their blood will shape your heirs.'
@@ -151,11 +161,15 @@ Game.matchmaker = function (who, opts = {}) {
       h('small', { class: 'dim' }, `${orientationText(c)}`),
       h('small', { class: 'dim' }, `Children would come of age at ~${GD.RACES[c.race].maturity} (if ${GD.RACES[c.race].name})`),
       note(c),
-      act(opening ? 'Choose' : `Marry (${c.dowry}g)`, () => done(c), { cls: 'hl', disabled: !opening && G.house.gold < c.dowry })))),
+      act(opening ? 'Choose' : kinMode ? 'Marry' : `Marry (${c.dowry}g)`, () => done(c), { cls: 'hl', disabled: !opening && !kinMode && G.house.gold < c.dowry })))),
+    kinMode && !cands.length ? h('p', { class: 'dim' }, `${who.name} has no unmarried adult kin.`) : null,
     h('div', { class: 'row' },
-      canSwitch && !forHeir ? act(self ? 'Seek a match who can give you an heir' : `Force a match that can give an heir`, () => { discardCandidates(cands, null); UI.closeAll(); this.matchmaker(who, { ...opts, forHeir: true }); }, { cls: self ? '' : 'danger', sub: self ? 'a marriage of duty' : `${who.name} will hate you for it` }) : null,
-      forHeir ? act('Back to matches of the heart', () => { discardCandidates(cands, null); UI.closeAll(); this.matchmaker(who, { ...opts, forHeir: false }); }) : null,
+      !opening && !kinMode ? act('Seek a match within the family', () => { discard(null); UI.closeAll(); this.matchmaker(who, { ...opts, kin: true, forHeir: false }); }, { sub: 'keep the blood close, if the era allows' }) : null,
+      kinMode ? act('Back to outside matches', () => { UI.closeAll(); this.matchmaker(who, { ...opts, kin: false }); }) : null,
+      canSwitch && !forHeir && !kinMode ? act(self ? 'Seek a match who can give you an heir' : `Force a match that can give an heir`, () => { discard(null); UI.closeAll(); this.matchmaker(who, { ...opts, forHeir: true }); }, { cls: self ? '' : 'danger', sub: self ? 'a marriage of duty' : `${who.name} will hate you for it` }) : null,
+      forHeir ? act('Back to matches of the heart', () => { discard(null); UI.closeAll(); this.matchmaker(who, { ...opts, forHeir: false }); }) : null,
       !opening ? act('Decline for now', () => done(null)) : null),
+    kinMode ? h('p', { class: 'dim small' }, 'Close-kin unions concentrate the blood: children are more likely to be born with conditions, infertile, weaker and plainer.') : null,
   );
   UI.modal(body, { title: opening ? 'Choose your Partner' : self ? 'Arranged Match' : `A Match for ${who.name}`, wide: true, locked: true });
 };
@@ -182,9 +196,25 @@ Game.enterWorld = function (fresh) {
 Game.clickTile = function (t) {
   if (this.busy || UI.modalStack.length || Battle.active) return;
   if (t.x === G.pos.x && t.y === G.pos.y) return;
+  const dist = Math.abs(t.x - G.pos.x) + Math.abs(t.y - G.pos.y);
+  if (hasTech('flight') && dist > 3) return this.fly(t);
   const path = findPath(tileAt(G.pos.x, G.pos.y), t);
-  if (!path || !path.length) return UI.toast('You cannot travel there.');
+  if (!path || !path.length) return UI.toast(isWater(t) || (isLand(t) && t.land !== tileAt(G.pos.x, G.pos.y).land) ? 'You need boats to cross the sea. Sailing has not been invented yet.' : 'You cannot travel there.');
   this.travel(path);
+};
+
+Game.fly = function (t) {
+  this.busy = true;
+  const dist = Math.abs(t.x - G.pos.x) + Math.abs(t.y - G.pos.y);
+  Render.move = { from: { ...G.pos }, to: { x: t.x, y: t.y }, t0: performance.now(), dur: 900, fly: true };
+  setTimeout(() => {
+    Render.move = null;
+    G.pos = { x: t.x, y: t.y };
+    advanceDays(Math.max(2, dist * 1.5));
+    this.busy = false;
+    if (G.pendingSuccession || G.pendingVictory || G.pendingDoom) return this.after();
+    this.arrive();
+  }, 920);
 };
 
 Game.travel = function (path) {
@@ -193,31 +223,43 @@ Game.travel = function (path) {
     if (!path.length) { this.busy = false; this.arrive(); return; }
     const next = path.shift();
     const from = { ...G.pos };
-    Render.move = { from, to: { x: next.x, y: next.y }, t0: performance.now(), dur: 260 };
+    Render.move = { from, to: { x: next.x, y: next.y }, t0: performance.now(), dur: 190 };
     setTimeout(() => {
       Render.move = null;
       G.pos = { x: next.x, y: next.y };
-      const cost = { grass: 1, sand: 1, forest: 1.3, hills: 1.5, mountain: 2 }[next.type] || 1;
-      advanceDays(15 * cost * (1 - G.house.up.horses * 0.18));
+      advanceDays(moveDays(next));
       for (const id of G.party) { const c = ch(id); if (c) c.hp = Math.min(maxHp(c), c.hp + maxHp(c) * 0.04); }
       UI.refresh();
-      if (G.pendingSuccession || G.pendingVictory) { this.busy = false; return this.after(); }
-      if (next.feature) { path.length = 0; return step(); }
+      if (G.pendingSuccession || G.pendingVictory || G.pendingDoom) { this.busy = false; return this.after(); }
+      const q = G.world.doom.quest;
+      if (next.feature || (q && q.x === next.x && q.y === next.y)) { path.length = 0; return step(); }
+      if (isWater(next)) return step();
       // ambush by rivals
       const rivals = Object.values(G.chars).filter((c) => c.alive && c.status === 'rival');
       if (rivals.length && R.chance(0.05 * rivals.length)) { this.busy = false; return this.rivalBattle(R.pick(rivals)); }
-      if (R.chance(0.22 * era().enc * ({ forest: 1.3, hills: 1.3, mountain: 1.5 }[next.type] || 1))) {
+      if (R.chance(0.2 * era().enc * ({ forest: 1.3, hills: 1.3, mountain: 1.5, jungle: 1.4, swamp: 1.4, desert: 1.2, snow: 1.2 }[next.type] || 1))) {
         this.busy = false;
         return this.battle(buildEncounter(next), { kind: 'wild', title: 'Ambush on the road' });
       }
       step();
-    }, 270);
+    }, 200);
   };
   step();
 };
 
 Game.arrive = function () {
   const t = tileAt(G.pos.x, G.pos.y);
+  const q = G.world.doom.quest;
+  if (q && q.x === t.x && q.y === t.y) {
+    if (q.type === 'herald') return this.heraldBattle();
+    if (q.type === 'beacon') {
+      if (R.chance(0.5)) {
+        return this.battle(buildEncounter(t, { hard: true, count: 3 }), { kind: 'dungeon', title: 'Guardians of the Beacon',
+          after: (res) => { if (res.outcome === 'victory') completeQuest(); } });
+      }
+      completeQuest();
+    }
+  }
   if (t.feature === 'town') Log.add(`Arrived at ${G.world.towns[t.townIdx].name}.`, 'dim');
   if (t.feature === 'estate') {
     Log.add('Home at last.', 'dim');
@@ -262,7 +304,39 @@ Game.delve = function (t) {
       G.house.potions += 1;
       addProsperity(5);
       G.party.map(ch).forEach((c) => addFormative(c, 2));
+      const q = G.world.doom.quest;
+      if (q && q.type === 'seal' && q.x === t.x && q.y === t.y) completeQuest();
       chron(`${ch(G.mcId).name}'s party cleared the ruins. Treasure: ${loot}g and a potion. Prestige +6, Prosperity +5.`, 'good', G.party.slice(), 'deed');
+    },
+  });
+};
+
+Game.heraldBattle = function () {
+  const lvl = Math.max(3, Math.round(partyLevel() + 2 + (year() - START_YEAR) / 120));
+  const enemies = [{ type: 'herald', lvl }, { type: 'cultist', lvl: lvl - 1 }, { type: 'wraith', lvl: lvl - 2 }];
+  this.battle(enemies, { kind: 'dungeon', title: 'The Herald', intro: `The Herald of ${GD.VILLAIN.name} rises from the earth!`,
+    after: (res) => { if (res.outcome === 'victory') completeQuest(); } });
+};
+// The last battle: at the Black Spire, or wherever the House stands when the thousand years end.
+Game.finalBattle = function (forced) {
+  const d = G.world.doom;
+  const lvl = villainLevel();
+  const enemies = [{ type: 'hollow', lvl }, { type: 'herald', lvl: lvl - 4 }, { type: 'herald', lvl: lvl - 5 }];
+  const warded = d.wards >= GD.WARDS_NEEDED;
+  this.battle(enemies, {
+    kind: 'final', title: GD.VILLAIN.name,
+    intro: warded ? `The wards blaze. ${GD.VILLAIN.name} is weakened, but not beaten.` : `${GD.VILLAIN.name} rises, strong with the years. Only ${d.wards} wards stand against it.`,
+    after: (res) => {
+      if (res.outcome === 'victory') {
+        G.world.saved = true;
+        d.ended = true;
+        chron(`${ch(G.mcId) ? ch(G.mcId).name : 'House ' + G.house.name} destroyed ${GD.VILLAIN.name}. The world endures.`, 'head', [G.mcId, ...G.party], 'final');
+        G.pendingSaved = true;
+      } else if (forced) {
+        d.ended = true;
+        chron(`${GD.VILLAIN.name} ended the world in the year ${year()}.`, 'bad', [], 'final');
+        G.pendingWorldEnd = true;
+      }
     },
   });
 };
@@ -276,6 +350,7 @@ Game.rest = function (days) {
 };
 Game.train = function () {
   advanceDays(90);
+  recordChoice('martial', 0.4, G.mcId);
   for (const id of G.party) {
     const c = ch(id);
     if (!c || !c.alive) continue;
@@ -302,6 +377,13 @@ Game.deed = function (town, kind) {
     G.house.prestige += pres + hb + amb;
     G.party.map(ch).forEach((c) => { addFormative(c, 2); c.loyalty = clamp(c.loyalty + 3, -100, 100); });
     chron(`${text} Prosperity +${pros}, Prestige +${pres + hb + amb}.`, 'good', G.party.slice(), 'deed');
+    recordChoice('charity', 1, G.mcId);
+    const q = G.world.doom.quest;
+    if (q && q.type === 'rally' && !q.progress.includes(town.name)) {
+      q.progress.push(town.name);
+      if (q.progress.length >= q.count) completeQuest();
+      else Log.add(`Rally the Realm: ${q.progress.length}/${q.count} towns.`, 'good');
+    }
   };
   if (kind === 'aid') { G.house.gold -= 120; advanceDays(10); finish(4, 3, `House ${G.house.name} feeds the starving of ${town.name}.`); }
   if (kind === 'festival') {
@@ -331,6 +413,7 @@ Game.recruit = function (c) {
   const parentComp = c.parents.map(ch).find((p) => p && p.alive && (p.status === 'party' || p.status === 'household'));
   if (parentComp) { addBond(c, parentComp, 15); c.loyalty += 10; }
   if (c.lineageKnown && c.secret === 'noble') G.house.prestige += 2;
+  recordChoice('open', 0.6, G.mcId);
   chron(`${c.name} joins House ${G.house.name}${c.status === 'household' ? ' (waiting at the estate)' : ''}.`, 'good', [c.id], 'join');
   this.after();
 };
@@ -360,6 +443,10 @@ Game.propose = function (c) {
   const wasStatus = c.status;
   if (wasStatus !== 'npc') { c.house = G.house.name; marry(mc, c); c.loyalty = Math.max(c.loyalty, 60); }
   else joinHouse(c, mc);
+  if (kinship(mc, c).sev) kinScandal(mc, c);
+  else recordChoice('kin', -0.3, mc.id);
+  recordChoice('love', 1, mc.id);
+  if (mc.gender === c.gender) recordChoice('accept', 1, mc.id);
   if (c.birth === 'highborn') G.house.prestige += 5;
   this.after();
 };
@@ -390,6 +477,7 @@ Game.interact = function (c, kind) {
     gain = 20;
     c.loyalty = clamp(c.loyalty + 10, -100, 100);
     text = `${mc.name} publicly asks ${c.name}'s forgiveness for the forced marriage.`;
+    recordChoice('love', 0.8, mc.id);
   }
   addBond(c, mc, gain);
   if (bond(c, mc) > 0 && c.forcedBy) {
@@ -428,6 +516,7 @@ Game.adopt = function (k) {
   addBond(k, mc, 25);
   if (sp) addBond(k, sp, 20);
   if (!G.heirId) G.heirId = k.id;
+  recordChoice('open', 1, mc.id);
   chron(`${mc.name}${sp ? ' and ' + sp.name : ''} adopted ${k.name}${k.foundling ? ', a foundling' : ', an orphan'}, into House ${G.house.name}.`, 'birth', [k.id, mc.id], 'adopt');
   this.after();
 };
@@ -436,6 +525,7 @@ Game.research = function (c) {
   const cost = Math.max(10, 40 - G.house.up.library * 10);
   G.house.gold -= cost;
   c.lineageKnown = true;
+  recordChoice('martial', -0.4, G.mcId);
   const s = GD.SECRETS[c.secret || 'common'];
   for (const k in s.bonus) c.bonus[k] += s.bonus[k];
   c.corruption += s.corruption;
@@ -446,6 +536,7 @@ Game.research = function (c) {
 Game.legitimise = function (c) {
   G.house.prestige -= 10;
   c.legit = true;
+  recordChoice('open', 0.5, G.mcId); recordChoice('accept', 0.6, G.mcId);
   chron(`${c.name} is legitimised and recognised as a true child of House ${G.house.name}.`, 'good', [c.id], 'legit');
   this.after(true);
 };
@@ -455,9 +546,10 @@ Game.toHousehold = function (c) {
   c.status = 'household'; G.party = G.party.filter((id) => id !== c.id); this.after(true);
 };
 Game.dismiss = function (c) {
-  c.status = 'npc'; c.town = R.int(0, G.world.towns.length - 1);
+  c.status = 'npc'; c.town = randomTownIdx();
   G.party = G.party.filter((id) => id !== c.id);
   c.loyalty -= 20; c.grudge = true;
+  recordChoice('open', -0.8, G.mcId);
   chron(`${c.name} was dismissed and leaves bitter.`, 'bad', [c.id], 'leave');
   this.after();
 };
@@ -468,6 +560,7 @@ Game.upgradeEstate = function () {
   G.house.gold -= next.cost;
   G.house.tier++;
   G.house.prestige += next.gain || 0;
+  recordChoice('charity', -0.8, G.mcId);
   chron(`House ${G.house.name} raises a ${next.name}! Prestige +${next.gain}.`, 'good', [G.mcId], 'estate');
   this.after(true);
 };
@@ -493,7 +586,32 @@ Game.after = function (quiet) {
     });
     return;
   }
+  if (G.pendingSaved) {
+    G.pendingSaved = false;
+    UI.closeAll();
+    return UI.endScreen({ title: 'The World Endures', text: `${GD.VILLAIN.name} is destroyed in the year ${year()}, after ${G.house.generation} generation(s) of House ${G.house.name} and ${G.world.doom.wards} wards raised against the dark. This is the story of your line.`,
+      actions: act('Live on in the saved world', () => { UI.closeModal(); this.after(); }, { cls: 'hl' }) });
+  }
+  if (G.pendingWorldEnd) {
+    G.pendingWorldEnd = false;
+    deleteSave();
+    UI.closeAll();
+    return UI.endScreen({ title: 'The End of the World', text: `In the year ${year()}, ${GD.VILLAIN.name} unmade the world. House ${G.house.name} stood until the last, through ${G.house.generation} generation(s), with ${G.world.doom.wards} of ${GD.WARDS_NEEDED} wards raised.`,
+      actions: act('Begin a new world', () => location.reload(), { cls: 'hl' }) });
+  }
+  if (G.pendingDoom && !Battle.active) {
+    G.pendingDoom = false;
+    UI.closeAll();
+    if (!G.party.length || !ch(G.mcId) || !ch(G.mcId).alive) { G.pendingWorldEnd = true; G.world.doom.ended = true; return this.after(); }
+    UI.modal(h('div', { class: 'title' }, h('h1', {}, 'The Thousand Years Are Over'),
+      h('p', {}, `${GD.VILLAIN.name} comes forth from ${GD.VILLAIN.seat} to end the world. House ${G.house.name} must stand now, with ${G.world.doom.wards} of ${GD.WARDS_NEEDED} wards.`),
+      act('Face the end', () => { UI.closeModal(); this.finalBattle(true); }, { cls: 'hl' })), { locked: true });
+    return;
+  }
   if (G.pendingSuccession) return this.succession();
+  const q = G.world.doom && G.world.doom.quest;
+  if (q && q.type === 'champion' && G.party.map(ch).some((c) => c && c.level >= q.count)) completeQuest();
+  if (G.world.doom && !G.world.doom.quest && !G.world.doom.ended) newQuest();
   UI.refresh();
   if (!quiet) saveGame();
 };

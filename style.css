@@ -230,3 +230,30 @@ table.sum td { padding: 3px 12px 3px 0; vertical-align: top; }
 .choices.two { grid-template-columns: repeat(2, minmax(0, 160px)); }
 .idrow label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--dim); }
 p.small { font-size: 12px; }
+
+/* world screen */
+.tabs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+.tab { background: var(--panel2); color: var(--dim); border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; cursor: pointer; font-family: var(--font); }
+.tab.on { color: var(--gold); border-color: var(--gold); }
+.doomline { position: relative; height: 14px; background: var(--bg); border-radius: 7px; margin: 14px 0 4px; overflow: visible; }
+.dl-fill { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #3a2a50, #8a3a3a); border-radius: 7px; }
+.dl-mark { position: absolute; top: -3px; width: 3px; height: 20px; background: #555; transform: translateX(-1px); }
+.dl-mark.got { background: #8fd3ff; }
+.dl-ward { position: absolute; top: -6px; width: 10px; height: 10px; background: var(--gold); transform: translateX(-5px) rotate(45deg); }
+.dl-now { position: absolute; top: -6px; width: 2px; height: 26px; background: #fff; }
+.row.spread { justify-content: space-between; color: var(--dim); }
+.axis { margin: 10px 0; }
+.axis-label { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; color: var(--dim); }
+.axis-label b { color: var(--text); font-weight: normal; }
+.axis-bar { position: relative; height: 8px; background: linear-gradient(90deg, #3d4a6b, #2b2738 50%, #6b4a3d); border-radius: 4px; margin-top: 3px; }
+.ax-house, .ax-era { position: absolute; top: -4px; width: 14px; height: 14px; border-radius: 50%; transform: translateX(-7px); display: inline-block; }
+.ax-house { background: var(--gold); border: 2px solid #5a4210; }
+.ax-era { background: #8fd3ff; border: 2px solid #1d4566; }
+.legend { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--dim); }
+.legend span { position: relative; transform: none; top: 0; }
+.quest { margin-top: 14px; border: 1px solid #5a4210; background: rgba(230, 192, 106, 0.06); border-radius: 6px; padding: 8px 10px; }
+.quest h4 { margin-top: 0; }
+.quest p { margin: 4px 0; }
+.quest small { display: block; }
+.k-quest .ltext, .k-ward .ltext { color: var(--gold); }
+#topbar { overflow-x: auto; }

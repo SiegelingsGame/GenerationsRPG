@@ -135,7 +135,7 @@ Render.partyWorldPos = function () {
   if (this.move) {
     const k = clamp((this.t - this.move.t0) / this.move.dur, 0, 1);
     const a = tileAt(this.move.from.x, this.move.from.y), b = tileAt(this.move.to.x, this.move.to.y);
-    const hop = Math.sin(k * Math.PI) * 0.5;
+    const hop = Math.sin(k * Math.PI) * (this.move.fly ? 8 : 0.5);
     return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, h: a.h + (b.h - a.h) * k + hop, k };
   }
   const t = tileAt(G.pos.x, G.pos.y);
@@ -182,6 +182,9 @@ Render.drawWorld = function () {
       if (ry < 0 || ry >= map.H) continue;
       const [x, y] = this.unrotXY(rx, ry);
       const t = tileAt(x, y);
+      const sp = this.iso(x, y, t.h);
+      const zx = (sp.x - this.w / 2) * this.zoom + this.w / 2, zy = (sp.y - this.h / 2) * this.zoom + this.h / 2;
+      if (zx < -80 * this.zoom || zx > this.w + 80 * this.zoom || zy < -120 * this.zoom || zy > this.h + 140 * this.zoom) continue;
       this.drawTile(t, pathSet.has(y * map.W + x));
       this.drawFeature(t);
     }
@@ -195,21 +198,63 @@ Render.drawWorld = function () {
   for (const t of map.tiles) {
     if (!t.feature) continue;
     const p = this.iso(t.x, t.y, t.h);
-    const label = t.feature === 'town' ? G.world.towns[t.townIdx].name : t.feature === 'estate' ? `House ${G.house.name}` : (t.cleared ? 'Ruins (cleared)' : 'Ruins');
+    const zx = (p.x - this.w / 2) * this.zoom + this.w / 2, zy = (p.y - this.h / 2) * this.zoom + this.h / 2;
+    if (zx < -60 || zx > this.w + 60 || zy < -60 || zy > this.h + 100) continue;
+    const town = t.feature === 'town' ? G.world.towns[t.townIdx] : null;
+    const label = town ? `${town.name}${town.size >= 4 ? ' ★' : ''}` : t.feature === 'estate' ? `House ${G.house.name}`
+      : t.feature === 'spire' ? 'The Black Spire' : t.feature === 'shrine' ? (t.lit ? 'Beacon (lit)' : 'Beacon Shrine')
+        : `${t.ruinOf ? 'Ruins of ' + t.ruinOf : 'Ruins'}${t.cleared ? ' (cleared)' : ''}`;
     c.fillStyle = 'rgba(0,0,0,0.55)';
     const w = c.measureText(label).width + 10;
     c.fillRect(p.x - w / 2, p.y - 70, w, 17);
     c.fillStyle = t.feature === 'estate' ? '#ffd98a' : '#f2ead8';
     c.fillText(label, p.x, p.y - 57);
   }
+  const q = G.world.doom && G.world.doom.quest;
+  if (q && q.x != null) {
+    const qt = tileAt(q.x, q.y);
+    const p = this.iso(q.x, q.y, qt.h);
+    const bob = Math.sin(this.t / 300) * 4;
+    c.fillStyle = '#ffd76a'; c.strokeStyle = '#5a4210'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(p.x, p.y - 96 + bob); c.lineTo(p.x + 9, p.y - 84 + bob); c.lineTo(p.x, p.y - 72 + bob); c.lineTo(p.x - 9, p.y - 84 + bob); c.closePath(); c.fill(); c.stroke();
+  }
   c.restore();
   // compass: which way is north on the rotated map
   this.drawCompass();
+  this.drawMinimap();
   // vignette
   const v = c.createRadialGradient(this.w / 2, this.h / 2, this.h * 0.35, this.w / 2, this.h / 2, this.h * 0.9);
   v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.45)');
   c.fillStyle = v; c.fillRect(0, 0, this.w, this.h);
   if (G.world.era.type === 'war') this.drawEmbers();
+};
+
+Render.drawMinimap = function () {
+  const c = this.ctx, map = G.world.map;
+  const size = Math.min(150, this.w * 0.22), px = size / map.W;
+  const x0 = 10, y0 = 10;
+  if (!this.mini || this.miniKey !== G.world.towns.length + ':' + Math.floor(G.day / 360) + ':' + this.rot) {
+    const cv = this.mini || document.createElement('canvas');
+    cv.width = map.W; cv.height = map.H;
+    const m = cv.getContext('2d');
+    for (const t of map.tiles) { m.fillStyle = GD.BIOMES[t.type].top; m.fillRect(t.x, t.y, 1, 1); }
+    this.mini = cv; this.miniKey = G.world.towns.length + ':' + Math.floor(G.day / 360) + ':' + this.rot;
+  }
+  c.save();
+  c.globalAlpha = 0.92;
+  c.fillStyle = 'rgba(15,13,20,0.8)'; c.fillRect(x0 - 3, y0 - 3, size + 6, size + 6);
+  c.imageSmoothingEnabled = false;
+  c.drawImage(this.mini, x0, y0, size, size);
+  const dot = (x, y, col, r) => { c.fillStyle = col; c.beginPath(); c.arc(x0 + (x + 0.5) * px, y0 + (y + 0.5) * px, r, 0, Math.PI * 2); c.fill(); };
+  for (const t of G.world.towns) if (!t.fallen) dot(t.x, t.y, '#f2ead8', 2);
+  dot(G.world.spire.x, G.world.spire.y, '#b04aff', 3);
+  const q = G.world.doom.quest;
+  if (q && q.x != null) dot(q.x, q.y, '#ffd76a', 2.5);
+  dot(G.world.estate.x, G.world.estate.y, G.house.color, 3);
+  dot(G.pos.x, G.pos.y, '#ffffff', 2.5);
+  c.fillStyle = '#a59c8e'; c.font = '10px Georgia, serif'; c.textAlign = 'left';
+  c.fillText('N ↑ (map)', x0, y0 + size + 13);
+  c.restore();
 };
 
 Render.drawCompass = function () {
@@ -240,9 +285,9 @@ Render.drawEmbers = function () {
 Render.drawTile = function (t, onPath) {
   const c = this.ctx;
   const p = this.iso(t.x, t.y, t.h);
-  const col = TILE[t.type];
+  const col = GD.BIOMES[t.type];
   let top = eraTint(col.top);
-  if (t.type === 'water') {
+  if (col.water) {
     const w = Math.sin(this.t / 600 + t.x * 0.8 + t.y * 0.5) * 0.06;
     top = shade(top, w);
   }
@@ -300,12 +345,63 @@ Render.drawFeature = function (t) {
     c.beginPath(); c.ellipse(p.x - 6, p.y + 2, 16, 8, 0, Math.PI, 0); c.fill();
     c.beginPath(); c.ellipse(p.x + 10, p.y + 5, 11, 6, 0, Math.PI, 0); c.fill();
   }
-  if (t.feature === 'town') this.drawTown(p);
+  if (!t.feature) {
+    const seed = (t.x * 73 + t.y * 31) % 7;
+    if (t.type === 'jungle') {
+      for (let i = 0; i < 4; i++) this.drawPalm(p.x - 14 + i * 9, p.y - 4 + ((i * 5 + seed) % 9), 0.8 + (i % 2) * 0.2);
+    } else if (t.type === 'snow') {
+      if (seed < 3) for (let i = 0; i < 2; i++) this.drawTree(p.x - 8 + i * 14, p.y + (i ? 2 : -4), 0.8, true);
+    } else if (t.type === 'desert') {
+      c.fillStyle = eraTint('#cfae63');
+      c.beginPath(); c.ellipse(p.x - 6, p.y + 3, 14, 5, 0, Math.PI, 0); c.fill();
+      if (seed < 3) { c.fillStyle = eraTint('#4f8a3c'); c.fillRect(p.x + 8, p.y - 14, 3, 14); c.fillRect(p.x + 4, p.y - 10, 4, 2); c.fillRect(p.x + 4, p.y - 14, 2, 4); }
+    } else if (t.type === 'swamp') {
+      c.fillStyle = 'rgba(40,60,50,0.55)';
+      c.beginPath(); c.ellipse(p.x - 6, p.y + 2, 10, 4, 0, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.ellipse(p.x + 10, p.y - 3, 6, 3, 0, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = eraTint('#6b7a3a'); c.lineWidth = 1.5;
+      for (let i = 0; i < 4; i++) { c.beginPath(); c.moveTo(p.x - 14 + i * 7, p.y + 6); c.lineTo(p.x - 15 + i * 7, p.y - 6); c.stroke(); }
+    }
+  }
+  if (t.feature === 'town') this.drawTown(p, G.world.towns[t.townIdx]);
   if (t.feature === 'estate') this.drawEstate(p, G.house.tier);
   if (t.feature === 'ruins') this.drawRuins(p, t.cleared);
+  if (t.feature === 'spire') this.drawSpire(p);
+  if (t.feature === 'shrine') this.drawShrine(p, t.lit);
 };
 
-Render.drawTree = function (x, y, s) {
+Render.drawPalm = function (x, y, s) {
+  const c = this.ctx;
+  c.strokeStyle = '#6b4a2a'; c.lineWidth = 2 * s;
+  c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 3 * s, y - 10 * s, x + 1 * s, y - 20 * s); c.stroke();
+  c.fillStyle = eraTint('#2f7a2a');
+  for (let i = 0; i < 5; i++) {
+    const a = -Math.PI / 2 + (i - 2) * 0.7;
+    c.beginPath(); c.ellipse(x + 1 * s + Math.cos(a) * 6 * s, y - 20 * s + Math.sin(a) * 3 * s + 3 * s, 7 * s, 2.2 * s, a, 0, Math.PI * 2); c.fill();
+  }
+};
+Render.drawSpire = function (p) {
+  const c = this.ctx;
+  c.fillStyle = '#1a1020';
+  c.beginPath(); c.moveTo(p.x - 14, p.y + 6); c.lineTo(p.x - 4, p.y - 70); c.lineTo(p.x, p.y - 92); c.lineTo(p.x + 4, p.y - 70); c.lineTo(p.x + 14, p.y + 6); c.closePath(); c.fill();
+  c.fillStyle = '#2c1838';
+  c.beginPath(); c.moveTo(p.x, p.y - 92); c.lineTo(p.x + 4, p.y - 70); c.lineTo(p.x + 14, p.y + 6); c.lineTo(p.x + 2, p.y + 8); c.closePath(); c.fill();
+  const glow = 0.5 + Math.sin(this.t / 350) * 0.3;
+  c.fillStyle = `rgba(190,80,255,${glow})`;
+  c.beginPath(); c.arc(p.x, p.y - 60, 3, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.arc(p.x, p.y - 94, 4 + glow * 3, 0, Math.PI * 2); c.fill();
+};
+Render.drawShrine = function (p, lit) {
+  const c = this.ctx;
+  this.drawBox(p.x, p.y, 0.35, 0.35, 26, eraTint('#a9a39a'), eraTint('#8c867d'));
+  if (lit) {
+    const f = 0.6 + Math.sin(this.t / 120) * 0.3;
+    c.fillStyle = `rgba(255,180,60,${f})`; c.beginPath(); c.arc(p.x, p.y - 34, 7, 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(255,240,180,0.9)'; c.beginPath(); c.arc(p.x, p.y - 34, 3, 0, Math.PI * 2); c.fill();
+  } else { c.fillStyle = '#555'; c.fillRect(p.x - 5, p.y - 34, 10, 4); }
+};
+
+Render.drawTree = function (x, y, s, snowy) {
   const c = this.ctx;
   c.fillStyle = 'rgba(0,0,0,0.2)';
   c.beginPath(); c.ellipse(x, y + 2, 7 * s, 3 * s, 0, 0, Math.PI * 2); c.fill();
@@ -315,6 +411,7 @@ Render.drawTree = function (x, y, s) {
   c.beginPath(); c.moveTo(x - 9 * s, y - 4 * s); c.lineTo(x, y - 26 * s); c.lineTo(x + 9 * s, y - 4 * s); c.closePath(); c.fill();
   c.fillStyle = eraTint(shade(leaf, 0.15));
   c.beginPath(); c.moveTo(x - 9 * s, y - 4 * s); c.lineTo(x, y - 26 * s); c.lineTo(x - 1 * s, y - 4 * s); c.closePath(); c.fill();
+  if (snowy) { c.fillStyle = '#f4f8fa'; c.beginPath(); c.moveTo(x - 4 * s, y - 16 * s); c.lineTo(x, y - 26 * s); c.lineTo(x + 4 * s, y - 16 * s); c.closePath(); c.fill(); }
 };
 
 Render.drawBox = function (x, y, w, d, h, wall, roof, roofH = 0) {
@@ -342,10 +439,18 @@ Render.drawBox = function (x, y, w, d, h, wall, roof, roofH = 0) {
   return { a, b, c: cc, d: dd };
 };
 
-Render.drawTown = function (p) {
-  this.drawBox(p.x - 12, p.y - 2, 0.7, 0.6, 12, eraTint('#c9b08a'), eraTint('#8c3b2a'), 9);
-  this.drawBox(p.x + 12, p.y - 4, 0.6, 0.6, 10, eraTint('#d4c3a0'), eraTint('#5b4a8a'), 8);
-  this.drawBox(p.x, p.y + 6, 0.8, 0.6, 14, eraTint('#bfa57d'), eraTint('#7a3022'), 10);
+Render.drawTown = function (p, town) {
+  const size = town ? town.size : 2;
+  if (size >= 4) {
+    // city walls and towers
+    const wall = eraTint('#a39b8c');
+    this.drawBox(p.x - 22, p.y - 2, 0.25, 0.25, 26, wall, eraTint('#8c867d'));
+    this.drawBox(p.x + 22, p.y - 2, 0.25, 0.25, 26, wall, eraTint('#8c867d'));
+  }
+  if (size >= 3) this.drawBox(p.x - 12, p.y - 2, 0.7, 0.6, 12 + (size >= 4 ? 8 : 0), eraTint('#c9b08a'), eraTint('#8c3b2a'), 9);
+  if (size >= 2) this.drawBox(p.x + 12, p.y - 4, 0.6, 0.6, 10, eraTint('#d4c3a0'), eraTint('#5b4a8a'), 8);
+  this.drawBox(p.x, p.y + 6, 0.8, 0.6, size >= 5 ? 30 : 14, eraTint('#bfa57d'), eraTint('#7a3022'), 10);
+  if (size >= 5) this.drawBox(p.x + 2, p.y - 10, 0.3, 0.3, 44, eraTint('#d8cbb0'), eraTint('#c9a24a'), 14);
   // smoke
   const c = this.ctx;
   for (let i = 0; i < 3; i++) {
@@ -404,6 +509,15 @@ Render.drawParty = function (pp) {
   const mc = ch(G.mcId);
   if (!mc) return;
   const party = G.party.map(ch).filter(Boolean);
+  const here = tileAt(Math.round(pp.x), Math.round(pp.y));
+  if (here && isWater(here) && !(this.move && this.move.fly)) {
+    const c = this.ctx;
+    c.fillStyle = '#6b4a2a';
+    c.beginPath(); c.moveTo(p.x - 24, p.y - 2); c.lineTo(p.x + 26, p.y - 2); c.lineTo(p.x + 16, p.y + 10); c.lineTo(p.x - 16, p.y + 10); c.closePath(); c.fill();
+    c.strokeStyle = '#3a2a1a'; c.lineWidth = 2; c.beginPath(); c.moveTo(p.x + 2, p.y - 2); c.lineTo(p.x + 2, p.y - 46); c.stroke();
+    c.fillStyle = hasTech('steam') ? '#555' : '#efe6d2';
+    if (hasTech('steam')) { c.fillRect(p.x + 8, p.y - 22, 6, 20); } else { c.beginPath(); c.moveTo(p.x + 3, p.y - 44); c.lineTo(p.x + 22, p.y - 10); c.lineTo(p.x + 3, p.y - 8); c.closePath(); c.fill(); }
+  }
   // followers behind leader
   party.slice(1).forEach((c, i) => {
     this.drawFigure(p.x - 10 - i * 7, p.y + 2 - i * 3, figLook(c), 0.55, { bob: this.move ? Math.sin(this.t / 90 + i) : 0 });

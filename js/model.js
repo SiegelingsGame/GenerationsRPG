@@ -106,7 +106,7 @@ function makeChar(o = {}) {
     orphaned: false,
     house: o.house || null,
     status: o.status || 'npc', // party | household | npc | rival | dead
-    town: o.town ?? R.int(0, G.world.towns.length - 1),
+    town: o.town ?? randomTownIdx(),
     base: o.base || rollBase(race),
     bonus: { str: 0, agi: 0, int: 0, wil: 0, vit: 0 },
     level: o.level || 1,
@@ -255,8 +255,9 @@ function attraction(a, b) {
   let base = { straight: same ? 0 : 1, gay: same ? 1 : 0, bi: 1, ace: 0.35 }[a.orientation || 'straight'];
   if (!base) return 0;
   const p = GD.PREFERENCES[a.pref || 'none'];
+  base *= 0.75 + attractiveness(b) * 0.05;
   if (p.stat) base *= clamp(0.6 + (stat(b, p.stat) - 6) * 0.09, 0.45, 1.7);
-  if (p.looks) base *= clamp(0.5 + (b.looks ?? 5) * 0.12, 0.5, 1.6);
+  if (p.looks) base *= clamp(0.4 + attractiveness(b) * 0.13, 0.4, 1.7);
   if (p.status) base *= b.birth === 'highborn' || b.house === G.house.name ? 1.5 : 0.7;
   return base;
 }
@@ -272,7 +273,7 @@ function bodyText(c) {
   const parts = [];
   if (c.height && c.height !== 'average') parts.push(GD.HEIGHTS[c.height].name);
   if (c.build && c.build !== 'average') parts.push(GD.BUILDS[c.build].name);
-  parts.push(GD.LOOKS[clamp(Math.round(c.looks ?? 5), 0, 9)]);
+  parts.push(`${attractivenessLabel(c)} (${attractiveness(c)}/10)`);
   return parts.join(' · ');
 }
 function bond(a, b) { return a.bonds[b.id] || 0; }
@@ -333,7 +334,7 @@ function haveChild(a, b) {
     race, born: G.day, parents: [a.id, b.id], birth,
     house: isHouse ? G.house.name : null,
     status: isHouse ? 'household' : 'npc',
-    town: a.status === 'npc' ? a.town : R.int(0, G.world.towns.length - 1),
+    town: a.status === 'npc' ? a.town : randomTownIdx(),
     base: childBase(a, b, race),
     hair: R.chance(0.5) ? a.hair : b.hair,
     loyalty: isHouse ? 40 : 10 + Math.round(((a.loyalty || 0) + (b.loyalty || 0)) / 4),
@@ -350,7 +351,18 @@ function haveChild(a, b) {
     })(),
     infertile: (a.infertile || b.infertile) ? R.chance(0.15) : R.chance(0.06),
   });
-  if (kid.condition) chron(`${kid.name} was born ${GD.CONDITIONS[kid.condition].name.toLowerCase()}.`, 'dim', [kid.id], 'condition');
+  const inb = kinship(a, b).coef + ((a.inbred || 0) + (b.inbred || 0)) / 4;
+  if (inb > 0.01) {
+    kid.inbred = Math.round(inb * 1000) / 1000;
+    for (const k of STATS) kid.base[k] = Math.max(1, kid.base[k] - Math.round(inb * 10));
+    kid.looks = clamp(kid.looks - Math.round(inb * 8), 0, 9);
+    if (!kid.condition && R.chance(inb * 2.5)) {
+      kid.condition = R.pick(Object.keys(GD.CONDITIONS));
+      if (GD.CONDITIONS[kid.condition].life) kid.lifespan = Math.round(kid.lifespan * GD.CONDITIONS[kid.condition].life);
+    }
+    if (R.chance(inb * 1.2)) kid.infertile = true;
+  }
+  if (kid.condition && (isHouse || relevant(a) || relevant(b))) chron(`${kid.name} was born ${GD.CONDITIONS[kid.condition].name.toLowerCase()}.`, 'dim', [kid.id], 'condition');
   if (isHouse) {
     const legacy = Math.floor(G.house.generation / 2);
     for (const k of STATS) kid.bonus[k] += legacy;
@@ -400,49 +412,10 @@ function isDescendantOf(c, ancestorId) {
 }
 
 // ---------------------------------------------------------------- world map
-function genMap(W, H) {
-  // value noise
-  const noise = (scale) => {
-    const gw = Math.ceil(W / scale) + 2, gh = Math.ceil(H / scale) + 2;
-    const g = [];
-    for (let i = 0; i < gw * gh; i++) g.push(Math.random());
-    return (x, y) => {
-      const fx = x / scale, fy = y / scale;
-      const ix = Math.floor(fx), iy = Math.floor(fy);
-      const tx = fx - ix, ty = fy - iy;
-      const s = (t) => t * t * (3 - 2 * t);
-      const v = (a, b) => g[b * gw + a];
-      const top = v(ix, iy) * (1 - s(tx)) + v(ix + 1, iy) * s(tx);
-      const bot = v(ix, iy + 1) * (1 - s(tx)) + v(ix + 1, iy + 1) * s(tx);
-      return top * (1 - s(ty)) + bot * s(ty);
-    };
-  };
-  const n1 = noise(5), n2 = noise(2.5), nf = noise(3);
-  const tiles = [];
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const dx = (x - W / 2) / (W / 2), dy = (y - H / 2) / (H / 2);
-      const edge = Math.max(Math.abs(dx), Math.abs(dy));
-      let e = n1(x, y) * 0.7 + n2(x, y) * 0.3 - Math.pow(edge, 3) * 0.55 + 0.12;
-      let h, type;
-      if (e < 0.3) { h = 0; type = 'water'; }
-      else if (e < 0.36) { h = 1; type = 'sand'; }
-      else if (e < 0.58) { h = 1 + (e > 0.48 ? 1 : 0); type = nf(x, y) > 0.55 ? 'forest' : 'grass'; }
-      else if (e < 0.7) { h = 3; type = 'hills'; }
-      else { h = 4; type = 'mountain'; }
-      tiles.push({ x, y, h, type, feature: null });
-    }
-  }
-  return { W, H, tiles };
-}
 function tileAt(x, y) {
   const m = G.world.map;
   if (x < 0 || y < 0 || x >= m.W || y >= m.H) return null;
   return m.tiles[y * m.W + x];
-}
-function passable(t) { return t && t.type !== 'water'; }
-function neighbors(t) {
-  return [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => tileAt(t.x + dx, t.y + dy)).filter(passable);
 }
 function findPath(from, to) {
   if (!passable(to)) return null;
@@ -460,35 +433,10 @@ function findPath(from, to) {
   return path;
 }
 
-function placeFeatures(map) {
-  const land = map.tiles.filter((t) => t.type === 'grass' || t.type === 'forest');
-  // estate: land tile nearest centre
-  land.sort((a, b) => Math.hypot(a.x - map.W / 2, a.y - map.H / 2) - Math.hypot(b.x - map.W / 2, b.y - map.H / 2));
-  const estate = land[0];
-  estate.feature = 'estate'; estate.type = 'grass';
-  // reachable set
-  const seen = new Set([estate]);
-  const q = [estate];
-  while (q.length) { const t = q.shift(); for (const n of neighbors(t)) if (!seen.has(n)) { seen.add(n); q.push(n); } }
-  const reach = [...seen];
-  const far = (t, list, d) => list.every((o) => Math.abs(o.x - t.x) + Math.abs(o.y - t.y) >= d);
-  const towns = [];
-  for (const t of R.shuffle(reach.filter((t) => t.type === 'grass' || t.type === 'sand'))) {
-    if (towns.length >= 3) break;
-    if (far(t, [estate, ...towns], 5)) { t.feature = 'town'; t.type = 'grass'; t.townIdx = towns.length; towns.push(t); }
-  }
-  const ruins = [];
-  for (const t of R.shuffle(reach.filter((t) => t.type === 'hills' || t.type === 'forest' || t.type === 'mountain'))) {
-    if (ruins.length >= 3) break;
-    if (far(t, [estate, ...towns, ...ruins], 4)) { t.feature = 'ruins'; ruins.push(t); t.cleared = 0; }
-  }
-  return { estate, towns, ruins };
-}
-
 // ---------------------------------------------------------------- new game
 function newGame() {
   G = {
-    version: 1,
+    version: 2,
     day: 0,
     nextId: 1,
     chars: {},
@@ -508,17 +456,7 @@ function newGame() {
     pendingSuccession: false,
     stats: { battles: 0, deaths: 0 },
   };
-  let map, feats;
-  for (let tries = 0; tries < 30; tries++) {
-    map = genMap(18, 18);
-    G.world.map = map;
-    feats = placeFeatures(map);
-    if (feats.towns.length === 3 && feats.ruins.length >= 2) break;
-  }
-  G.world.map = map;
-  G.world.towns = feats.towns.map((t, i) => ({ name: GD.TOWN_NAMES[i], x: t.x, y: t.y }));
-  G.world.estate = { x: feats.estate.x, y: feats.estate.y };
-  G.pos = { x: feats.estate.x, y: feats.estate.y };
+  initWorld();
   startEra('peace', 6);
   seedPopulation();
 }
@@ -544,7 +482,7 @@ function seedPopulation() {
 function spawnWanderer(town) {
   const orphan = R.chance(0.45);
   const c = makeChar({
-    town: town ?? R.int(0, G.world.towns.length - 1),
+    town: town ?? randomTownIdx(),
     birth: orphan ? 'lowborn' : R.pick(['lowborn', 'lowborn', 'bastard', 'highborn']),
     lineageKnown: false,
     secret: R.weighted({ noble: 1, warrior: 1.4, common: 3, tainted: 0.8 }),
@@ -562,8 +500,9 @@ function partyLevel() {
 // ---------------------------------------------------------------- eras
 function startEra(type, years) {
   const len = years || R.int(6, 15);
-  G.world.era = { type, start: year(), end: year() + len };
-  G.world.eras.push({ type, start: year() });
+  const prev = G.world.era ? G.world.era.values : null;
+  G.world.era = { type, start: year(), end: year() + len, values: rollEraValues(type, prev) };
+  G.world.eras.push({ type, start: year(), values: G.world.era.values });
   if (G.log && G.mcId) chron(`A new era dawns: the ${GD.ERAS[type].name}.`, 'era', [], 'era');
 }
 function era() { return GD.ERAS[G.world.era.type]; }
@@ -587,6 +526,10 @@ function addProsperity(n) {
 
 // ---------------------------------------------------------------- yearly tick
 function yearTick() {
+  G._anc = new Map(); // ancestry cache for this year's kinship checks
+  try { yearTickInner(); } finally { G._anc = null; }
+}
+function yearTickInner() {
   const h = G.house;
   const E = era();
   const y = year();
@@ -640,15 +583,23 @@ function yearTick() {
   for (const a of single) {
     if (used.has(a.id)) continue;
     for (const b of single) {
-      if (b.id === a.id || used.has(b.id) || isDescendantOf(a, b.id) || isDescendantOf(b, a.id) || siblings(a, b)) continue;
+      if (b.id === a.id || used.has(b.id)) continue;
       const sameGroup = (a.status === 'npc' && b.status === 'npc' && a.town === b.town) || (a.status !== 'npc' && b.status !== 'npc');
       if (!sameGroup) continue;
       const bd = bond(a, b);
       const m = mutual(a, b);
       if (m <= 0) continue;
-      if ((bd >= 60 && R.chance(0.4 * Math.min(1.3, m))) || (a.status === 'npc' && b.status === 'npc' && R.chance(0.1 * m))) {
+      if (kinBlocked(a, b)) continue;
+      const ksev = kinship(a, b).sev;
+      if (ksev && R.chance(clamp(0.65 + ksev * 0.12, 0, 0.97))) continue; // most still look beyond the family
+      if ((bd >= 60 && R.chance(0.4 * Math.min(1.3, m))) || (a.status === 'npc' && b.status === 'npc' && R.chance(0.2 * m))) {
         marry(a, b); used.add(a.id); used.add(b.id);
+        if (kinship(a, b).sev) kinScandal(a, b);
         if (a.house === h.name || b.house === h.name) {
+          const kin2 = a.house === h.name ? a : b;
+          recordChoice('love', 1, kin2.id);
+          if (a.gender === b.gender) recordChoice('accept', 1, kin2.id);
+          if (!kinship(a, b).sev) recordChoice('kin', -0.3, kin2.id);
           const kin = a.house === h.name ? a : b;
           if (!canConceive(a, b) && a.gender === b.gender) chron(`${kin.name} chose a partner of their own heart. They will not have children together.`, 'dim', [a.id, b.id], 'love');
         }
@@ -682,6 +633,7 @@ function yearTick() {
     if (a.trait === 'fertile' || b.trait === 'fertile') p *= 1.5;
     if (kids >= 4) p *= 0.25;
     if ((a.id === G.mcId || b.id === G.mcId) && kids === 0) p = Math.max(p, 0.55);
+    if (!relevant(a) && !relevant(b)) p *= clamp(110 / living.length, 0.15, 1.3); // the land feeds only so many
     if (R.chance(p)) haveChild(a, b);
   }
 
@@ -726,10 +678,16 @@ function yearTick() {
 
   // world population upkeep
   const npcAdults = living.filter((c) => c.status === 'npc' && isAdult(c));
-  if (npcAdults.length < 14) for (let i = 0; i < 3; i++) spawnWanderer();
+  const want = 8 * liveTowns().length;
+  if (npcAdults.length < want) for (let i = 0; i < Math.min(5, Math.ceil((want - npcAdults.length) / 3)); i++) spawnWanderer();
 
   // era change
   if (y >= G.world.era.end && G.world.era.type !== 'golden') startEra(nextEra());
+  techTick();
+  townTick();
+  doomTick();
+  G.house.scandal = Math.max(0, (G.house.scandal || 0) - 0.05);
+  if (y % 5 === 0) pruneDead();
 
   Log.add(`— Year ${y} begins (${GD.ERAS[G.world.era.type].short}). Estate income +${income}g.`, 'year');
 }
@@ -827,7 +785,7 @@ function performTimeskip(heir) {
   for (let i = 0; i < years; i++) {
     advanceDays(DAYS_PER_YEAR);
     for (const c of skipPeople()) if (c.alive) liveAYear(c, heir);
-    if (!heir.alive) break;
+    if (!heir.alive || G.pendingDoom) break;
   }
   const events = G.skipLog;
   G.skipLog = null;
@@ -915,7 +873,7 @@ function loadGame() {
     const s = localStorage.getItem(SAVE_KEY);
     if (!s) return false;
     const data = JSON.parse(s);
-    if (!data || data.version !== 1) return false;
+    if (!data || data.version !== 2) return false;
     G = data;
     G.ledger = G.ledger || [];
     for (const c of Object.values(G.chars)) {

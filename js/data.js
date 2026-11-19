@@ -208,3 +208,74 @@ GD.CONDITIONS = {
   deaf:       { name: 'Deaf',         mods: { wil: 1, agi: -1 },    hereditary: true, desc: 'Born without hearing. Patient and hard to rattle.' },
 };
 GD.HAIRSTYLES = ['short', 'long', 'bun', 'braid', 'shaved', 'crop'];
+
+// ---------------------------------------------------------------- biomes (big world)
+GD.BIOMES = {
+  deep:     { name: 'Deep sea',  top: '#2a5f8f', side: '#1d4566', cost: 3, water: true },
+  water:    { name: 'Shallows',  top: '#3b78a8', side: '#285a80', cost: 2, water: true },
+  sand:     { name: 'Beach',     top: '#d9c48a', side: '#a8925e', cost: 1 },
+  grass:    { name: 'Grassland', top: '#6fa34a', side: '#4d7a34', cost: 1 },
+  forest:   { name: 'Forest',    top: '#4f8a3c', side: '#376128', cost: 1.3 },
+  jungle:   { name: 'Jungle',    top: '#3f7f34', side: '#2b5a22', cost: 1.6 },
+  swamp:    { name: 'Swamp',     top: '#5a6b3e', side: '#3e4a2a', cost: 1.7 },
+  desert:   { name: 'Desert',    top: '#e0c27a', side: '#b39350', cost: 1.4 },
+  snow:     { name: 'Tundra',    top: '#e6eef2', side: '#b5c2c9', cost: 1.5 },
+  hills:    { name: 'Hills',     top: '#8f9a5a', side: '#6b7342', cost: 1.5 },
+  mountain: { name: 'Mountains', top: '#8c8a86', side: '#66645f', cost: 2 },
+};
+Object.assign(GD.ENEMIES, {
+  stalker:  { name: 'Dune Stalker', shape: 'beast',    color: '#b08a4a', s: { str: 6, agi: 8, int: 1, wil: 2, vit: 4 }, xp: 14, gold: 4 },
+  frostwolf:{ name: 'Frost Wolf',   shape: 'beast',    color: '#c8d4dc', s: { str: 6, agi: 7, int: 1, wil: 3, vit: 5 }, xp: 14, gold: 3 },
+  lurker:   { name: 'Bog Lurker',   shape: 'brute',    color: '#4d5a36', s: { str: 7, agi: 3, int: 2, wil: 3, vit: 9 }, xp: 18, gold: 6 },
+  jaguar:   { name: 'Jungle Cat',   shape: 'beast',    color: '#a8782e', s: { str: 6, agi: 9, int: 1, wil: 2, vit: 4 }, xp: 15, gold: 3 },
+  herald:   { name: 'Herald of the Hollow King', shape: 'wraith', color: '#3a1f4a', s: { str: 9, agi: 7, int: 10, wil: 8, vit: 10 }, xp: 120, gold: 150, skill: 'int' },
+  hollow:   { name: 'The Hollow King', shape: 'wraith', color: '#140a1c', s: { str: 13, agi: 8, int: 14, wil: 12, vit: 16 }, xp: 1000, gold: 0, skill: 'int' },
+});
+Object.assign(GD.ENCOUNTERS, {
+  sand: ['bandit', 'wolf'], desert: ['stalker', 'stalker', 'bandit'], snow: ['frostwolf', 'frostwolf', 'troll'],
+  swamp: ['lurker', 'ghoul', 'lurker'], jungle: ['jaguar', 'jaguar', 'boar'],
+});
+
+// ---------------------------------------------------------------- the thousand-year doom
+GD.DOOM_YEARS = 1000;
+GD.VILLAIN = { name: 'The Hollow King', seat: 'the Black Spire' };
+GD.WARDS_NEEDED = 7;
+GD.QUESTS = {
+  seal:     { name: 'Recover a Seal',      desc: 'A Seal of Warding lies in {place}. Clear it and bring the Seal home.' },
+  herald:   { name: 'Slay the Herald',     desc: 'A Herald of the Hollow King has risen near {place}. Destroy it before it spreads the rot.' },
+  rally:    { name: 'Rally the Realm',     desc: 'Do deeds for the realm in {count} different towns to unite them against the dark.' },
+  champion: { name: 'Raise a Champion',    desc: 'Bring a member of your party to level {count}.' },
+  beacon:   { name: 'Light the Beacon',    desc: 'Reach the old beacon shrine at {place} and rekindle it.' },
+};
+
+// ---------------------------------------------------------------- technology (timing varies per run)
+GD.TECH = [
+  { key: 'boats',    name: 'Sailing boats',     years: [70, 140],  desc: 'Boats can cross water to distant islands.' },
+  { key: 'roads',    name: 'Paved roads',       years: [180, 300], desc: 'Overland travel takes 25% less time.' },
+  { key: 'carts',    name: 'Carriages',         years: [380, 560], desc: 'Overland travel takes another 25% less time.' },
+  { key: 'steam',    name: 'Steamships',        years: [560, 720], desc: 'Sea travel is as fast as land travel.' },
+  { key: 'rail',     name: 'Railways',          years: [700, 860], desc: 'Overland travel takes another 40% less time.' },
+  { key: 'flight',   name: 'Flying machines',   years: [840, 980], desc: 'Fly directly to any point on the map.' },
+];
+
+// ---------------------------------------------------------------- culture
+// Each axis runs from -1 (neg) to +1 (pos). House culture is built from its members' choices,
+// weighted by how long each of them lived. Each era's people hold their own values.
+GD.CULTURE_AXES = {
+  kin:     { neg: 'Marries outsiders', pos: 'Keeps the blood close', label: 'Kinship' },
+  love:    { neg: 'Duty before love',  pos: 'Love before duty',      label: 'Marriage' },
+  martial: { neg: 'Scholarly',         pos: 'Martial',               label: 'Way of life' },
+  open:    { neg: 'Insular',           pos: 'Open to outsiders',     label: 'Outsiders' },
+  charity: { neg: 'Ambitious',         pos: 'Charitable',            label: 'Wealth' },
+  accept:  { neg: 'Rigid',             pos: 'Accepting',             label: 'Tolerance' },
+};
+GD.CULTURE_MEMBERS = 5;
+GD.REPUTATION = [
+  { min: 0.45, name: 'Revered', color: '#7fd18a' },
+  { min: 0.15, name: 'Respected', color: '#a8d18a' },
+  { min: -0.15, name: 'Tolerated', color: '#e6c06a' },
+  { min: -0.45, name: 'Distrusted', color: '#e0904a' },
+  { min: -9, name: 'Scorned', color: '#ef7461' },
+];
+GD.TOWN_SIZES = ['Ruin', 'Hamlet', 'Village', 'Town', 'City', 'Great City'];
+GD.TOWN_SYL = { a: ['Ash', 'Bram', 'Cold', 'Dun', 'Elm', 'Fair', 'Gold', 'High', 'Iron', 'Kings', 'Long', 'Mist', 'North', 'Oak', 'Rook', 'Salt', 'Thorn', 'Wolf', 'Stone', 'Sun'], b: ['ford', 'haven', 'mere', 'wick', 'gate', 'holm', 'stead', 'bury', 'fell', 'port', 'reach', 'vale', 'hollow', 'watch'] };

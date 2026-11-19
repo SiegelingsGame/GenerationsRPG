@@ -257,6 +257,7 @@ function resolveBattle(outcome, b) {
     }
     for (let i = 0; i < alive.length; i++) for (let j = i + 1; j < alive.length; j++) addBond(alive[i], alive[j], 2);
     addProsperity(G.world.era.type === 'war' ? 0.6 : 0.3);
+    recordChoice('martial', 0.15, G.mcId);
     const rivalUnit = enemies.find((e) => e.charId);
     if (rivalUnit) {
       const rv = ch(rivalUnit.charId);
@@ -300,9 +301,9 @@ function resolveBattle(outcome, b) {
 function buildEncounter(tile, opts = {}) {
   const E = era();
   let pool = [...(GD.ENCOUNTERS[tile.feature === 'ruins' ? 'ruins' : tile.type] || GD.ENCOUNTERS.grass)];
-  if (E.extra && tile.feature !== 'ruins') pool = pool.concat(E.extra);
+  if (E.extra && tile.feature !== 'ruins' && !['snow', 'desert', 'swamp', 'jungle'].includes(tile.type)) pool = pool.concat(E.extra);
   const dist = Math.abs(tile.x - G.world.estate.x) + Math.abs(tile.y - G.world.estate.y);
-  const lvlBase = Math.max(1, Math.round(partyLevel() + dist / 5 + (opts.hard ? 2 : 0) - 0.5));
+  const lvlBase = Math.max(1, Math.round(partyLevel() + dist / 9 + (opts.hard ? 2 : 0) - 0.5 + (year() - START_YEAR) / 150));
   const n = opts.count || clamp(R.int(1, Math.min(4, 1 + Math.ceil(G.party.length * 0.9))), 1, 4);
   const out = [];
   for (let i = 0; i < n; i++) out.push({ type: R.pick(pool), lvl: Math.max(1, lvlBase + R.int(-1, 1)) });
