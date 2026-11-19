@@ -257,3 +257,20 @@ p.small { font-size: 12px; }
 .quest small { display: block; }
 .k-quest .ltext, .k-ward .ltext { color: var(--gold); }
 #topbar { overflow-x: auto; }
+
+/* road events */
+.event .vignette { width: 100%; max-width: 560px; height: auto; aspect-ratio: 560 / 150; border-radius: 6px; display: block; margin: 0 auto 10px; }
+.ev-opts { display: grid; gap: 6px; }
+
+/* campfire: first person */
+.campfire { position: fixed; inset: 0; z-index: 30; background: #05060f; display: flex; flex-direction: column; }
+.camp-canvas { flex: 1; width: 100%; min-height: 0; display: block; }
+.camp-ui { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px max(16px, env(safe-area-inset-left, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(transparent, rgba(5, 4, 8, 0.85) 30%); }
+.camp-say { display: flex; gap: 10px; align-items: flex-start; max-width: 720px; margin: 0 auto 10px; min-height: 48px; color: #f2e4c8; text-shadow: 0 1px 2px #000; }
+.camp-say p { margin: 2px 0 0; font-style: italic; font-size: 15px; }
+.camp-btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.camp-btn { background: rgba(40, 26, 18, 0.85); color: #f2e4c8; border: 1px solid #7a5a3a; border-radius: 5px; padding: 7px 12px; font-family: var(--font); cursor: pointer; }
+.camp-btn:hover:not([disabled]) { border-color: #ffb050; }
+.camp-btn.done { opacity: 0.6; }
+.camp-btn.leave { border-color: #a8781e; }
+.camp-btn[disabled] { opacity: 0.4; cursor: default; }

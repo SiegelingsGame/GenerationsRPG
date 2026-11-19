@@ -187,6 +187,29 @@ The land goes through **eras**, each 6–15 years long:
   - Once 5 people have belonged to the House, its culture forms and gets a name.
   - Culture only changes how the people of each era see the House. Its distance from the era's own values, minus lingering scandal, sets a reputation (Revered to Scorned), which scales courting, hiring, matches and prestige.
 
+## 7c. The road and the campfire
+
+**Road events:** a step through the wilds can turn up any of these, weighted by biome and era (traders in peace, refugees in war and famine, mines in hills and desert):
+- **Traders:** cheap potions, gear, tonics that permanently raise a stat, and maps that reveal caves and mines.
+- **Ambushes**, which come more often near bandit camps.
+- **People in need:** a cart in the mud, refugees, starving families, a wounded traveler who may join you, wolves at a farm. Helping raises prestige and prosperity and pushes the culture toward charity. Sometimes it's a ruse.
+- **Lost children**, who can be adopted, taken to a town, or left behind (and remember it).
+- **Wanderers** who ask to join.
+- **Mines:** working one takes 20 days and pays gold based on STR. Cave-ins can injure, and the seam runs out.
+- **Caves and dungeons:** a crawl of several rooms. Fights can be sneaked past with AGI, chests may be trapped, there are traps to beat with AGI or INT, healing springs, altars that strengthen the heirloom, and a boss at the end.
+
+**Bandit camps:**
+- Attack a camp when you find it, or leave it.
+- A camp you leave grows every year (faster in war and famine), shows up on the map, stunts nearby towns, raids them, and can become a Bandit Stronghold.
+- New camps appear unseen in hard times.
+
+**The campfire:**
+- *Make camp* anywhere in the wilds to open a first-person view from the head of House: night sky, a horizon that matches the biome, a flickering fire with sparks, warm light falling off into the dark, and your own hands held to the flames (just one if you lost an arm).
+- Your companions sit across the fire, drawn with their age, race, injuries and armour.
+- **Talking:** click someone to talk. What they say comes from who they are: resentment over a forced marriage, kinship, old wounds, age, traits, the era, the doom, and their own memories from the Chronicle.
+- **Other actions:** share stories (bonds and formative growth), sleep, or rest with a watch (less healing, safer from night attacks).
+- **Sound:** an optional fire crackle.
+
 ## 8. Combat (turn-based)
 
 - Up to 4 party members against 1–4 enemies, in initiative order by AGI.

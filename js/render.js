@@ -202,7 +202,7 @@ Render.drawWorld = function () {
     if (zx < -60 || zx > this.w + 60 || zy < -60 || zy > this.h + 100) continue;
     const town = t.feature === 'town' ? G.world.towns[t.townIdx] : null;
     const label = town ? `${town.name}${town.size >= 4 ? ' ★' : ''}` : t.feature === 'estate' ? `House ${G.house.name}`
-      : t.feature === 'spire' ? 'The Black Spire' : t.feature === 'shrine' ? (t.lit ? 'Beacon (lit)' : 'Beacon Shrine')
+      : Events.label(t) ? Events.label(t) : t.feature === 'spire' ? 'The Black Spire' : t.feature === 'shrine' ? (t.lit ? 'Beacon (lit)' : 'Beacon Shrine')
         : `${t.ruinOf ? 'Ruins of ' + t.ruinOf : 'Ruins'}${t.cleared ? ' (cleared)' : ''}`;
     c.fillStyle = 'rgba(0,0,0,0.55)';
     const w = c.measureText(label).width + 10;
@@ -368,6 +368,7 @@ Render.drawFeature = function (t) {
   if (t.feature === 'ruins') this.drawRuins(p, t.cleared);
   if (t.feature === 'spire') this.drawSpire(p);
   if (t.feature === 'shrine') this.drawShrine(p, t.lit);
+  if (t.feature === 'camp' || t.feature === 'cave' || t.feature === 'mine') Events.drawFeature(this, t, p);
 };
 
 Render.drawPalm = function (x, y, s) {
@@ -560,16 +561,22 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
   c.fillStyle = 'rgba(0,0,0,0.3)';
   c.beginPath(); c.ellipse(x, y, 11 * s * wd, 4 * s, 0, 0, Math.PI * 2); c.fill();
   const inj = look.inj || {};
-  // legs (a peg leg if one was lost)
+  // legs (a peg leg if one was lost); seated: shins forward, knees up
   c.fillStyle = fl ? '#fff' : '#3b2f2a';
-  c.fillRect(x - 5 * s * wd, y - 14 * s + Math.max(0, bob), 4 * s * wd, 14 * s);
-  if (inj.leg) {
+  if (o.seated) {
+    c.fillRect(x - 7 * s * wd, y - 6 * s, 6 * s * wd, 5 * s);
+    c.fillRect(x + 1 * s * wd, y - 6 * s, 6 * s * wd, 5 * s);
+    c.fillStyle = fl ? '#fff' : '#2a201c';
+    c.fillRect(x - 7 * s * wd, y - 1.5 * s, 6 * s * wd, 2.5 * s);
+    if (!inj.leg) c.fillRect(x + 1 * s * wd, y - 1.5 * s, 6 * s * wd, 2.5 * s);
+  } else c.fillRect(x - 5 * s * wd, y - 14 * s + Math.max(0, bob), 4 * s * wd, 14 * s);
+  if (o.seated) { /* drawn above */ } else if (inj.leg) {
     c.fillRect(x + 1 * s * wd, y - 14 * s, 4 * s * wd, 6 * s);
     c.fillStyle = fl ? '#fff' : '#8a6a45';
     c.fillRect(x + 2.2 * s * wd, y - 8 * s, 1.6 * s, 8 * s);
   } else c.fillRect(x + 1 * s * wd, y - 14 * s + Math.max(0, -bob), 4 * s * wd, 14 * s);
   // body
-  const by = y - 14 * s;
+  const by = y - (o.seated ? 6 : 14) * s;
   c.fillStyle = fl ? '#fff' : (look.evil ? '#2a1420' : look.tunic);
   c.beginPath();
   c.moveTo(x - hip * s * wd, by); c.lineTo(x + hip * s * wd, by);

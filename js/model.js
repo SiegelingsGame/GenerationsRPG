@@ -685,6 +685,7 @@ function yearTickInner() {
   if (y >= G.world.era.end && G.world.era.type !== 'golden') startEra(nextEra());
   techTick();
   townTick();
+  if (typeof Events !== 'undefined') Events.yearly();
   doomTick();
   G.house.scandal = Math.max(0, (G.house.scandal || 0) - 0.05);
   if (y % 5 === 0) pruneDead();

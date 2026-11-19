@@ -237,9 +237,9 @@ Game.travel = function (path) {
       // ambush by rivals
       const rivals = Object.values(G.chars).filter((c) => c.alive && c.status === 'rival');
       if (rivals.length && R.chance(0.05 * rivals.length)) { this.busy = false; return this.rivalBattle(R.pick(rivals)); }
-      if (R.chance(0.2 * era().enc * ({ forest: 1.3, hills: 1.3, mountain: 1.5, jungle: 1.4, swamp: 1.4, desert: 1.2, snow: 1.2 }[next.type] || 1))) {
+      if (R.chance(0.26 * Math.sqrt(era().enc) * ({ forest: 1.2, hills: 1.2, mountain: 1.3, jungle: 1.3, swamp: 1.3, desert: 1.1, snow: 1.1 }[next.type] || 1))) {
         this.busy = false;
-        return this.battle(buildEncounter(next), { kind: 'wild', title: 'Ambush on the road' });
+        return Events.show(Events.roll(next));
       }
       step();
     }, 200);
