@@ -236,6 +236,16 @@ The world moves only when your party moves.
 - **Unseen dangers:** ambushes and road events (traders, people in need, mines, caves, camps) can still strike as you cross the land.
 - **Map size:** new worlds are 64×64 tiles with proportionally more towns, ruins and shrines.
 
+**Landscape and free movement:**
+- **Terrain:** the world is drawn as one continuous landscape instead of tiles: a smooth height field with blended biomes, hill shading, highland contour lines and natural coastlines, laid out in the 2.5D view. Trees, peaks, settlements and parties stand upright on it.
+- **Rivers** flow downhill from the highlands to the sea. They block travel except at **bridges** (on roads, or standalone crossings with tracks off each bank) and the occasional **ford**.
+- **Roads** connect the estate and the towns on each landmass and are much faster to travel.
+- **Sheer peaks** are impassable.
+- **Free movement:** tap any point and the party walks there in any direction, along a route found on a fine navigation grid (three cells per region) and then straightened. It curves only for rivers, sea, cliffs and rough ground.
+- **Time** passes only while you move: days per step come from the ground underfoot (roads fast, swamps slow).
+- **Other parties** follow the same free routes.
+- **Underneath,** the old tiles remain as regions for biomes, towns and encounters.
+
 ## 8. Combat (turn-based)
 
 - Up to 4 party members against 1–4 enemies, in initiative order by AGI.

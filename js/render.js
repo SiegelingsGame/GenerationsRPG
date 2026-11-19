@@ -59,6 +59,7 @@ Render.init = function (canvas) {
     else if (G && G.mode === 'world' && !this.pinching) {
       const ag = Living.pick(this.unzoom(p));
       if (ag) return Living.go(tileAt(Math.round(ag.x), Math.round(ag.y)), ag);
+      if (LS.ready) { const wp = this.screenToWorld(p); return Game.clickPoint(wp); }
       const t = this.pickTile(p); if (t) Game.clickTile(t);
     }
   });
@@ -157,7 +158,16 @@ Render.drawTitleBg = function () {
 const TW = 64, TH = 32;
 Render.iso = function (x, y, h) {
   const [rx, ry] = this.rotXY(x, y);
-  return { x: (rx - ry) * TW / 2 + this.cam.x, y: (rx + ry) * TH / 2 - h * HSTEP + this.cam.y };
+  return { x: (rx - ry) * TW / 2 + this.cam.x, y: (rx + ry) * TH / 2 - (this.flat ? 0 : h * HSTEP) + this.cam.y };
+};
+// screen point -> world point on the flat landscape (inverse of iso at height 0)
+Render.screenToWorld = function (p0) {
+  const p = this.unzoom(p0);
+  const o = this.iso(0, 0, 0), ax = this.iso(1, 0, 0), ay = this.iso(0, 1, 0);
+  const a = ax.x - o.x, b = ax.y - o.y, c = ay.x - o.x, d = ay.y - o.y;
+  const det = a * d - b * c;
+  const dx = p.x - o.x, dy = p.y - o.y;
+  return { x: (d * dx - c * dy) / det, y: (-b * dx + a * dy) / det };
 };
 Render.partyWorldPos = function () {
   if (this.move) {
@@ -174,7 +184,99 @@ Render.partyWorldPos = function () {
   return { x: t.x, y: t.y, h: t.h, k: 1 };
 };
 
+// The seamless landscape: a painted terrain texture laid out in the 2.5D view, with trees, peaks,
+// settlements and parties standing upright on it, sorted by depth.
 Render.drawWorld = function () {
+  if (LS.ensure()) return this.drawLandscape();
+  this.flat = false;
+  return this.drawWorldTiles();
+};
+Render.drawLandscape = function () {
+  const c = this.ctx;
+  const map = G.world.map;
+  this.flat = true;
+  const sky = c.createLinearGradient(0, 0, 0, this.h);
+  sky.addColorStop(0, eraTint('#1d3550')); sky.addColorStop(1, eraTint('#0d1824'));
+  c.fillStyle = sky; c.fillRect(0, 0, this.w, this.h);
+  const pp = this.partyWorldPos();
+  const [prx, pry] = this.rotXY(pp.x, pp.y);
+  const tx = this.w / 2 - (prx - pry) * TW / 2;
+  const ty = this.h / 2 - (prx + pry) * TH / 2;
+  if (!this.camInit) { this.cam.x = tx; this.cam.y = ty; this.camInit = true; }
+  this.cam.x += (tx - this.cam.x) * 0.15;
+  this.cam.y += (ty - this.cam.y) * 0.15;
+  this.zoom += (this.zoomTarget - this.zoom) * 0.18;
+  c.save();
+  const sk = this.spin ? clamp((this.t - this.spin) / 220, 0, 1) : 1;
+  c.translate(this.w / 2, this.h / 2);
+  c.scale(this.zoom * (0.75 + 0.25 * sk), this.zoom);
+  c.translate(-this.w / 2, -this.h / 2);
+  // the terrain itself, as one image mapped onto the ground plane
+  const o = this.iso(-0.5, -0.5, 0), ax = this.iso(0.5, -0.5, 0), ay = this.iso(-0.5, 0.5, 0);
+  c.save();
+  c.transform((ax.x - o.x) / LS.S, (ax.y - o.y) / LS.S, (ay.x - o.x) / LS.S, (ay.y - o.y) / LS.S, o.x, o.y);
+  c.imageSmoothingEnabled = true;
+  c.drawImage(LS.tex, 0, 0);
+  c.restore();
+  // the planned route
+  if (Living.moving && Living.path.length) {
+    c.strokeStyle = 'rgba(255,230,140,0.75)'; c.lineWidth = 2; c.setLineDash([6, 6]);
+    c.beginPath();
+    const s0 = this.iso(G.ppos.x, G.ppos.y, 0); c.moveTo(s0.x, s0.y);
+    for (const q of Living.path) { const s1 = this.iso(q.x, q.y, 0); c.lineTo(s1.x, s1.y); }
+    c.stroke(); c.setLineDash([]);
+  }
+  // everything that stands up, sorted back to front
+  const view = (sx, sy) => { const zx = (sx - this.w / 2) * this.zoom + this.w / 2, zy = (sy - this.h / 2) * this.zoom + this.h / 2; return zx > -90 && zx < this.w + 90 && zy > -140 && zy < this.h + 160; };
+  const items = [];
+  for (const t of map.tiles) {
+    const s = this.iso(t.x, t.y, 0);
+    if (!view(s.x, s.y)) continue;
+    if (t.feature || ['forest', 'jungle', 'mountain', 'snow', 'hills', 'desert', 'swamp'].includes(t.type)) items.push({ y: s.y, t });
+  }
+  for (const a of Living.visibleAgents()) { const s = this.iso(a.x, a.y, 0); items.push({ y: s.y, a }); }
+  for (const a of G.world.parties || []) if (!Living.visible(a)) a._sx = null;
+  const ps = this.iso(pp.x, pp.y, 0);
+  items.push({ y: ps.y + 0.1, party: true });
+  items.sort((p, q) => p.y - q.y);
+  for (const it of items) {
+    if (it.t) this.drawFeature(it.t);
+    else if (it.a) Living.drawAgent(this, it.a);
+    else { Living.drawDest(this); this.drawParty(pp); }
+  }
+  // labels
+  c.font = '600 12px Georgia, serif';
+  c.textAlign = 'center';
+  for (const t of map.tiles) {
+    if (!t.feature) continue;
+    const p = this.iso(t.x, t.y, 0);
+    if (!view(p.x, p.y)) continue;
+    const town = t.feature === 'town' ? G.world.towns[t.townIdx] : null;
+    const label = town ? `${town.name}${town.size >= 4 ? ' ★' : ''}` : t.feature === 'estate' ? `House ${G.house.name}`
+      : Events.label(t) ? Events.label(t) : t.feature === 'spire' ? 'The Black Spire' : t.feature === 'shrine' ? (t.lit ? 'Beacon (lit)' : 'Beacon Shrine')
+        : `${t.ruinOf ? 'Ruins of ' + t.ruinOf : 'Ruins'}${t.cleared ? ' (cleared)' : ''}`;
+    const w = c.measureText(label).width + 10;
+    c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(p.x - w / 2, p.y - 62, w, 17);
+    c.fillStyle = t.feature === 'estate' ? '#ffd98a' : '#f2ead8';
+    c.fillText(label, p.x, p.y - 49);
+  }
+  Living.drawLabels(this);
+  const q = G.world.doom && G.world.doom.quest;
+  if (q && q.x != null) {
+    const p = this.iso(q.x, q.y, 0);
+    const bob = Math.sin(this.t / 300) * 4;
+    c.fillStyle = '#ffd76a'; c.strokeStyle = '#5a4210'; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(p.x, p.y - 88 + bob); c.lineTo(p.x + 9, p.y - 76 + bob); c.lineTo(p.x, p.y - 64 + bob); c.lineTo(p.x - 9, p.y - 76 + bob); c.closePath(); c.fill(); c.stroke();
+  }
+  c.restore();
+  this.drawCompass();
+  this.drawMinimap();
+  const v = c.createRadialGradient(this.w / 2, this.h / 2, this.h * 0.35, this.w / 2, this.h / 2, this.h * 0.9);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.4)');
+  c.fillStyle = v; c.fillRect(0, 0, this.w, this.h);
+  if (G.world.era.type === 'war') this.drawEmbers();
+};
+Render.drawWorldTiles = function () {
   const c = this.ctx;
   const map = G.world.map;
   // sky
@@ -276,12 +378,13 @@ Render.drawMinimap = function () {
   const c = this.ctx, map = G.world.map;
   const size = Math.min(150, this.w * (this.w < 500 ? 0.26 : 0.22)), px = size / map.W;
   const x0 = 10, y0 = 10;
-  if (!this.mini || this.miniKey !== G.world.towns.length + ':' + Math.floor(G.day / 360) + ':' + this.rot) {
+  if (!this.mini || this.miniKey !== G.world.towns.length + ':' + Math.floor(G.day / 360) + ':' + this.rot + ':' + (LS.k || '')) {
     const cv = this.mini || document.createElement('canvas');
     cv.width = map.W; cv.height = map.H;
     const m = cv.getContext('2d');
-    for (const t of map.tiles) { m.fillStyle = GD.BIOMES[t.type].top; m.fillRect(t.x, t.y, 1, 1); }
-    this.mini = cv; this.miniKey = G.world.towns.length + ':' + Math.floor(G.day / 360) + ':' + this.rot;
+    if (LS.ready && LS.tex) { cv.width = LS.tex.width / 4; cv.height = LS.tex.height / 4; m.drawImage(LS.tex, 0, 0, cv.width, cv.height); }
+    else for (const t of map.tiles) { m.fillStyle = GD.BIOMES[t.type].top; m.fillRect(t.x, t.y, 1, 1); }
+    this.mini = cv; this.miniKey = G.world.towns.length + ':' + Math.floor(G.day / 360) + ':' + this.rot + ':' + (LS.k || '');
   }
   c.save();
   c.globalAlpha = 0.92;
@@ -384,7 +487,7 @@ Render.drawFeature = function (t) {
     c.fillStyle = '#f4f4f4';
     c.beginPath(); c.moveTo(p.x - 9, p.y - 20); c.lineTo(p.x - 2, p.y - 34); c.lineTo(p.x + 6, p.y - 21); c.lineTo(p.x - 2, p.y - 24); c.closePath(); c.fill();
   }
-  if (t.type === 'hills' && !t.feature) {
+  if (t.type === 'hills' && !t.feature && !this.flat) {
     c.fillStyle = eraTint('#7d8a4c');
     c.beginPath(); c.ellipse(p.x - 6, p.y + 2, 16, 8, 0, Math.PI, 0); c.fill();
     c.beginPath(); c.ellipse(p.x + 10, p.y + 5, 11, 6, 0, Math.PI, 0); c.fill();

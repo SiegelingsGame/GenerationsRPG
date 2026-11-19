@@ -53,65 +53,86 @@ function regionLevel(x, y, bonus = 0) {
 }
 
 // ---------------------------------------------------------------- moving the party
-Living.go = function (tile, agent) {
+Living.go = function (tile, agent) { return this.goPoint({ x: tile.x, y: tile.y }, agent); };
+Living.goPoint = function (pt, agent) {
   if (!this.ensure() || Battle.active || UI.modalStack.length || TownView.open || Campfire.open) return;
-  const here = tileAt(G.pos.x, G.pos.y);
-  if (tile === here && !agent) return;
-  const path = tile === here ? [] : findPath(here, tile);
-  if (!path) return UI.toast(isWater(tile) || (isLand(tile) && tile.land !== here.land) ? 'You need boats to cross the sea. Sailing has not been invented yet.' : 'You cannot travel there.');
+  if (!LS.ensure()) return;
+  // snap onto places of note
+  const t = tileAt(clamp(Math.round(pt.x), 0, G.world.map.W - 1), clamp(Math.round(pt.y), 0, G.world.map.H - 1));
+  if (t && t.feature && Math.hypot(pt.x - t.x, pt.y - t.y) < 0.6) pt = { x: t.x, y: t.y };
+  if (agent && Math.hypot(agent.x - G.ppos.x, agent.y - G.ppos.y) < 0.7) { this.stop(); return this.encounter(agent, true); }
+  const path = LS.path(G.ppos, pt);
+  if (!path) {
+    const water = LS.hfAt(pt.x, pt.y) < 0;
+    return UI.toast(water && !hasTech('boats') ? 'You need boats to cross the sea. Sailing has not been invented yet.' : 'There is no way through from here.');
+  }
   this.path = path;
-  this.dest = tile;
+  this.dest = path[path.length - 1];
   this.targetId = agent ? agent.id : null;
+  this.repath = 0.4;
   this.moving = true;
-  this.enteredAt = G.day;
-  if (agent && dist2(agent, G.ppos) < 0.7) { this.stop(); this.encounter(agent, true); }
 };
 Living.stop = function () { this.moving = false; this.path = []; this.dest = null; this.targetId = null; };
+// days it takes to cross one tile-width of ground at a point
+Living.daysPerUnit = function (x, y) {
+  let c = LS.costAt(x, y);
+  if (!isFinite(c)) c = 1.5;
+  const water = LS.hfAt(x, y) < 0;
+  let d = 15 * c;
+  if (!water) {
+    d *= 1 - G.house.up.horses * 0.18;
+    if (hasTech('roads')) d *= 0.75;
+    if (hasTech('carts')) d *= 0.75;
+    if (hasTech('rail')) d *= 0.6;
+  }
+  return Math.max(1.5, d);
+};
 
 Living.frame = function (ts) {
   const dt = Math.min(0.05, Math.max(0, (ts - (this.lastTs || ts)) / 1000));
   this.lastTs = ts;
   if (!this.moving || !G || G.mode !== 'world' || Battle.active || UI.modalStack.length || TownView.open || Campfire.open || Game.busy) return;
-  if (!this.ensure()) return;
-  // chasing a party: re-aim at it every so often
+  if (!this.ensure() || !LS.ensure()) return;
   if (this.targetId) {
-    const ag = G.world.parties.find((a) => a.id === this.targetId);
+    const ag = G.world.parties.find((x) => x.id === this.targetId);
     if (!ag) { this.stop(); return; }
     this.repath -= dt;
     if (this.repath <= 0) {
-      this.repath = 0.4;
-      const t = tileAt(Math.round(ag.x), Math.round(ag.y));
-      const p = findPath(tileAt(G.pos.x, G.pos.y), t);
-      if (p) { this.path = p; this.dest = t; }
+      this.repath = 0.5;
+      const p = LS.path(G.ppos, { x: ag.x, y: ag.y });
+      if (p) { this.path = p; this.dest = p[p.length - 1]; }
     }
-    if (dist2(ag, G.ppos) < 0.65) { this.stop(); return this.encounter(ag, true); }
+    if (Math.hypot(ag.x - G.ppos.x, ag.y - G.ppos.y) < 0.65) { this.stop(); return this.encounter(ag, true); }
   }
   const next = this.path[0];
   if (!next) {
     this.stop();
+    const t = tileAt(Math.round(G.ppos.x), Math.round(G.ppos.y));
+    G.pos = { x: t.x, y: t.y };
     UI.refresh();
     return Game.arrive();
   }
-  // walk toward the next tile centre; slower in rough country, and days pass with every step
-  const cost = GD.BIOMES[next.type].cost;
-  const speed = 2.8 / Math.sqrt(cost);
+  // walk straight toward the next corner of the route, slower over rough ground
+  const c = LS.costAt(G.ppos.x, G.ppos.y);
+  const speed = 2.6 / Math.sqrt(isFinite(c) ? Math.max(0.6, c) : 1.5);
   const dx = next.x - G.ppos.x, dy = next.y - G.ppos.y;
   const rem = Math.hypot(dx, dy);
   const step = Math.min(rem, speed * dt);
   if (rem > 0) { G.ppos.x += dx / rem * step; G.ppos.y += dy / rem * step; }
-  const days = step * moveDays(next);
+  const days = step * this.daysPerUnit(G.ppos.x, G.ppos.y);
   advanceDays(days);
   this.tick(days);
   if (G.pendingSuccession || G.pendingVictory || G.pendingDoom) { this.stop(); return Game.after(); }
-  // someone reaches us
   for (const a of G.world.parties) {
     if (a.cool > G.day) continue;
-    if (dist2(a, G.ppos) < 0.6 && (AGENTS[a.kind].hostile && a.hunting)) { this.stop(); return this.encounter(a, false); }
+    if (Math.hypot(a.x - G.ppos.x, a.y - G.ppos.y) < 0.6 && AGENTS[a.kind].hostile && a.hunting) { this.stop(); return this.encounter(a, false); }
   }
-  if (rem - step < 0.001) {
-    G.pos = { x: next.x, y: next.y };
-    this.path.shift();
-    this.enterTile(next);
+  if (rem - step < 0.001) this.path.shift();
+  // crossing into a new region
+  const t = tileAt(clamp(Math.round(G.ppos.x), 0, G.world.map.W - 1), clamp(Math.round(G.ppos.y), 0, G.world.map.H - 1));
+  if (t.x !== G.pos.x || t.y !== G.pos.y) {
+    G.pos = { x: t.x, y: t.y };
+    this.enterTile(t);
   }
 };
 
@@ -155,38 +176,41 @@ Living.tick = function (days) {
 
 Living.moveAgent = function (a, days) {
   const kind = AGENTS[a.kind];
-  const sees = kind.sight && dist2(a, G.ppos) <= kind.sight * (['forest', 'jungle', 'swamp'].includes(tileAt(G.pos.x, G.pos.y).type) ? 0.6 : 1);
+  const sees = kind.sight && Math.hypot(a.x - G.ppos.x, a.y - G.ppos.y) <= kind.sight * (['forest', 'jungle', 'swamp'].includes(tileAt(G.pos.x, G.pos.y).type) ? 0.6 : 1);
+  const wasHunting = a.hunting;
   a.hunting = false;
   if (sees && a.cool <= G.day) {
     const brave = a.kind === 'rival' || this.agentPower(a) >= this.partyPower() * 0.7;
-    if (brave) { a.hunting = true; a.gx = G.pos.x; a.gy = G.pos.y; }
-    else if (a.kind === 'bandits') {
-      // run from a stronger party
-      a.gx = clamp(Math.round(a.x + (a.x - G.ppos.x) * 3), 0, G.world.map.W - 1);
-      a.gy = clamp(Math.round(a.y + (a.y - G.ppos.y) * 3), 0, G.world.map.H - 1);
+    if (brave) {
+      a.hunting = true;
+      if (!wasHunting || (a.repathAt || 0) <= G.day) { a.gx = G.ppos.x; a.gy = G.ppos.y; a.path = null; a.repathAt = G.day + 1.5; }
+    } else if (a.kind === 'bandits' && !a.fleeing) {
+      a.fleeing = true;
+      a.gx = clamp(a.x + (a.x - G.ppos.x) * 3, 0, G.world.map.W - 1);
+      a.gy = clamp(a.y + (a.y - G.ppos.y) * 3, 0, G.world.map.H - 1);
+      a.path = null;
     }
-  }
-  if (a.gx == null || (Math.round(a.x) === a.gx && Math.round(a.y) === a.gy)) this.newGoal(a);
+  } else a.fleeing = false;
+  if (a.gx == null || (!a.path && a.tries > 3)) { a.tries = 0; this.newGoal(a); }
   if (a.dead) return;
+  if (!a.path) {
+    a.path = LS.path({ x: a.x, y: a.y }, { x: a.gx, y: a.gy });
+    if (!a.path) { a.tries = (a.tries || 0) + 1; this.newGoal(a); return; }
+  }
   let left = kind.speed * days;
   let guard = 0;
-  while (left > 0 && guard++ < 20) {
-    if (a.nx == null) {
-      const cur = tileAt(Math.round(a.x), Math.round(a.y));
-      const opts = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => tileAt(cur.x + dx, cur.y + dy)).filter((t) => t && isLand(t) && t.land === cur.land);
-      if (!opts.length) { a.dead = true; return; }
-      opts.sort((p, q) => Math.hypot(p.x - a.gx, p.y - a.gy) - Math.hypot(q.x - a.gx, q.y - a.gy) + R.float(-0.4, 0.4));
-      const pick = opts.find((t) => !(t.x === a.px && t.y === a.py)) || opts[0];
-      a.px = cur.x; a.py = cur.y;
-      a.nx = pick.x; a.ny = pick.y;
-    }
-    const dx = a.nx - a.x, dy = a.ny - a.y;
+  while (left > 0 && a.path && a.path.length && guard++ < 40) {
+    const nx = a.path[0];
+    const dx = nx.x - a.x, dy = nx.y - a.y;
     const rem = Math.hypot(dx, dy);
-    const cost = GD.BIOMES[tileAt(a.nx, a.ny).type].cost;
-    const can = left / cost;
-    if (can >= rem) { a.x = a.nx; a.y = a.ny; a.nx = null; left -= rem * cost; }
+    let c = LS.costAt(a.x, a.y); if (!isFinite(c)) c = 1.5;
+    const can = left / Math.max(0.6, c);
+    if (can >= rem) { a.x = nx.x; a.y = nx.y; a.path.shift(); left -= rem * Math.max(0.6, c); }
     else { a.x += dx / rem * can; a.y += dy / rem * can; left = 0; }
-    if (Math.round(a.x) === a.gx && Math.round(a.y) === a.gy) { this.arrived(a); if (a.dead) return; this.newGoal(a); }
+  }
+  if (a.path && !a.path.length) {
+    a.path = null;
+    if (Math.hypot(a.x - a.gx, a.y - a.gy) < 0.7) { this.arrived(a); if (a.dead) return; this.newGoal(a); }
   }
 };
 Living.arrived = function (a) {
@@ -228,6 +252,7 @@ Living.newGoal = function (a) {
   }
   if (!t) t = cur;
   a.gx = t.x; a.gy = t.y;
+  a.path = null;
 };
 
 Living.spawn = function () {

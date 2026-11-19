@@ -201,6 +201,14 @@ Game.clickTile = function (t) {
   Living.go(t); // seamless travel: the world moves only while you do
 };
 
+// free movement: walk (or fly) to any point on the landscape
+Game.clickPoint = function (wp) {
+  if (this.busy || UI.modalStack.length || Battle.active || !Living.ensure()) return;
+  const t = tileAt(clamp(Math.round(wp.x), 0, G.world.map.W - 1), clamp(Math.round(wp.y), 0, G.world.map.H - 1));
+  const dist = Math.hypot(wp.x - G.ppos.x, wp.y - G.ppos.y);
+  if (hasTech('flight') && dist > 4) return this.fly(t);
+  Living.goPoint(wp);
+};
 Game.fly = function (t) {
   this.busy = true;
   Living.stop();

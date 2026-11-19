@@ -52,7 +52,7 @@ function genMap(W, H) {
         else if (m > 0.52) type = 'forest';
         else type = 'grass';
       }
-      tiles.push({ x, y, h, type, feature: null });
+      tiles.push({ x, y, h, type, feature: null, e: Math.round(e * 1000) / 1000 });
     }
   }
   return { W, H, tiles };

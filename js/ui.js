@@ -240,7 +240,7 @@ UI.renderPanel = function () {
   else if (t.feature === 'spire') body.push(...this.spirePanel());
   else if (Events.panel(t)) body.push(...Events.panel(t));
   else if (t.feature === 'shrine') body.push(h('h3', {}, 'Beacon Shrine'), h('p', { class: 'dim' }, t.lit ? 'The beacon burns again, a ward against the dark.' : 'A cold beacon from an older age.'));
-  else body.push(h('h3', {}, isWater(t) ? 'At Sea' : GD.BIOMES[t.type].name), h('p', { class: 'dim' }, isWater(t) ? 'Your boat rides the waves.' : 'Click a tile to travel. Every step costs time, and danger is everywhere.'));
+  else body.push(h('h3', {}, isWater(t) ? 'At Sea' : GD.BIOMES[t.type].name), h('p', { class: 'dim' }, isWater(t) ? 'Your boat rides the waves.' : 'Tap anywhere to travel. Time passes only while you move, and danger is everywhere.'));
   if (!isWater(t) && t.feature !== 'town' && t.feature !== 'estate') body.push(act('Make camp', () => Campfire.start(), { sub: 'sit by the fire with your party · rest the night' }));
   body.push(this.questBox());
   body.push(h('div', { class: 'hint' }, this.isMobile()
