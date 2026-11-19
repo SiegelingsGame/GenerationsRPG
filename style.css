@@ -83,10 +83,13 @@ button.act.danger { border-color: #6e3a33; }
 .blog { font-size: 12px; color: var(--dim); border-top: 1px solid var(--line); padding-top: 6px; }
 .blog div { margin-bottom: 3px; }
 
-.modal-wrap { position: fixed; inset: 0; background: rgba(8, 6, 12, 0.72); display: grid; place-items: center; z-index: 10; padding: 16px; }
+.modal-wrap { position: fixed; inset: 0; background: rgba(8, 6, 12, 0.72); display: grid; place-items: center; z-index: 10;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
 .modal { position: relative; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px; padding: 18px 20px; width: min(440px, 100%); max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); }
 .modal.wide { width: min(900px, 100%); }
-.modal .close { position: absolute; right: 10px; top: 8px; background: none; border: none; color: var(--dim); font-size: 24px; cursor: pointer; }
+.modal .close { position: sticky; top: -6px; float: right; z-index: 3; margin: -10px -10px 0 8px; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--panel2); border: 1px solid var(--line); color: var(--text); font-size: 24px; line-height: 1; cursor: pointer; }
+.modal .close:hover { border-color: var(--gold); }
 .title { text-align: center; }
 .title h1 { font-size: 46px; font-weight: normal; letter-spacing: 6px; color: var(--gold); margin: 8px 0; }
 .title .tag-line { color: var(--dim); font-style: italic; margin-bottom: 20px; }
@@ -202,8 +205,12 @@ table.stats td:first-child { color: var(--gold); }
   #sheet .auto { margin: 4px 0; }
   body.in-battle #stage { bottom: 40vh; }
 
-  .modal-wrap { padding: 8px; align-items: start; z-index: 12; }
-  .modal { padding: 14px; max-height: calc(100vh - 16px); max-height: calc(100dvh - 16px); }
+  html, body { background: #0f1a26; }
+  .modal-wrap { align-items: start; z-index: 12;
+    padding: calc(8px + env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px)); }
+  .modal { padding: 14px; max-height: calc(100vh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+  .modal .close { width: 44px; height: 44px; font-size: 28px; }
   .choices { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
   .choices.partners { grid-template-columns: 1fr; }
   .sheet-left { width: 100%; }
@@ -330,3 +337,5 @@ p.small { font-size: 12px; }
 .town-canvas { flex: 1; width: 100%; min-height: 0; display: block; touch-action: manipulation; }
 .town-ui { background: linear-gradient(transparent, rgba(12, 10, 8, 0.9) 28%); }
 .town-ui .camp-say small { font-weight: normal; }
+
+.campfire, .townview { padding-top: env(safe-area-inset-top, 0px); }
