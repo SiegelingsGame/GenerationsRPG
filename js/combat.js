@@ -137,6 +137,7 @@ Battle.damage = function (src, t, dmg, crit, label) {
     if (sh.v <= 0) delete t.st.shield;
   }
   t.hp = Math.max(0, t.hp - dmg);
+  if (src && Battle.counter) setTimeout(() => { if (!this.over) this.counter(src, t); }, 120);
   t.flash = 1;
   this.fx.push({ uid: t.uid, text: (crit ? 'CRIT ' : '') + dmg, color: crit ? '#ffd23f' : '#ff5c5c', t0: performance.now() });
   if (label) this.fx.push({ uid: t.uid, text: label, color: '#ddd', t0: performance.now() + 60, small: true });

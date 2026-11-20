@@ -266,8 +266,9 @@ Every character has a class. You choose yours at founding. Others take theirs fr
 | Priest | Healing | Last Rites: fallen allies far less likely to die | Mend · Prayer (heal all) · Smite (double vs undead) |
 | Bard | Support | Party earns +15% XP | Inspire (+25% damage, 3 rounds) · Rally (+1 focus, small heal) · Dissonance (enemies lose half their armour) |
 | Ranger | Precision | +10% crit chance | Aimed Shot · Volley · Hunter's Mark (+30% damage taken) |
+| Knight | High defence, precision attacks | Plate and precision: −20% damage taken; every attack pierces a quarter of armour and crits more often | Precision Strike (170%, +30% crit, pierces armour) · Riposte (guard 2 rounds, counter-attacks every attacker) · Challenge (marks a foe and draws its attacks) |
 
-Status effects (inspired, bloodlust, guarded, shielded, exposed, slowed, marked) show as markers over each fighter. The battle AI picks abilities by role: heal the wounded, shield or guard, buff, rally, mark, then area or single-target damage.
+Status effects (inspired, bloodlust, guarded, shielded, exposed, slowed, marked, riposte) show as markers over each fighter. The battle AI picks abilities by role: heal the wounded, shield or guard, buff, rally, mark, then area or single-target damage.
 
 ## 9. 2.5D presentation
 

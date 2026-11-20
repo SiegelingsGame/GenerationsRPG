@@ -354,7 +354,7 @@ UI.battleChanged = function () {
   const kids = [h('h3', {}, Battle.title)];
   if (Battle.waiting && u && u.side === 'party') {
     const cl = GD.CLASSES[u.cls];
-    const st = Object.keys(u.st || {}).filter((k) => Battle.st(u, k)).map((k) => ({ atkUp: 'inspired', bloodlust: 'bloodlust', guard: 'guarded', defDown: 'exposed', slow: 'slowed', mark: 'marked', shield: `shield ${u.st.shield && u.st.shield.v}` }[k])).filter(Boolean);
+    const st = Object.keys(u.st || {}).filter((k) => Battle.st(u, k)).map((k) => ({ atkUp: 'inspired', bloodlust: 'bloodlust', guard: 'guarded', defDown: 'exposed', slow: 'slowed', mark: 'marked', shield: `shield ${u.st.shield && u.st.shield.v}`, riposte: 'riposte' }[k])).filter(Boolean);
     kids.push(h('p', {}, h('b', {}, `${u.name}'s turn`), h('br'), h('small', { class: 'dim' }, `${cl ? cl.icon + ' ' + cl.name + ' · ' : ''}Focus ${u.focus}/3${st.length ? ' · ' + st.join(', ') : ''}`)));
     if (this.targeting) {
       kids.push(h('p', { class: 'dim' }, `Choose a target for ${this.targeting === 'skill' ? GD.ABILITIES[this.targetSkill].name : this.targeting}: tap the field or below.`));

@@ -43,6 +43,14 @@ GD.CLASSES = {
     growth: { wil: 0.3, agi: 0.25 },
     skills: ['inspire', 'rally', 'dissonance'],
   },
+  knight: {
+    name: 'Knight', icon: '♞', weapon: 'lance', top: ['vit', 'str'],
+    desc: 'Sworn and armoured. The hardest to bring down, with precise strikes that find the gaps in any armour.',
+    passive: 'Plate and precision: takes 20% less damage; every attack pierces a quarter of armour and crits more often.',
+    mods: { atk: 1.05, def: 1.45, hp: 1.15, mag: 0.6, heal: 0.8, spd: 0.85 },
+    growth: { vit: 0.4, str: 0.25 },
+    skills: ['precisionStrike', 'riposte', 'challenge'],
+  },
   ranger: {
     name: 'Ranger', icon: '➶', weapon: 'bow', top: ['agi'],
     desc: 'A sharp-eyed archer. Precise shots, arrow volleys, and marks that let the whole party strike harder.',
@@ -73,6 +81,9 @@ GD.ABILITIES = {
   aimedShot:      { name: 'Aimed Shot',      cost: 2, target: 'enemy',   role: 'nuke',  anim: 'cast',  desc: '200% damage with a much higher chance to crit.' },
   volley:         { name: 'Volley',          cost: 2, target: 'enemies', role: 'aoe',   anim: 'cast',  desc: 'Rain arrows on every enemy for 70% damage.' },
   huntersMark:    { name: 'Hunter\'s Mark',  cost: 1, target: 'enemy',   role: 'mark',  anim: 'cast',  desc: 'Marked enemies take 30% more damage from everyone for 3 rounds.' },
+  precisionStrike: { name: 'Precision Strike', cost: 2, target: 'enemy', role: 'nuke', anim: 'lunge', desc: '170% damage through the gaps: ignores most armour and crits often.' },
+  riposte:        { name: 'Riposte',         cost: 2, target: 'self',    role: 'guard', anim: 'cast',  desc: 'A guarded stance for 2 rounds: take less damage and counter-attack anyone who strikes you.' },
+  challenge:      { name: 'Challenge',       cost: 2, target: 'enemy',   role: 'mark',  anim: 'cast',  desc: 'Call out one foe: they are marked (+30% damage taken) and enemies must attack you for 3 rounds.' },
   flurry:         { name: 'Flurry',          cost: 2, target: 'enemy',   role: 'nuke',  anim: 'lunge', desc: 'Two quick strikes with a high crit chance.' },
   bulwark:        { name: 'Bulwark',         cost: 2, target: 'self',    role: 'guard', anim: 'cast',  desc: 'Guard and draw enemy attacks for 2 rounds.' },
 };
@@ -88,7 +99,7 @@ function classFor(c) {
   if (parentCls.length && R.chance(0.35)) return (c.cls = R.pick(parentCls));
   const order = STATS.slice().sort((a, b) => (c.base[b] + (c.bonus[b] || 0)) - (c.base[a] + (c.bonus[a] || 0)));
   const top = order[0];
-  const pick = { str: R.chance(0.6) ? 'warrior' : 'berserker', vit: 'warrior', int: 'sorcerer', wil: R.chance(0.6) ? 'priest' : 'bard', agi: R.chance(0.65) ? 'ranger' : 'bard' }[top];
+  const pick = { str: R.chance(0.6) ? 'warrior' : 'berserker', vit: R.chance(0.5) ? 'knight' : 'warrior', int: 'sorcerer', wil: R.chance(0.6) ? 'priest' : 'bard', agi: R.chance(0.65) ? 'ranger' : 'bard' }[top];
   return (c.cls = pick);
 }
 function classOf(c) { return GD.CLASSES[classFor(c)]; }
@@ -124,12 +135,15 @@ Battle.inMult = function (t) {
   if (this.st(t, 'guard')) m *= 0.65;
   if (t.defending) m *= 0.5;
   if (t.cls === 'warrior') m *= 0.85;
+  if (t.cls === 'knight') m *= 0.8;
+  if (this.st(t, 'riposte')) m *= 0.75;
   return m;
 };
 Battle.armour = function (t) { return t.def * (this.st(t, 'defDown') ? 0.5 : 1); };
 Battle.physical = function (u, t, mult, extraCrit = 0, pierce = 0) {
+  if (u.cls === 'knight') pierce = Math.min(0.9, pierce + 0.25);
   let dmg = u.atk * R.float(0.85, 1.15) * mult * this.outMult(u) - this.armour(t) * 0.5 * (1 - pierce);
-  const crit = R.chance(0.05 + u.agi * 0.008 + extraCrit + (u.cls === 'ranger' ? 0.1 : 0));
+  const crit = R.chance(0.05 + u.agi * 0.008 + extraCrit + (u.cls === 'ranger' ? 0.1 : 0) + (u.cls === 'knight' ? 0.08 : 0));
   if (crit) dmg *= 1.6;
   dmg *= this.inMult(t);
   return { dmg: Math.max(1, Math.round(dmg)), crit };
@@ -187,6 +201,9 @@ Battle.useAbility = function (u, id, t) {
     case 'aimedShot': { const f = pickFoe(); const r = this.physical(u, f, 2.0, 0.25); this.damage(u, f, r.dmg, r.crit); msg = `${u.name} looses an Aimed Shot at ${f.name} for ${r.dmg}${r.crit ? ' (critical!)' : ''}.`; break; }
     case 'volley': { foes.forEach((f) => { const r = this.physical(u, f, 0.7); this.damage(u, f, r.dmg, r.crit); }); msg = `${u.name} looses a volley of arrows!`; break; }
     case 'huntersMark': { const f = pickFoe(); this.give(f, 'mark', 3); label(f, 'Marked', '#ffd76a'); msg = `${u.name} marks ${f.name} for the hunt.`; break; }
+    case 'precisionStrike': { const f = pickFoe(); const r = this.physical(u, f, 1.7, 0.3, 0.6); this.damage(u, f, r.dmg, r.crit); msg = `${u.name} finds the gap in ${f.name}'s guard for ${r.dmg}${r.crit ? ' (critical!)' : ''}.`; break; }
+    case 'riposte': { this.give(u, 'riposte', 2); u.defending = true; label(u, 'Riposte'); msg = `${u.name} takes a guarded stance, blade ready to answer.`; break; }
+    case 'challenge': { const f = pickFoe(); this.give(f, 'mark', 3); u.taunt = 3; label(f, 'Challenged', '#ffd76a'); label(u, 'Challenge'); msg = `${u.name} challenges ${f.name}! All eyes turn to the knight.`; break; }
     case 'flurry': { const f = pickFoe(); let tot = 0; for (let i = 0; i < 2 && f.alive; i++) { const r = this.physical(u, f, 0.65, 0.2); this.damage(u, f, r.dmg, r.crit); tot += r.dmg; } msg = `${u.name} unleashes a Flurry on ${f.name} for ${tot}.`; break; }
     case 'bulwark': { u.defending = true; u.taunt = 2; this.give(u, 'guard', 2); label(u, 'Bulwark'); msg = `${u.name} raises a Bulwark and draws the enemy's attacks.`; break; }
     default: msg = `${u.name} hesitates.`;
@@ -235,4 +252,14 @@ Battle.choose = function (u) {
   const safeNk = nk.filter((id) => !(id === 'recklessStrike' && u.hp < u.maxHp * 0.2));
   if (safeNk.length) return { id: pick(safeNk), t: taunter || foes.slice().sort((a, b) => a.hp - b.hp)[0] };
   return null;
+};
+
+// a knight in riposte answers every blow aimed at them
+Battle.counter = function (src, t) {
+  if (!src || src === t || !src.alive || !t.alive || src.side === t.side || !this.st(t, 'riposte') || this._countering) return;
+  this._countering = true;
+  const r = this.physical(t, src, 0.6);
+  this.say(`${t.name} ripostes ${src.name} for ${r.dmg}${r.crit ? ' (critical!)' : ''}.`);
+  this.damage(null, src, r.dmg, r.crit, 'Riposte');
+  this._countering = false;
 };

@@ -782,10 +782,15 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
       c.fillStyle = '#2a1a0a'; c.beginPath(); c.arc(hx0 - 2 * s, hy0 - 4 * s, 1.2 * s, 0, Math.PI * 2); c.fill();
     } else {
       const staff = w === 'staff' || w === 'orb';
-      c.strokeStyle = staff ? '#7a5a3a' : '#cfd6dc'; c.lineWidth = (w === 'axe' ? 2.6 : 2.2) * s;
+      c.strokeStyle = staff || w === 'lance' ? '#7a5a3a' : '#cfd6dc'; c.lineWidth = (w === 'axe' ? 2.6 : 2.2) * s;
       c.beginPath(); c.moveTo(hx0, hy0); c.lineTo(x + 18 * s * wd, by - (staff ? 34 : 26) * s); c.stroke();
       if (w === 'staff') { c.fillStyle = '#fff3a0'; c.beginPath(); c.arc(x + 18 * s * wd, by - 35 * s, 3 * s, 0, Math.PI * 2); c.fill(); c.fillRect(x + 17 * s * wd, by - 41 * s, 2 * s, 5 * s); }
       if (w === 'orb') { const g = 0.6 + Math.sin(this.t / 200) * 0.3; c.fillStyle = `rgba(180,138,255,${g})`; c.beginPath(); c.arc(x + 18 * s * wd, by - 36 * s, 4.2 * s, 0, Math.PI * 2); c.fill(); }
+      if (w === 'lance') {
+        c.fillStyle = '#d8dde2'; c.beginPath(); c.moveTo(x + 18 * s * wd, by - 26 * s); c.lineTo(x + 20.5 * s * wd, by - 33 * s); c.lineTo(x + 16.5 * s * wd, by - 27 * s); c.closePath(); c.fill();
+        c.fillStyle = look.house ? G.house.color : '#5a6a7a'; c.beginPath(); c.moveTo(x - 17 * s * wd, by - 17 * s); c.lineTo(x - 7 * s * wd, by - 17 * s); c.lineTo(x - 8 * s * wd, by - 6 * s); c.lineTo(x - 12 * s * wd, by - 1 * s); c.lineTo(x - 16 * s * wd, by - 6 * s); c.closePath(); c.fill();
+        c.strokeStyle = '#cfd6dc'; c.lineWidth = 1 * s; c.stroke();
+      }
       if (w === 'axe') { c.fillStyle = '#b8c0c8'; c.beginPath(); c.moveTo(x + 17 * s * wd, by - 24 * s); c.quadraticCurveTo(x + 26 * s * wd, by - 26 * s, x + 24 * s * wd, by - 17 * s); c.lineTo(x + 16 * s * wd, by - 20 * s); c.closePath(); c.fill(); }
       if (w === 'shield') { c.fillStyle = look.house ? G.house.color : '#6a6a6a'; c.beginPath(); c.ellipse(x - 12 * s * wd, by - 10 * s, 5 * s, 8 * s, 0, 0, Math.PI * 2); c.fill(); c.strokeStyle = '#cfd6dc'; c.lineWidth = 1 * s; c.stroke(); }
     }
@@ -962,6 +967,7 @@ Render.drawBattle = function () {
       if (S('defDown')) tags.push(['▼', '#e0904a']);
       if (S('slow')) tags.push(['❄', '#9fe0ff']);
       if (S('mark')) tags.push(['✶', '#ff5c5c']);
+      if (S('riposte')) tags.push(['⚔', '#cfd6dc']);
       c.font = 'bold 11px Georgia, serif'; c.textAlign = 'left';
       tags.forEach(([g, col], i) => { c.fillStyle = col; c.fillText(g, bx + 28 + i * 10, byy + 13); });
       c.textAlign = 'center';
