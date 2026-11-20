@@ -380,3 +380,12 @@ button.act.ability { border-left: 3px solid var(--accent); }
   #drawer-body { padding-bottom: max(16px, env(safe-area-inset-bottom, 0px)); }
   .modal-wrap { padding-bottom: max(8px, calc(env(safe-area-inset-bottom, 0px) - 10px)); }
 }
+
+/* iOS home-screen apps (iOS 26 especially) size the page shorter than the screen and clip everything
+   below it, even fixed layers. When ui.js detects that gap, the page itself becomes screen-tall. */
+html.ios-short, html.ios-short body { height: var(--appH, 100%); min-height: var(--appH, 100%); }
+html.ios-short body { background: linear-gradient(#0e1018, #120e14); }
+@media (display-mode: standalone) and (max-width: 900px) {
+  html { min-height: calc(100% + env(safe-area-inset-top, 0px)); }
+  body { min-height: 100%; }
+}

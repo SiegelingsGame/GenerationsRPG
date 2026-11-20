@@ -96,6 +96,8 @@ UI.fixStandalone = function () {
   }
   document.documentElement.style.setProperty('--appH', full + 'px');
   document.documentElement.style.setProperty('--xb', Math.max(0, full - window.innerHeight) + 'px');
+  // iOS paints nothing outside the page box, so the page itself has to be screen-tall as well
+  document.documentElement.classList.toggle('ios-short', full > window.innerHeight);
 };
 UI.openDrawer = function () { document.body.classList.add('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'false'); this.placeLayout(); };
 UI.closeDrawer = function () { document.body.classList.remove('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'true'); };
