@@ -16,6 +16,7 @@ Game.title = function () {
   UI.modal(h('div', { class: 'title' },
     h('h1', {}, 'Generations'),
     h('p', { class: 'tag-line' }, 'A roguelike RPG about a family line. You will die. Your children will carry on.'),
+    h('p', { class: 'dim small' }, `Version ${UI.buildVersion()}`),
     can ? act('Continue your House', () => { if (loadGame()) { UI.closeAll(); this.enterWorld(); } else UI.toast('Save could not be loaded.'); }, { cls: 'hl' }) : null,
     act('Found a new House', () => { UI.closeAll(); this.create(); }),
     act('How to play', () => UI.showHelp()),

@@ -53,6 +53,8 @@ const UI = {
 UI.init = function () {
   Log.listeners.push(() => this.renderLog());
   this.buildMobile();
+  this.checkForUpdate();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.checkForUpdate(); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && this.modalStack.length && !this.modalStack[this.modalStack.length - 1].locked) this.closeModal();
   });
@@ -104,6 +106,7 @@ UI.placeLayout = function () {
   const mobile = this.isMobile();
   document.body.classList.toggle('mobile', mobile);
   document.body.classList.toggle('in-battle', mobile && Battle.active);
+  if (!(mobile && Battle.active)) stage.style.bottom = '';
   if (mobile) {
     if (Battle.active) { if (panel.parentNode !== this.mob.sheet) this.mob.sheet.append(panel); this.closeDrawer(); }
     else if (panel.parentNode !== body) body.prepend(panel);
@@ -378,6 +381,7 @@ UI.battleChanged = function () {
   kids.push(h('label', { class: 'auto' }, h('input', { type: 'checkbox', checked: Battle.auto, onchange: (e) => { Battle.auto = e.target.checked; if (Battle.auto && Battle.waiting) { Battle.waiting = false; Battle.ai(Battle.cur); } } }), ' Auto-battle'));
   kids.push(h('div', { class: 'blog' }, ...Battle.log.map((l) => h('div', {}, l))));
   p.replaceChildren(...kids);
+  if (this.isMobile() && this.mob) $('#stage').style.bottom = this.mob.sheet.offsetHeight + 'px';
 };
 UI.beginTarget = function (kind) { this.targeting = kind; this.battleChanged(); };
 UI.validTarget = function (x) {
@@ -873,8 +877,32 @@ UI.showWorld = function (tab = 'prophecy') {
 };
 
 // ---------------------------------------------------------------- menu
+// which build is running, and what the screen reports (for checking phone layouts)
+UI.buildVersion = function () { const m = document.querySelector('meta[name="gen-version"]'); const v = m ? m.content : 'dev'; return v === '__VERSION__' ? 'dev' : v; };
+UI.diagnostics = function () {
+  const standalone = window.navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  return `Version ${this.buildVersion()} · screen ${screen.width}×${screen.height} · view ${window.innerWidth}×${window.innerHeight} · fill ${getComputedStyle(document.documentElement).getPropertyValue('--appH').trim() || '-'} · ${standalone ? 'home-screen app' : 'browser'}`;
+};
+// installed web apps can hold on to old files: check the live page and reload if it has moved on
+UI.checkForUpdate = function () {
+  if (!/^https?:/.test(location.protocol)) return;
+  const mine = this.buildVersion();
+  if (mine === 'dev') return;
+  fetch(location.pathname + '?check=' + Date.now(), { cache: 'no-store' }).then((r) => r.text()).then((html) => {
+    const m = html.match(/name="gen-version" content="([^"]+)"/);
+    let tried = null;
+    try { tried = sessionStorage.getItem('gen-update-tried'); } catch (e) { /* storage blocked */ }
+    if (m && m[1] !== mine && m[1] !== '__VERSION__' && tried !== m[1]) {
+      try { sessionStorage.setItem('gen-update-tried', m[1]); } catch (e) { /* storage blocked */ }
+      try { saveGame(); } catch (e) { /* nothing to save yet */ }
+      UI.toast('Updating to the latest version…');
+      setTimeout(() => location.replace(location.pathname + '?v=' + m[1]), 900);
+    }
+  }).catch(() => {});
+};
 UI.showMenu = function () {
   this.modal([
+    h('p', { class: 'dim small' }, this.diagnostics()),
     act('Save Game', () => { UI.toast(saveGame() ? 'Game saved.' : 'Could not save (storage unavailable).'); this.closeModal(); }),
     act('Concept & How to Play', () => { this.closeModal(); this.showHelp(); }),
     act('Abandon & Start Over', () => {
