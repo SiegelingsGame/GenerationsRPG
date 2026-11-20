@@ -82,16 +82,18 @@ UI.buildMobile = function () {
 // iOS home-screen apps report a viewport shorter than the screen they actually draw on, leaving an
 // unpainted strip at the bottom. Measure the shortfall and let the layout extend over it.
 UI.fixStandalone = function () {
-  let xb = 0;
+  // iOS home-screen apps can report a viewport shorter than the screen they draw on. Use the real
+  // screen height there, so the map and every full-screen layer reach the bottom edge.
+  const ios = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent));
   const standalone = window.navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-  if (standalone && /iP(hone|od|ad)/.test(navigator.userAgent) || (standalone && navigator.maxTouchPoints > 1 && /Mac/.test(navigator.userAgent))) {
+  let full = window.innerHeight;
+  if (ios && standalone) {
     const landscape = window.innerWidth > window.innerHeight;
-    const full = landscape ? Math.max(screen.width, screen.height) : Math.max(screen.height, screen.width);
-    const fullH = landscape ? Math.min(screen.width, screen.height) : full;
-    const gap = fullH - window.innerHeight;
-    if (gap > 0 && gap < 120) xb = gap;
+    const sh = landscape ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
+    full = Math.max(full, sh);
   }
-  document.documentElement.style.setProperty('--xb', xb + 'px');
+  document.documentElement.style.setProperty('--appH', full + 'px');
+  document.documentElement.style.setProperty('--xb', Math.max(0, full - window.innerHeight) + 'px');
 };
 UI.openDrawer = function () { document.body.classList.add('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'false'); this.placeLayout(); };
 UI.closeDrawer = function () { document.body.classList.remove('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'true'); };
@@ -185,7 +187,8 @@ UI.renderTop = function () {
 
 UI.charLine = function (c) {
   const st = GD.STAGES[stageKey(c)].name;
-  return `${GD.GENDERS[c.gender || 'man'].sym} ${GD.RACES[c.race].name} · ${ageStr(c)} yrs · ${st}`;
+  const cl = isAdult(c) ? classOf(c) : null;
+  return `${GD.GENDERS[c.gender || 'man'].sym} ${GD.RACES[c.race].name}${cl ? ' ' + cl.name : ''} · ${ageStr(c)} yrs · ${st}`;
 };
 
 UI.renderParty = function () {
@@ -347,20 +350,23 @@ UI.battleChanged = function () {
   const u = Battle.cur;
   const kids = [h('h3', {}, Battle.title)];
   if (Battle.waiting && u && u.side === 'party') {
-    kids.push(h('p', {}, h('b', {}, `${u.name}'s turn`), h('br'), h('small', { class: 'dim' }, `Focus ${u.focus}/3`)));
+    const cl = GD.CLASSES[u.cls];
+    const st = Object.keys(u.st || {}).filter((k) => Battle.st(u, k)).map((k) => ({ atkUp: 'inspired', bloodlust: 'bloodlust', guard: 'guarded', defDown: 'exposed', slow: 'slowed', mark: 'marked', shield: `shield ${u.st.shield && u.st.shield.v}` }[k])).filter(Boolean);
+    kids.push(h('p', {}, h('b', {}, `${u.name}'s turn`), h('br'), h('small', { class: 'dim' }, `${cl ? cl.icon + ' ' + cl.name + ' · ' : ''}Focus ${u.focus}/3${st.length ? ' · ' + st.join(', ') : ''}`)));
     if (this.targeting) {
-      kids.push(h('p', { class: 'dim' }, `Choose a target for ${this.targeting === 'skill' ? GD.SKILLS[this.targetSkill].name : this.targeting}: click on the field or below.`));
+      kids.push(h('p', { class: 'dim' }, `Choose a target for ${this.targeting === 'skill' ? GD.ABILITIES[this.targetSkill].name : this.targeting}: tap the field or below.`));
       const targets = Battle.units.filter((x) => this.validTarget(x));
       kids.push(...targets.map((x) => act(`${x.name} (${x.hp}/${x.maxHp})`, () => this.chooseTarget(x))));
       kids.push(act('Back', () => { this.targeting = null; this.battleChanged(); }));
     } else {
-      kids.push(act('Attack', () => this.beginTarget('attack')));
-      for (const key of [u.skill, u.skill2].filter(Boolean)) {
-        const sk = GD.SKILLS[key];
-        kids.push(act(`${sk.name}${key === u.skill2 ? ' (learned)' : ''}`, () => {
-          if (key === 'str' || key === 'vit') Battle.act('skill', null, key);
-          else { this.targetSkill = key; this.beginTarget('skill'); }
-        }, { disabled: u.focus < 2, sub: `2 focus · ${sk.desc}` }));
+      kids.push(act(u.cls === 'sorcerer' ? 'Arcane Bolt' : 'Attack', () => this.beginTarget('attack'), { sub: u.cls === 'sorcerer' ? 'magic that slips past armour' : null }));
+      for (const id of u.abilities || []) {
+        const A = GD.ABILITIES[id];
+        if (!A) continue;
+        kids.push(act(A.name, () => {
+          if (A.target === 'enemy' || A.target === 'ally') { this.targetSkill = id; this.beginTarget('skill'); }
+          else Battle.act('skill', null, id);
+        }, { disabled: u.focus < A.cost, sub: `${A.cost} focus · ${A.desc}`, cls: 'ability' }));
       }
       kids.push(act('Defend', () => Battle.act('defend'), { sub: 'halve damage, +1 focus' }));
       kids.push(act(`Potion (${G.house.potions})`, () => this.beginTarget('potion'), { disabled: G.house.potions <= 0 }));
@@ -377,7 +383,7 @@ UI.beginTarget = function (kind) { this.targeting = kind; this.battleChanged(); 
 UI.validTarget = function (x) {
   const u = Battle.cur;
   if (!u || !x.alive || !this.targeting) return false;
-  const friendly = this.targeting === 'potion' || (this.targeting === 'skill' && this.targetSkill === 'wil');
+  const friendly = this.targeting === 'potion' || (this.targeting === 'skill' && GD.ABILITIES[this.targetSkill] && GD.ABILITIES[this.targetSkill].target === 'ally');
   return friendly ? x.side === u.side : x.side !== u.side;
 };
 UI.chooseTarget = function (x) {
@@ -463,7 +469,12 @@ UI.charBody = function (c) {
       c.alive ? h('p', { class: 'dim' }, `Formative ${Math.round(c.formative)}/${formativeCap(c)} · XP ×${xpMod(c).toFixed(2)}`) : null,
       ...actions),
     h('div', { class: 'sheet-right' },
-      h('p', {}, h('b', {}, `Level ${c.level}`), ` · Power ${power(c)} · Signature: ${GD.SKILLS[topStat(c)].name}`, c.extraSkill ? ` · Learned: ${GD.SKILLS[c.extraSkill].name}` : ''),
+      h('p', {}, h('b', {}, `Level ${c.level}`), ` · Power ${power(c)}`),
+      h('div', { class: 'classbox' },
+        h('b', {}, `${classOf(c).icon} ${classOf(c).name}`), h('small', { class: 'dim' }, ` ${classOf(c).desc}`),
+        h('small', { class: 'good' }, classOf(c).passive),
+        h('ul', { class: 'abil' }, classOf(c).skills.map((id, i) => h('li', { class: i === 2 && c.level < 5 ? 'dim' : '' }, h('b', {}, GD.ABILITIES[id].name), ` (${GD.ABILITIES[id].cost} focus${i === 2 && c.level < 5 ? ', unlocks at level 5' : ''}): ${GD.ABILITIES[id].desc}`)),
+          c.extraSkill && GD.LEGACY_SKILL[c.extraSkill] && !classOf(c).skills.includes(GD.LEGACY_SKILL[c.extraSkill]) ? h('li', {}, h('b', {}, GD.ABILITIES[GD.LEGACY_SKILL[c.extraSkill]].name), ` (learned): ${GD.ABILITIES[GD.LEGACY_SKILL[c.extraSkill]].desc}`) : null)),
       (c.injuries || []).length ? h('div', { class: 'tags' }, c.injuries.map((k) => h('span', { class: 'tag ' + (GD.INJURIES[k].good ? 'good' : 'bad'), title: Object.entries(GD.INJURIES[k].mods).map(([s2, v]) => `${STAT_NAMES[s2]} ${v > 0 ? '+' : ''}${v}`).join(', ') }, GD.INJURIES[k].name))) : null,
       c.alive ? h('div', {}, bar(c.xp, xpNeed(c.level), 'xp'), h('small', { class: 'dim' }, `XP ${Math.round(c.xp)}/${xpNeed(c.level)}`)) : null,
       h('table', { class: 'stats' }, statRows),

@@ -254,6 +254,21 @@ The world moves only when your party moves.
 - Signature skills: **Cleave** (STR, hits all), **Flurry** (AGI, two hits with high crit), **Firebolt** (INT), **Mend** (WIL, heals), **Bulwark** (VIT, taunt + guard).
 - Your House retinue volleys an enemy at the start of each round.
 
+## 8b. Classes
+
+Every character has a class. You choose yours at founding. Others take theirs from their strongest stats, and sometimes inherit a parent's calling. Each class shapes stat growth, combat numbers, weapon and passive, and gives two abilities plus a third at level 5. Abilities cost focus (1–3).
+
+| Class | Role | Passive | Abilities |
+|---|---|---|---|
+| Warrior | Hard physical hits, protects the party | Steady: −15% damage taken | Heavy Blow (190%, pierces armour) · Shield Wall (party −35% damage, taunt) · Cleave |
+| Berserker | Huge damage, low defence, reckless | Rage: up to +60% damage as health drops | Reckless Strike (210%, costs 8% health, exposes self) · Bloodlust (+50% damage, lifesteal) · Whirlwind |
+| Sorcerer | Innate magic | Basic attacks are arcane bolts that ignore most armour | Firebolt · Frost Nova (all, slows) · Arcane Shield (absorb) |
+| Priest | Healing | Last Rites: fallen allies far less likely to die | Mend · Prayer (heal all) · Smite (double vs undead) |
+| Bard | Support | Party earns +15% XP | Inspire (+25% damage, 3 rounds) · Rally (+1 focus, small heal) · Dissonance (enemies lose half their armour) |
+| Ranger | Precision | +10% crit chance | Aimed Shot · Volley · Hunter's Mark (+30% damage taken) |
+
+Status effects (inspired, bloodlust, guarded, shielded, exposed, slowed, marked) show as markers over each fighter. The battle AI picks abilities by role: heal the wounded, shield or guard, buff, rally, mark, then area or single-target damage.
+
 ## 9. 2.5D presentation
 
 - Isometric world built from height-extruded tiles. Lighting shifts with the era: warm gold in Abundance, cold grey in Famine, red haze in War.

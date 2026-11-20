@@ -26,7 +26,7 @@ Game.title = function () {
 Game.create = function () {
   newGame();
   const sel = { race: 'human', birth: 'lowborn', color: GD.HOUSE_COLORS[0], name: genName('human'), house: R.pick(GD.HOUSE_NAMES),
-    gender: 'man', orientation: 'straight', pref: 'none', height: 'average', build: 'average' };
+    gender: 'man', orientation: 'straight', pref: 'none', height: 'average', build: 'average', cls: 'warrior' };
   const pick = (id, label, key, table, extra) => h('label', {}, label, ' ',
     h('select', { id, onchange: (e) => { sel[key] = e.target.value; if (extra) extra(); } },
       Object.entries(table).map(([k, v]) => h('option', { value: k, selected: sel[key] === k }, v.name))));
@@ -46,6 +46,10 @@ Game.create = function () {
         pick('c-height', 'Height', 'height', GD.HEIGHTS, () => UI.replaceModal(draw(), opts)),
         pick('c-build', 'Build', 'build', GD.BUILDS, () => UI.replaceModal(draw(), opts))),
       h('p', { class: 'dim small' }, `${GD.ORIENTATIONS[sel.orientation].desc} ${GD.PREFERENCES[sel.pref].desc || ''} Your partner choices follow from this. Only a man and a woman can have children together; anyone can adopt.`),
+      h('h4', {}, 'Class'),
+      h('div', { class: 'choices' }, Object.entries(GD.CLASSES).map(([k, cl]) => h('div', { class: 'choice' + (sel.cls === k ? ' on' : ''), onclick: () => { sel.cls = k; UI.replaceModal(draw(), opts); } },
+        h('b', {}, `${cl.icon} ${cl.name}`), h('small', { class: 'dim' }, cl.desc), h('small', { class: 'good' }, cl.passive),
+        h('small', {}, cl.skills.slice(0, 2).map((id) => GD.ABILITIES[id].name).join(' · ') + ` · ${GD.ABILITIES[cl.skills[2]].name} at level 5`)))),
       h('h4', {}, 'Race'),
       h('div', { class: 'choices' }, Object.entries(GD.RACES).map(([k, r]) => h('div', { class: 'choice' + (sel.race === k ? ' on' : ''), onclick: () => { sel.race = k; sel.name = genName(k); UI.replaceModal(draw(), opts); } },
         racePortrait(k), h('b', {}, r.name), h('small', {}, `Comes of age at ${r.maturity} · lives ${r.life[0]}–${r.life[1]}`), h('small', { class: 'dim' }, r.desc)))),
@@ -75,6 +79,7 @@ Game.found = function (sel) {
     born: G.day - (r.maturity + Math.max(1, Math.round((r.primeEnd - r.maturity) * 0.08))) * DAYS_PER_YEAR - 40,
     house: G.house.name, status: 'party', loyalty: 100, corruption: 0, weapon: 1, trait: R.pick(['brave', 'wise', 'hardy', 'charming', 'ambitious', 'loyal']),
     gender: sel.gender, orientation: sel.orientation, pref: sel.pref, height: sel.height, build: sel.build,
+    cls: sel.cls,
     condition: null, infertile: R.chance(0.04), orientKnown: true, beard: sel.gender === 'man' ? R.chance(0.4) : sel.race === 'dwarf',
   });
   if (sel.birth === 'orphan') { mc.orphaned = true; mc.formative = 2; mc.lineageKnown = true; mc.secret = 'common'; }

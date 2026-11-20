@@ -18,12 +18,16 @@ function unitFromChar(c, side, slot, boss) {
     spd: stat(c, 'agi'),
     agi: stat(c, 'agi'),
     maxHp: maxHp(c), hp: Math.max(1, Math.round(c.hp)),
-    skill: topStat(c), skill2: c.extraSkill && c.extraSkill !== topStat(c) ? c.extraSkill : null,
+    cls: classFor(c), abilities: abilitiesOf(c), st: {},
     focus: 1, defending: false, taunt: 0,
     brave: c.trait === 'brave', alive: true,
     look: figLook(c),
     anim: null, flash: 0,
   };
+  // the class shapes how this person fights
+  const m = GD.CLASSES[u.cls].mods;
+  u.atk *= m.atk; u.def *= m.def; u.mag *= m.mag; u.heal *= m.heal; u.spd *= m.spd;
+
   if (boss) {
     u.maxHp = Math.round(u.maxHp * 1.8); u.hp = u.maxHp;
     u.atk *= 1.15; u.mag *= 1.15; u.look.evil = true;
@@ -42,7 +46,7 @@ function makeEnemyUnit(type, lvl, slot) {
     atk: s.str * 1.4 + lvl, mag: s.int * 1.5 + lvl, heal: s.wil * 2 + lvl,
     def: s.vit * 0.6 + lvl * 0.5, spd: s.agi, agi: s.agi,
     maxHp: Math.round(18 + s.vit * 5 + lvl * 6), hp: 0,
-    skill: d.skill || null, focus: 0, defending: false, taunt: 0, alive: true,
+    abilities: d.skill ? [GD.LEGACY_SKILL[d.skill]] : [], st: {}, focus: 0, defending: false, taunt: 0, alive: true,
     xp: Math.round(d.xp * (1 + lvl * 0.15)), gold: Math.round(d.gold * (1 + lvl * 0.2)),
     look: { color: d.color, skin: d.skin },
     anim: null, flash: 0,
@@ -90,12 +94,14 @@ Battle.next = function () {
       this.damage(null, t, dmg, false, 'Retinue volley');
       if (!this.alive('enemy').length) return setTimeout(() => this.finish('victory'), 500);
     }
-    this.queue = this.units.filter((u) => u.alive).sort((a, b) => b.spd * R.float(0.8, 1.2) - a.spd * R.float(0.8, 1.2));
+    const spd = (u) => u.spd * (this.st(u, 'slow') ? 0.55 : 1) * R.float(0.8, 1.2);
+    this.queue = this.units.filter((u) => u.alive).map((u) => [spd(u), u]).sort((a, b) => b[0] - a[0]).map((x) => x[1]);
   }
   const u = this.queue.shift();
   if (!u.alive) return this.next();
   this.cur = u;
   u.defending = false;
+  this.tickStatus(u);
   u.focus = Math.min(3, u.focus + 1);
   if (u.side === 'party' && !this.auto) {
     this.waiting = true;
@@ -110,42 +116,26 @@ Battle.next = function () {
 Battle.ai = function (u) {
   if (this.over) return;
   const foes = this.alive(u.side === 'party' ? 'enemy' : 'party');
-  const friends = this.alive(u.side);
   if (!foes.length) return this.next();
-  let target;
-  const taunter = foes.find((f) => f.taunt > 0);
-  if (u.skill2 && u.focus >= 2 && R.chance(0.4)) {
-    const s2 = u.skill2;
-    if (s2 === 'wil') {
-      const hurt = friends.filter((f) => f.hp < f.maxHp * 0.6);
-      if (hurt.length) return this.act('skill', hurt[0].uid, 'wil');
-    } else return this.act('skill', (taunter || R.pick(foes)).uid, s2);
-  }
-  if (u.skill && u.focus >= 2) {
-    if (u.skill === 'wil') {
-      const hurt = friends.filter((f) => f.hp < f.maxHp * 0.6);
-      if (hurt.length) return this.act('skill', hurt.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0].uid);
-    } else if (u.skill !== 'vit' || u.hp < u.maxHp * 0.7 || u.side === 'party') {
-      if (u.skill !== 'wil') return this.act('skill', (taunter || R.pick(foes)).uid);
-    }
-  }
+  const choice = this.choose(u);
+  if (choice) return this.act('skill', choice.t ? choice.t.uid : null, choice.id);
   if (u.side === 'party' && G.house.potions > 0 && u.hp < u.maxHp * 0.3) return this.act('potion', u.uid);
-  target = taunter || (R.chance(0.5) ? foes.sort((a, b) => a.hp - b.hp)[0] : R.pick(foes));
+  const taunter = foes.find((f) => f.taunt > 0);
+  const target = taunter || (R.chance(0.5) ? foes.slice().sort((a, b) => a.hp - b.hp)[0] : R.pick(foes));
   this.act('attack', target.uid);
 };
 
 Battle.find = function (uid) { return this.units.find((u) => u.uid === uid); };
 
-Battle.physical = function (u, t, mult, extraCrit = 0) {
-  let dmg = u.atk * R.float(0.85, 1.15) * mult - t.def * 0.5;
-  if (u.brave) dmg *= 1.1;
-  const crit = R.chance(0.05 + u.agi * 0.008 + extraCrit);
-  if (crit) dmg *= 1.6;
-  if (t.defending) dmg *= 0.5;
-  return { dmg: Math.max(1, Math.round(dmg)), crit };
-};
-
 Battle.damage = function (src, t, dmg, crit, label) {
+  // an arcane shield soaks damage first
+  const sh = t.st && t.st.shield;
+  if (sh && sh.v > 0) {
+    const soak = Math.min(sh.v, dmg);
+    sh.v -= soak; dmg -= soak;
+    this.fx.push({ uid: t.uid, text: `(${soak})`, color: '#b48aff', t0: performance.now() + 40, small: true });
+    if (sh.v <= 0) delete t.st.shield;
+  }
   t.hp = Math.max(0, t.hp - dmg);
   t.flash = 1;
   this.fx.push({ uid: t.uid, text: (crit ? 'CRIT ' : '') + dmg, color: crit ? '#ffd23f' : '#ff5c5c', t0: performance.now() });
@@ -163,11 +153,9 @@ Battle.act = function (action, targetUid, skillKey) {
   let t = this.find(targetUid);
   const foes = this.alive(u.side === 'party' ? 'enemy' : 'party');
   if (action === 'attack') {
-    if (!t || !t.alive || t.side === u.side) t = foes[0];
-    const r = this.physical(u, t, 1);
-    u.anim = { type: 'lunge', to: t.uid, t0: performance.now() };
-    this.damage(u, t, r.dmg, r.crit);
-    this.say(`${u.name} strikes ${t.name} for ${r.dmg}${r.crit ? ' (critical!)' : ''}.`);
+    if (!t || !t.alive || t.side === u.side) t = foes.find((f) => f.taunt > 0) || foes[0];
+    u.anim = { type: u.cls === 'sorcerer' ? 'cast' : 'lunge', to: t.uid, t0: performance.now() };
+    this.basicAttack(u, t);
   } else if (action === 'defend') {
     u.defending = true; u.focus = Math.min(3, u.focus + 1);
     this.fx.push({ uid: u.uid, text: 'Guard', color: '#8fd3ff', t0: performance.now() });
@@ -181,37 +169,9 @@ Battle.act = function (action, targetUid, skillKey) {
     this.fx.push({ uid: t.uid, text: '+' + amt, color: '#6fe08a', t0: performance.now() });
     this.say(`${u.name} uses a potion on ${t.name}.`);
   } else if (action === 'skill') {
-    u.focus -= 2;
-    const key = skillKey || u.skill;
-    const sk = GD.SKILLS[key].name;
-    u.anim = { type: key === 'int' || key === 'wil' ? 'cast' : 'lunge', to: t ? t.uid : null, t0: performance.now() };
-    if (key === 'str') {
-      for (const f of foes) { const r = this.physical(u, f, 0.7); this.damage(u, f, r.dmg, r.crit); }
-      this.say(`${u.name} uses ${sk} on all foes!`);
-    } else if (key === 'agi') {
-      if (!t || !t.alive || t.side === u.side) t = foes[0];
-      let total = 0;
-      for (let i = 0; i < 2 && t.alive; i++) { const r = this.physical(u, t, 0.65, 0.2); this.damage(u, t, r.dmg, r.crit); total += r.dmg; }
-      this.say(`${u.name} uses ${sk} on ${t.name} for ${total}.`);
-    } else if (key === 'int') {
-      if (!t || !t.alive || t.side === u.side) t = foes[0];
-      const dmg = Math.max(1, Math.round(u.mag * 1.7 * R.float(0.9, 1.1) - t.def * 0.15) * (t.defending ? 0.5 : 1));
-      this.damage(u, t, dmg, false);
-      this.fx.push({ uid: t.uid, burst: '#ff8a3d', t0: performance.now() });
-      this.say(`${u.name} casts ${sk} at ${t.name} for ${dmg}.`);
-    } else if (key === 'wil') {
-      const allies = this.alive(u.side);
-      if (!t || !t.alive || t.side !== u.side) t = allies.sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
-      const amt = Math.round(u.heal * R.float(0.9, 1.1));
-      t.hp = Math.min(t.maxHp, t.hp + amt);
-      this.fx.push({ uid: t.uid, text: '+' + amt, color: '#6fe08a', t0: performance.now() });
-      this.fx.push({ uid: t.uid, burst: '#7dffa8', t0: performance.now() });
-      this.say(`${u.name} uses ${sk} on ${t.name} (+${amt}).`);
-    } else if (key === 'vit') {
-      u.defending = true; u.taunt = 2;
-      this.fx.push({ uid: u.uid, text: 'Bulwark', color: '#8fd3ff', t0: performance.now() });
-      this.say(`${u.name} raises a Bulwark and draws the enemy's attacks.`);
-    }
+    const id = skillKey || (u.abilities || [])[0];
+    if (!id || !GD.ABILITIES[id] || GD.ABILITIES[id].cost > u.focus) { this.basicAttack(u, t && t.alive && t.side !== u.side ? t : foes[0]); }
+    else this.useAbility(u, id, t);
   } else if (action === 'flee') {
     const pa = this.alive('party'), ea = this.alive('enemy');
     const avg = (l) => l.reduce((s, x) => s + x.agi, 0) / l.length;
@@ -241,9 +201,10 @@ function resolveBattle(outcome, b) {
   const partyUnits = b.units.filter((u) => u.side === 'party');
   const enemies = b.units.filter((u) => u.side === 'enemy');
   // write HP back
-  for (const u of partyUnits) { const c = ch(u.charId); if (c) c.hp = Math.max(1, u.hp); }
+  for (const u of partyUnits) { const c = ch(u.charId); if (c) c.hp = Math.max(1, Math.round(u.hp)); }
   if (outcome === 'victory') {
     res.xp = enemies.reduce((s, e) => s + (e.xp || Math.round(30 + e.lvl * 12)), 0);
+    if (partyUnits.some((u) => u.alive && u.cls === 'bard')) { res.xp = Math.round(res.xp * 1.15); res.bard = true; }
     res.gold = Math.round(enemies.reduce((s, e) => s + (e.gold || 40 + e.lvl * 10), 0) * era().income);
     if (G.world.era.type === 'war') res.xp = Math.round(res.xp * 1.25);
     G.house.gold += res.gold;
@@ -275,6 +236,7 @@ function resolveBattle(outcome, b) {
       const st = stageKey(c);
       let p = 0.22 - G.house.up.chapel * 0.06 + (st === 'elder' ? 0.15 : st === 'venerable' ? 0.25 : st === 'youth' ? -0.08 : 0);
       if (wiped) p += 0.15;
+      if (partyUnits.some((x) => x.alive && x.cls === 'priest')) p -= 0.12; // last rites
       if (c.id === G.mcId && !heirCandidates().some((x) => x.c.id !== c.id && !x.why.startsWith('Spouse'))) p *= 0.5; // fate spares a line's last hope (a little)
       if (R.chance(clamp(p, 0.05, 0.9))) {
         kill(c, wiped ? 'slain in a lost battle' : 'fell in battle');

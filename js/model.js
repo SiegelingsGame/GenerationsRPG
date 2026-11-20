@@ -125,6 +125,7 @@ function makeChar(o = {}) {
     tunic: o.tunic || R.pick(GD.TUNIC),
     gear: { weapon: o.weapon || 0, armor: o.armor || 0 },
     generation: o.generation || 0,
+    cls: o.cls || null,
   };
   if (condition && GD.CONDITIONS[condition].life) c.lifespan = Math.round(c.lifespan * GD.CONDITIONS[condition].life);
   G.chars[c.id] = c;
@@ -171,6 +172,7 @@ function stat(c, k) {
   const r = GD.RACES[c.race];
   let v = c.base[k] + r.growth[k] * (c.level - 1) * 0.9 + (c.bonus[k] || 0);
   for (const inj of c.injuries || []) v += (GD.INJURIES[inj].mods[k] || 0);
+  if (GD.CLASSES) v += classGrowth(c, k);
   v += (GD.HEIGHTS[c.height || 'average'].mods[k] || 0) + (GD.BUILDS[c.build || 'average'].mods[k] || 0);
   if (c.condition) v += GD.CONDITIONS[c.condition].mods[k] || 0;
   const b = GD.BIRTH[birthKey(c)];
@@ -188,6 +190,7 @@ function maxHp(c) {
   let hp = 24 + stat(c, 'vit') * 6 + c.level * 5;
   if (c.trait === 'hardy') hp *= 1.15;
   if (c.trait === 'frail') hp *= 0.85;
+  if (GD.CLASSES && isAdult(c)) hp *= classOf(c).mods.hp;
   return Math.round(hp);
 }
 function weaponAtk(c) {

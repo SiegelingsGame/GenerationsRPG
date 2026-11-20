@@ -769,13 +769,26 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
   }
   // weapon
   if (o.weapon && !(inj.arm && o.weapon !== 'shield')) {
-    c.strokeStyle = o.weapon === 'staff' ? '#7a5a3a' : '#cfd6dc'; c.lineWidth = 2.2 * s;
-    c.beginPath();
-    c.moveTo(x + 10 * s * wd, by - 6 * s);
-    c.lineTo(x + 18 * s * wd, by - (o.weapon === 'staff' ? 34 : 26) * s);
-    c.stroke();
-    if (o.weapon === 'staff') { c.fillStyle = '#8fd3ff'; c.beginPath(); c.arc(x + 18 * s * wd, by - 35 * s, 3 * s, 0, Math.PI * 2); c.fill(); }
-    if (o.weapon === 'shield') { c.fillStyle = look.house ? G.house.color : '#6a6a6a'; c.beginPath(); c.ellipse(x - 12 * s * wd, by - 10 * s, 5 * s, 8 * s, 0, 0, Math.PI * 2); c.fill(); }
+    const hx0 = x + 10 * s * wd, hy0 = by - 6 * s;
+    const w = o.weapon;
+    if (w === 'bow') {
+      c.strokeStyle = '#7a5a3a'; c.lineWidth = 2 * s;
+      c.beginPath(); c.arc(hx0 + 4 * s, hy0 - 10 * s, 12 * s, -Math.PI * 0.45, Math.PI * 0.45); c.stroke();
+      c.strokeStyle = '#e8e0c8'; c.lineWidth = 0.7 * s;
+      c.beginPath(); c.moveTo(hx0 + 4 * s + Math.cos(-Math.PI * 0.45) * 12 * s, hy0 - 10 * s + Math.sin(-Math.PI * 0.45) * 12 * s); c.lineTo(hx0 + 4 * s + Math.cos(Math.PI * 0.45) * 12 * s, hy0 - 10 * s + Math.sin(Math.PI * 0.45) * 12 * s); c.stroke();
+    } else if (w === 'lute') {
+      c.fillStyle = '#9a6a3a'; c.beginPath(); c.ellipse(hx0 - 2 * s, hy0 - 4 * s, 5 * s, 4 * s, -0.5, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = '#5a3a1a'; c.lineWidth = 1.6 * s; c.beginPath(); c.moveTo(hx0, hy0 - 6 * s); c.lineTo(hx0 + 8 * s, hy0 - 16 * s); c.stroke();
+      c.fillStyle = '#2a1a0a'; c.beginPath(); c.arc(hx0 - 2 * s, hy0 - 4 * s, 1.2 * s, 0, Math.PI * 2); c.fill();
+    } else {
+      const staff = w === 'staff' || w === 'orb';
+      c.strokeStyle = staff ? '#7a5a3a' : '#cfd6dc'; c.lineWidth = (w === 'axe' ? 2.6 : 2.2) * s;
+      c.beginPath(); c.moveTo(hx0, hy0); c.lineTo(x + 18 * s * wd, by - (staff ? 34 : 26) * s); c.stroke();
+      if (w === 'staff') { c.fillStyle = '#fff3a0'; c.beginPath(); c.arc(x + 18 * s * wd, by - 35 * s, 3 * s, 0, Math.PI * 2); c.fill(); c.fillRect(x + 17 * s * wd, by - 41 * s, 2 * s, 5 * s); }
+      if (w === 'orb') { const g = 0.6 + Math.sin(this.t / 200) * 0.3; c.fillStyle = `rgba(180,138,255,${g})`; c.beginPath(); c.arc(x + 18 * s * wd, by - 36 * s, 4.2 * s, 0, Math.PI * 2); c.fill(); }
+      if (w === 'axe') { c.fillStyle = '#b8c0c8'; c.beginPath(); c.moveTo(x + 17 * s * wd, by - 24 * s); c.quadraticCurveTo(x + 26 * s * wd, by - 26 * s, x + 24 * s * wd, by - 17 * s); c.lineTo(x + 16 * s * wd, by - 20 * s); c.closePath(); c.fill(); }
+      if (w === 'shield') { c.fillStyle = look.house ? G.house.color : '#6a6a6a'; c.beginPath(); c.ellipse(x - 12 * s * wd, by - 10 * s, 5 * s, 8 * s, 0, 0, Math.PI * 2); c.fill(); c.strokeStyle = '#cfd6dc'; c.lineWidth = 1 * s; c.stroke(); }
+    }
   }
   // head
   const hx = x + stoop, hy = by - 26 * s;
@@ -920,11 +933,11 @@ Render.drawBattle = function () {
     c.save();
     if (facing) { c.translate(p.x, 0); c.scale(-1, 1); c.translate(-p.x, 0); }
     if (u.shape === 'beast') this.drawBeast(p.x, p.y, u.look, 1.1, o);
-    else if (u.kind === 'char') this.drawFigure(p.x, p.y, u.look, 1.25, { ...o, weapon: u.skill === 'int' || u.skill === 'wil' ? 'staff' : u.skill === 'vit' ? 'shield' : 'sword' });
+    else if (u.kind === 'char') this.drawFigure(p.x, p.y, u.look, 1.25, { ...o, weapon: (GD.CLASSES[u.cls] || {}).weapon || 'sword' });
     else {
       const look = { skin: u.look.skin || (u.shape === 'brute' ? '#7d8f72' : '#d8b08c'), hair: '#2a2a2a', tunic: u.look.color, race: u.shape === 'brute' ? 'orc' : 'human', stage: 'prime' };
       if (u.shape === 'wraith') { c.globalAlpha = 0.75; look.skin = '#c8d8f0'; look.tunic = u.look.color; }
-      this.drawFigure(p.x, p.y + (u.shape === 'wraith' ? -8 + Math.sin(now / 300) * 3 : 0), look, u.shape === 'brute' ? 1.7 : 1.25, { ...o, weapon: u.skill === 'int' ? 'staff' : 'sword' });
+      this.drawFigure(p.x, p.y + (u.shape === 'wraith' ? -8 + Math.sin(now / 300) * 3 : 0), look, u.shape === 'brute' ? 1.7 : 1.25, { ...o, weapon: (u.abilities || []).includes('firebolt') ? 'orb' : 'sword' });
       c.globalAlpha = 1;
     }
     c.restore();
@@ -939,6 +952,19 @@ Render.drawBattle = function () {
       // focus pips
       for (let i = 0; i < 3; i++) { c.fillStyle = i < u.focus ? '#8fd3ff' : 'rgba(255,255,255,0.15)'; c.fillRect(bx + i * 8, byy + 7, 6, 3); }
       if (u.defending) { c.fillStyle = '#8fd3ff'; c.fillText('🛡', bx + bw + 8, byy + 6); }
+      // status markers
+      const tags = [];
+      const S = (k) => Battle.st(u, k);
+      if (S('atkUp')) tags.push(['▲', '#ffd76a']);
+      if (S('bloodlust')) tags.push(['♥', '#ff5c5c']);
+      if (S('guard')) tags.push(['◆', '#8fd3ff']);
+      if (u.st && u.st.shield) tags.push(['◎', '#b48aff']);
+      if (S('defDown')) tags.push(['▼', '#e0904a']);
+      if (S('slow')) tags.push(['❄', '#9fe0ff']);
+      if (S('mark')) tags.push(['✶', '#ff5c5c']);
+      c.font = 'bold 11px Georgia, serif'; c.textAlign = 'left';
+      tags.forEach(([g, col], i) => { c.fillStyle = col; c.fillText(g, bx + 28 + i * 10, byy + 13); });
+      c.textAlign = 'center';
     }
   }
   // fx
