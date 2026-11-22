@@ -871,6 +871,7 @@ function householdCount() { return Object.values(G.chars).filter((c) => c.alive 
 const SAVE_KEY = 'generations-rpg-save-v1';
 function saveGame() {
   Heraldry.ensureAll();
+  WorldArt.ensure();
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); return true; } catch (e) { return false; }
 }
 function loadGame() {

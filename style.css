@@ -434,3 +434,5 @@ body:not(.has-game) #guide-goal { display: none; }
 .sigil-grid button.selected { border: 2px solid var(--gold); background: #3a3122; }
 
 @media (max-width: 600px) { .heraldry-preview canvas { width: 216px; height: 144px; } }
+
+.generated-room { display: block; width: 100%; max-width: 576px; height: auto; image-rendering: pixelated; border: 1px solid var(--accent); border-radius: 6px; margin: 10px auto 16px; }

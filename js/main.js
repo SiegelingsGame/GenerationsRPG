@@ -278,6 +278,7 @@ Game.enterWorld = function (fresh) {
     Log.add('Tip: travel to towns to recruit and court, clear ruins for prestige, and invest at your estate.', 'dim');
   }
   Heraldry.ensureAll();
+  WorldArt.ensure();
   Guide.init();
   UI.refresh();
   saveGame();

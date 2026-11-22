@@ -547,6 +547,7 @@ UI.showTavern = function (idx) {
   const kids = this.townPeople(idx).filter((c) => !isAdult(c));
   const mc = ch(G.mcId);
   const body = h('div', {},
+    WorldArt.room('tavern', WorldArt.seedHere()),
     h('p', { class: 'dim' }, 'Adventurers, wanderers and locals. Click someone to see their lineage, court them or recruit them.'),
     h('div', { class: 'grid' }, people.map((c) => this.miniCard(c, () => this.replaceModalChar(c), [
       h('small', {}, `${hireCost(c)}g`),
@@ -573,6 +574,7 @@ UI.showMarket = function () {
   const maxTier = Math.min(GD.GEAR.length, 2 + G.house.up.armory + Math.floor(G.house.tier / 2));
   const party = G.party.map(ch);
   const rows = [];
+  rows.push(WorldArt.room('market', WorldArt.seedHere()));
   rows.push(h('div', { class: 'row' }, act('Buy Potion', () => { Game.buyPotion(); this.closeModal(); this.showMarket(); }, { sub: `25g · you have ${G.house.potions}`, disabled: G.house.gold < 25 })));
   for (const c of party) {
     const cells = [h('b', {}, c.name)];
@@ -607,7 +609,7 @@ UI.showEstate = function () {
   Guide.mark('estate');
   const hs = G.house;
   const next = GD.ESTATE[hs.tier + 1];
-  const rows = [];
+  const rows = [WorldArt.room('estate', WorldArt.seedHere())];
   rows.push(h('p', {}, 'Current seat: ', h('b', {}, GD.ESTATE[hs.tier].name), ` · ${hs.gold}g · ${Math.round(hs.prestige)} prestige`));
   if (next) {
     rows.push(act(`Build ${next.name}`, () => { Game.upgradeEstate(); this.closeModal(); this.showEstate(); },
@@ -913,6 +915,7 @@ UI.showMenu = function () {
     act('House flag & sigil', () => { this.closeModal(); this.modal([Heraldry.canvas(G.house.heraldry, 288), act('Edit heraldry', () => { this.closeModal(); this.modal([Heraldry.editor(G.house.heraldry, flag => { G.house.heraldry=flag; G.house.color=Heraldry.color(flag.primary); saveGame(); UI.refresh(); })], { title: 'House heraldry', wide: true }); })], { title: `House ${G.house.name}` }); }),
     act('Save Game', () => { UI.toast(saveGame() ? 'Game saved.' : 'Could not save (storage unavailable).'); this.closeModal(); }),
     act('Interactive starter guide', () => { this.closeModal(); Guide.show(); }),
+    act('Art credits', () => { this.closeModal(); this.showArtCredits(); }),
     act('Concept & How to Play', () => { this.closeModal(); this.showHelp(); }),
     act('Abandon & Start Over', () => {
       this.closeModal();
@@ -938,4 +941,14 @@ UI.showHelp = function () {
       <li><b>Betrayal:</b> resentful companions and their children can become <b>Rivals</b> who hunt your line. Keep bonds and loyalty high.</li>
       <li><b>Deeds</b> in towns, cleared ruins and slain rivals raise prosperity, and higher prosperity makes good eras more likely.</li>
     </ul>` }), { title: 'How to Play', wide: true });
+};
+
+UI.showArtCredits = function () {
+  this.modal([
+    h('p', {}, 'Pixel Burst VFX: Elemental Spells — dotplays. Used in combat projectiles.'),
+    h('p', {}, 'Super Pixel Effects Gigapack — Will Tice / unTied Games. Used in combat impacts, healing and defensive effects.'),
+    h('p', {}, 'Modern Interiors Free — LimeZu. Used in generated rooms and settlement details. The supplied free pack is licensed for noncommercial projects only.'),
+    h('p', {}, 'House sigils: Angais / Pixel Art Atlas (CC0 dedication).'),
+    h('a', { href: 'assets/packs/README.md', target: '_blank', rel: 'noopener' }, 'Asset sources and license notes'),
+  ], { title: 'Art credits' });
 };

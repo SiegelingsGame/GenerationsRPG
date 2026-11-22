@@ -519,6 +519,7 @@ Render.drawFeature = function (t) {
       for (let i = 0; i < 4; i++) { c.beginPath(); c.moveTo(p.x - 14 + i * 7, p.y + 6); c.lineTo(p.x - 15 + i * 7, p.y - 6); c.stroke(); }
     }
   }
+  WorldArt.drawSite(this, t);
   if (t.feature === 'town') this.drawTown(p, G.world.towns[t.townIdx]);
   if (t.feature === 'estate') this.drawEstate(p, G.house.tier);
   if (t.feature === 'ruins') this.drawRuins(p, t.cleared);
@@ -974,6 +975,7 @@ Render.drawBattle = function () {
       c.textAlign = 'center';
     }
   }
+  PackArt.drawBattle(this);
   // fx
   Battle.fx = Battle.fx.filter((f) => now - f.t0 < 1100);
   for (const f of Battle.fx) {

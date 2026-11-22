@@ -114,7 +114,7 @@ function abilitiesOf(c) {
 
 // ---------------------------------------------------------------- abilities in battle
 Battle.st = function (u, k) { return (u.st && u.st[k] && u.st[k].t > 0) ? u.st[k] : null; };
-Battle.give = function (u, k, turns, v = 0) { u.st = u.st || {}; u.st[k] = { t: turns, v }; };
+Battle.give = function (u, k, turns, v = 0) { u.st = u.st || {}; u.st[k] = { t: turns, v }; if (['shield','guard','riposte'].includes(k)) PackArt.emit('shield',u); else if (['atkUp','bloodlust'].includes(k)) PackArt.emit('buff',u); };
 Battle.tickStatus = function (u) {
   if (!u.st) return;
   for (const k of Object.keys(u.st)) { u.st[k].t--; if (u.st[k].t <= 0 && k !== 'shield') delete u.st[k]; }
@@ -154,6 +154,7 @@ Battle.magic = function (u, t, mult) {
   return { dmg: Math.max(1, Math.round(dmg)), crit: false };
 };
 Battle.healUnit = function (u, t, amt, label) {
+  PackArt.emit('heal',t);
   amt = Math.round(amt);
   t.hp = Math.min(t.maxHp, t.hp + amt);
   this.fx.push({ uid: t.uid, text: '+' + amt, color: '#6fe08a', t0: performance.now() });
@@ -171,6 +172,7 @@ Battle.useAbility = function (u, id, t) {
   const pickAlly = () => (t && t.alive && t.side === u.side ? t : allies.slice().sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0]);
   const fx = (target, col) => this.fx.push({ uid: target.uid, burst: col, t0: performance.now() });
   const label = (target, text, col = '#8fd3ff') => this.fx.push({ uid: target.uid, text, color: col, t0: performance.now() });
+  u.vfxSkill = id;
   u.focus -= A.cost;
   u.anim = { type: A.anim, to: t ? t.uid : null, t0: performance.now() };
   let msg = '';
@@ -208,6 +210,7 @@ Battle.useAbility = function (u, id, t) {
     case 'bulwark': { u.defending = true; u.taunt = 2; this.give(u, 'guard', 2); label(u, 'Bulwark'); msg = `${u.name} raises a Bulwark and draws the enemy's attacks.`; break; }
     default: msg = `${u.name} hesitates.`;
   }
+  u.vfxSkill = null;
   this.say(msg);
 };
 // how a unit's plain attack works (sorcerers throw arcane bolts)

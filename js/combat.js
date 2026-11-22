@@ -63,6 +63,7 @@ function unitPos(u) {
 }
 
 Battle.start = function (opts) {
+  PackArt.effects = [];
   this.active = true; this.over = false; this.round = 0; this.fx = []; this.log = [];
   this.kind = opts.kind || 'wild';
   this.title = opts.title || 'Battle';
@@ -128,6 +129,7 @@ Battle.ai = function (u) {
 Battle.find = function (uid) { return this.units.find((u) => u.uid === uid); };
 
 Battle.damage = function (src, t, dmg, crit, label) {
+  PackArt.damage(src, t, crit);
   // an arcane shield soaks damage first
   const sh = t.st && t.st.shield;
   if (sh && sh.v > 0) {
@@ -158,6 +160,7 @@ Battle.act = function (action, targetUid, skillKey) {
     u.anim = { type: u.cls === 'sorcerer' ? 'cast' : 'lunge', to: t.uid, t0: performance.now() };
     this.basicAttack(u, t);
   } else if (action === 'defend') {
+    PackArt.emit('shield', u);
     u.defending = true; u.focus = Math.min(3, u.focus + 1);
     this.fx.push({ uid: u.uid, text: 'Guard', color: '#8fd3ff', t0: performance.now() });
     this.say(`${u.name} braces.`);
@@ -168,6 +171,7 @@ Battle.act = function (action, targetUid, skillKey) {
     const amt = Math.round(t.maxHp * 0.45);
     t.hp = Math.min(t.maxHp, t.hp + amt);
     this.fx.push({ uid: t.uid, text: '+' + amt, color: '#6fe08a', t0: performance.now() });
+    PackArt.emit('heal',t);
     this.say(`${u.name} uses a potion on ${t.name}.`);
   } else if (action === 'skill') {
     const id = skillKey || (u.abilities || [])[0];

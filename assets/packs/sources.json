@@ -1,0 +1,171 @@
+{
+  "table": {
+    "pack": "1-Modern_Interiors_Free_v2.2.zip",
+    "path": "Modern tiles_Free/Interiors_free/16x16/Interiors_free_16x16.png",
+    "crop": [
+      112,
+      208,
+      160,
+      240
+    ],
+    "index": 0
+  },
+  "chair": {
+    "pack": "1-Modern_Interiors_Free_v2.2.zip",
+    "path": "Modern tiles_Free/Interiors_free/16x16/Interiors_free_16x16.png",
+    "crop": [
+      96,
+      192,
+      112,
+      224
+    ],
+    "index": 1
+  },
+  "bookcase": {
+    "pack": "1-Modern_Interiors_Free_v2.2.zip",
+    "path": "Modern tiles_Free/Interiors_free/16x16/Interiors_free_16x16.png",
+    "crop": [
+      160,
+      1088,
+      192,
+      1120
+    ],
+    "index": 2
+  },
+  "rug": {
+    "pack": "1-Modern_Interiors_Free_v2.2.zip",
+    "path": "Modern tiles_Free/Interiors_free/16x16/Interiors_free_16x16.png",
+    "crop": [
+      112,
+      240,
+      176,
+      288
+    ],
+    "index": 3
+  },
+  "plant": {
+    "pack": "1-Modern_Interiors_Free_v2.2.zip",
+    "path": "Modern tiles_Free/Interiors_free/16x16/Interiors_free_16x16.png",
+    "crop": [
+      160,
+      704,
+      192,
+      752
+    ],
+    "index": 4
+  },
+  "supplies": {
+    "pack": "1-Modern_Interiors_Free_v2.2.zip",
+    "path": "Modern tiles_Free/Interiors_free/16x16/Interiors_free_16x16.png",
+    "crop": [
+      80,
+      960,
+      128,
+      1008
+    ],
+    "index": 5
+  },
+  "cabinet": {
+    "pack": "1-Modern_Interiors_Free_v2.2.zip",
+    "path": "Modern tiles_Free/Interiors_free/16x16/Interiors_free_16x16.png",
+    "crop": [
+      160,
+      768,
+      192,
+      816
+    ],
+    "index": 6
+  },
+  "pots": {
+    "pack": "1-Modern_Interiors_Free_v2.2.zip",
+    "path": "Modern tiles_Free/Interiors_free/16x16/Interiors_free_16x16.png",
+    "crop": [
+      0,
+      1056,
+      48,
+      1088
+    ],
+    "index": 7
+  },
+  "wood-floor": {
+    "pack": "1-Modern_Interiors_Free_v2.2.zip",
+    "crop": [
+      176,
+      208,
+      192,
+      224
+    ]
+  },
+  "hit": {
+    "pack": "3-Super-Pixel-Effects-Gigapack-Free-Version-v3.3.0.zip",
+    "path": "Super Pixel Effects Gigapack (Free Version)/PNG/Impacts/directional_impact_002/directional_impact_002_small_white"
+  },
+  "critical": {
+    "pack": "3-Super-Pixel-Effects-Gigapack-Free-Version-v3.3.0.zip",
+    "path": "Super Pixel Effects Gigapack (Free Version)/PNG/Impacts/symmetrical_impact_001/symmetrical_impact_001_small_yellow"
+  },
+  "explosion": {
+    "pack": "3-Super-Pixel-Effects-Gigapack-Free-Version-v3.3.0.zip",
+    "path": "Super Pixel Effects Gigapack (Free Version)/PNG/Explosions/epic_explosion_001/epic_explosion_001_small_orange"
+  },
+  "heal": {
+    "pack": "3-Super-Pixel-Effects-Gigapack-Free-Version-v3.3.0.zip",
+    "path": "Super Pixel Effects Gigapack (Free Version)/PNG/Fantasy Spells/spell_heal_001/spell_heal_001_small_red"
+  },
+  "shield": {
+    "pack": "3-Super-Pixel-Effects-Gigapack-Free-Version-v3.3.0.zip",
+    "path": "Super Pixel Effects Gigapack (Free Version)/PNG/Fantasy Spells/spell_defense_up_001/spell_defense_up_001_small_blue"
+  },
+  "buff": {
+    "pack": "3-Super-Pixel-Effects-Gigapack-Free-Version-v3.3.0.zip",
+    "path": "Super Pixel Effects Gigapack (Free Version)/PNG/Fantasy Spells/spell_attack_up_001/spell_attack_up_001_small_red"
+  },
+  "music": {
+    "pack": "3-Super-Pixel-Effects-Gigapack-Free-Version-v3.3.0.zip",
+    "path": "Super Pixel Effects Gigapack (Free Version)/PNG/Magic Bursts/directional_music_burst_001/directional_music_burst_001_small_red"
+  },
+  "sparkle": {
+    "pack": "3-Super-Pixel-Effects-Gigapack-Free-Version-v3.3.0.zip",
+    "path": "Super Pixel Effects Gigapack (Free Version)/PNG/Magic Bursts/round_sparkle_burst_001/round_sparkle_burst_001_small_blue"
+  },
+  "lightning": {
+    "pack": "3-Super-Pixel-Effects-Gigapack-Free-Version-v3.3.0.zip",
+    "path": "Super Pixel Effects Gigapack (Free Version)/PNG/Lightning/lightning_strike_001/lightning_strike_001_small_violet"
+  },
+  "flame": {
+    "pack": "3-Super-Pixel-Effects-Gigapack-Free-Version-v3.3.0.zip",
+    "path": "Super Pixel Effects Gigapack (Free Version)/PNG/Fire/fire_looping_003A/fire_looping_003A_small_orange"
+  },
+  "fire_proj": {
+    "pack": "2-pixel-burst-elemental-spells-free.zip",
+    "path": "sheets/1x/fire_proj.png"
+  },
+  "ice_proj": {
+    "pack": "2-pixel-burst-elemental-spells-free.zip",
+    "path": "sheets/1x/ice_proj.png"
+  },
+  "volt_proj": {
+    "pack": "2-pixel-burst-elemental-spells-free.zip",
+    "path": "sheets/1x/volt_proj.png"
+  },
+  "earth_proj": {
+    "pack": "2-pixel-burst-elemental-spells-free.zip",
+    "path": "sheets/1x/earth_proj.png"
+  },
+  "wind_proj": {
+    "pack": "2-pixel-burst-elemental-spells-free.zip",
+    "path": "sheets/1x/wind_proj.png"
+  },
+  "water_proj": {
+    "pack": "2-pixel-burst-elemental-spells-free.zip",
+    "path": "sheets/1x/water_proj.png"
+  },
+  "dark_proj": {
+    "pack": "2-pixel-burst-elemental-spells-free.zip",
+    "path": "sheets/1x/dark_proj.png"
+  },
+  "holy_proj": {
+    "pack": "2-pixel-burst-elemental-spells-free.zip",
+    "path": "sheets/1x/holy_proj.png"
+  }
+}
