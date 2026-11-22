@@ -687,21 +687,24 @@ Render.drawParty = function (pp) {
 function figLook(c, overlay) {
   const inj = {};
   for (const k of c.injuries || []) if (GD.INJURIES[k].look) inj[GD.INJURIES[k].look] = true;
-  Equip.ensureChar(c);
-  const eq = overlay || c.equip || {};
+  const full = Equip.isChar(c);
+  if (full) Equip.ensureChar(c);
+  const eq = overlay || (full && c.equip) || {};
   const body = eq.body;
   const head = eq.head;
   const feet = eq.feet;
   const hand = eq.hand;
   const off = eq.offhand;
-  const armorTier = body ? body.tier : ((c.gear && c.gear.armor) || 0);
+  const armorTier = body ? body.tier : (full && c.gear && c.gear.armor) || 0;
+  const clsKey = full ? classFor(c) : (c.cls && GD.CLASSES[c.cls] ? c.cls : null);
+  const stage = (c.born != null && c.lifespan != null) ? stageKey(c) : (c.stage || 'prime');
   return {
-    skin: GD.RACES[c.race].skin, hair: c.hair, tunic: c.tunic, stage: stageKey(c), race: c.race, evil: c.evil,
-    house: G && G.house && c.house === G.house.name, inj, armor: armorTier,
+    skin: (GD.RACES[c.race] || GD.RACES.human).skin, hair: c.hair, tunic: c.tunic, stage, race: c.race || 'human', evil: c.evil,
+    house: full && G && G.house && c.house === G.house.name, inj, armor: armorTier,
     bodyStyle: body ? (body.kind === 'robe' ? 'robe' : body.kind === 'leather' ? 'leather' : 'armor') : null,
     headStyle: head ? head.kind : null, headTier: head ? head.tier : 0,
     feetStyle: feet ? feet.kind : null, feetTier: feet ? feet.tier : 0,
-    weapon: hand && hand.weapon ? hand.weapon : (off && off.weapon === 'shield' ? 'shield' : ((GD.CLASSES[classFor(c)] || {}).weapon || null)),
+    weapon: hand && hand.weapon ? hand.weapon : (off && off.weapon === 'shield' ? 'shield' : ((clsKey && GD.CLASSES[clsKey]) || {}).weapon || null),
     hasShield: !!(off && off.weapon === 'shield'),
     gender: c.gender || 'man', hairStyle: c.hairStyle || 'short', beard: !!c.beard,
     hScale: GD.HEIGHTS[c.height || 'average'].scale, wScale: GD.BUILDS[c.build || 'average'].width,

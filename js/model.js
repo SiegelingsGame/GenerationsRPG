@@ -194,19 +194,23 @@ function maxHp(c) {
   return Math.round(hp);
 }
 function weaponAtk(c) {
+  if (!Equip.isChar(c)) return 0;
   Equip.ensureChar(c);
+  // Zero is a valid equipment total (e.g. a Cloth Robe or Glass Orb); do not fall back to GD.GEAR.
   let a = Equip.bonus(c, 'atk');
-  if (!a && c.gear.weapon) a = GD.GEAR[c.gear.weapon - 1].atk;
   if (G.mcId === c.id && G.house.heirloom) a += G.house.heirloom.power;
   return a;
 }
 function armorDef(c) {
+  if (!Equip.isChar(c)) return 0;
   Equip.ensureChar(c);
-  let d = Equip.bonus(c, 'def');
-  if (!d && c.gear.armor) d = GD.GEAR[c.gear.armor - 1].def;
-  return d;
+  return Equip.bonus(c, 'def');
 }
-function gearMag(c) { Equip.ensureChar(c); return Equip.bonus(c, 'mag'); }
+function gearMag(c) {
+  if (!Equip.isChar(c)) return 0;
+  Equip.ensureChar(c);
+  return Equip.bonus(c, 'mag');
+}
 function power(c) {
   // rough combat rating for UI and matchmaking
   return Math.round(STATS.reduce((s, k) => s + stat(c, k), 0) + c.level * 2 + weaponAtk(c) + armorDef(c) + gearMag(c) * 0.5);

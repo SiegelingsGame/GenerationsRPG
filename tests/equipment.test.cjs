@@ -58,6 +58,31 @@ test('class kits drive equipment; try-on and equip update figure and combat bonu
     assert.equal(state.headTier, 3);
     assert.ok(state.defUp);
 
+    // Zero equipment bonuses must not fall back to legacy GD.GEAR tiers.
+    const zero = await p.evaluate(() => {
+      const c = makeChar({ cls: 'sorcerer', race: 'human', birth: 'lowborn', house: G.house.name, status: 'party', level: 2 });
+      Equip.ensureChar(c);
+      c.equip.body = Equip.makeItem('robe', 1); // def 0
+      c.equip.hand = Equip.makeItem('orb', 1); // atk 0
+      Equip.syncLegacy(c);
+      const before = { def: armorDef(c), atk: weaponAtk(c), armorTier: c.gear.armor };
+      c.equip.feet = Equip.makeItem('shoes', 3); // def 1
+      return { before, afterDef: armorDef(c) };
+    });
+    assert.equal(zero.before.def, 0);
+    assert.equal(zero.before.atk, 0);
+    assert.equal(zero.before.armorTier, 1);
+    assert.equal(zero.afterDef, 1);
+
+    // Creation-preview stubs must not crash through figLook / Equip.ensureChar.
+    const preview = await p.evaluate(() => {
+      try {
+        const cv = portrait({ race: 'human', gender: 'man', hairStyle: 'crop', beard: false, hair: '#5a3a22', tunic: '#3d5a80', alive: true, born: G.day - 20 * DAYS_PER_YEAR, lifespan: 999, height: 'average', build: 'average' }, 40);
+        return { ok: !!cv && cv.tagName === 'CANVAS' };
+      } catch (e) { return { ok: false, err: String(e) }; }
+    });
+    assert.equal(preview.ok, true, preview.err || 'preview portrait');
+
     await p.evaluate(() => UI.showInventory(ch(G.mcId)));
     await p.locator('.inv-screen').waitFor();
     await p.screenshot({ path: '/tmp/inventory-tryon.png' });

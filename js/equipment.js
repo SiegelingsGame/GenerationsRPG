@@ -107,10 +107,16 @@ Equip.makeItem = function (kind, tier, o = {}) {
   };
 };
 
-Equip.kitFor = function (c) { return GD.CLASS_KIT[classFor(c)] || GD.CLASS_KIT.warrior; };
+// Creation-preview portraits are lightweight stubs without parents/base/gear.
+Equip.isChar = function (c) { return !!(c && c.base && Array.isArray(c.parents)); };
+
+Equip.kitFor = function (c) {
+  if (!this.isChar(c)) return GD.CLASS_KIT[(c && c.cls) || 'warrior'] || GD.CLASS_KIT.warrior;
+  return GD.CLASS_KIT[classFor(c)] || GD.CLASS_KIT.warrior;
+};
 
 Equip.canWear = function (c, item) {
-  if (!item) return false;
+  if (!item || !this.isChar(c)) return false;
   const kit = this.kitFor(c);
   const allowed = kit[item.slot];
   if (item.slot === 'neck' || item.slot === 'ring') return true;
@@ -119,7 +125,7 @@ Equip.canWear = function (c, item) {
 };
 
 Equip.ensureChar = function (c) {
-  if (!c) return;
+  if (!this.isChar(c)) return;
   if (!c.equip) c.equip = this.emptyEquip();
   for (const slot of Object.keys(GD.EQ_SLOTS)) if (!(slot in c.equip)) c.equip[slot] = null;
   // Migrate legacy gear.weapon / gear.armor into equipped items once.
@@ -154,6 +160,7 @@ Equip.syncLegacy = function (c) {
 
 Equip.worn = function (c) {
   this.ensureChar(c);
+  if (!c || !c.equip) return [];
   return Object.values(c.equip).filter(Boolean);
 };
 
