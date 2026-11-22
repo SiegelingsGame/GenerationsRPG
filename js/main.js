@@ -31,13 +31,13 @@ Game.create = function () {
   const pick = (id, label, key, table, extra) => h('label', {}, label, ' ',
     h('select', { id, onchange: (e) => { sel[key] = e.target.value; if (extra) extra(); } },
       Object.entries(table).map(([k, v]) => h('option', { value: k, selected: sel[key] === k }, v.name))));
+  let step = 0, nameEdited = false;
+  const titles = ['Sex & preferences', 'Race', 'Class', 'Birth & background', 'Name your House'];
+  const opts = { title: 'Found your House', wide: true, locked: true };
+  const go = (n) => { step = n; UI.replaceModal(draw(), opts); };
   const draw = () => {
-    const body = h('div', { class: 'create' },
-      h('div', { class: 'row' },
-        h('label', {}, 'Your name ', h('input', { value: sel.name, oninput: (e) => { sel.name = e.target.value; } })),
-        h('label', {}, 'House ', h('input', { value: sel.house, oninput: (e) => { sel.house = e.target.value; } })),
-        h('div', { class: 'colors' }, GD.HOUSE_COLORS.map((c) => h('span', { class: 'swatch' + (sel.color === c ? ' on' : ''), style: `background:${c}`, onclick: () => { sel.color = c; UI.replaceModal(draw(), opts); } })))),
-      h('h4', {}, 'Who you are'),
+    const sections = [
+      () => [
       h('div', { class: 'choices two' }, Object.entries(GD.GENDERS).map(([k, g]) => h('div', { class: 'choice' + (sel.gender === k ? ' on' : ''), onclick: () => { sel.gender = k; UI.replaceModal(draw(), opts); } },
         portrait({ race: sel.race, gender: k, hairStyle: k === 'man' ? 'crop' : 'long', beard: false, hair: '#5a3a22', tunic: '#3d5a80', alive: true, born: G.day - (GD.RACES[sel.race].maturity + 4) * DAYS_PER_YEAR, lifespan: 999, height: sel.height, build: sel.build }, 60),
         h('b', {}, `${g.sym} ${g.name}`)))),
@@ -47,22 +47,45 @@ Game.create = function () {
         pick('c-height', 'Height', 'height', GD.HEIGHTS, () => UI.replaceModal(draw(), opts)),
         pick('c-build', 'Build', 'build', GD.BUILDS, () => UI.replaceModal(draw(), opts))),
       h('p', { class: 'dim small' }, `${GD.ORIENTATIONS[sel.orientation].desc} ${GD.PREFERENCES[sel.pref].desc || ''} Your partner choices follow from this. Only a man and a woman can have children together; anyone can adopt.`),
-      h('h4', {}, 'Class'),
+      ],
+      () => [
+      h('div', { class: 'choices' }, Object.entries(GD.RACES).map(([k, r]) => h('div', { class: 'choice' + (sel.race === k ? ' on' : ''), onclick: () => { sel.race = k; if (!nameEdited) sel.name = genName(k); UI.replaceModal(draw(), opts); } },
+        racePortrait(k), h('b', {}, r.name), h('small', {}, `Comes of age at ${r.maturity} · lives ${r.life[0]}–${r.life[1]}`), h('small', { class: 'dim' }, r.desc)))),
+      ],
+      () => [
       h('div', { class: 'choices' }, Object.entries(GD.CLASSES).map(([k, cl]) => h('div', { class: 'choice' + (sel.cls === k ? ' on' : ''), onclick: () => { sel.cls = k; UI.replaceModal(draw(), opts); } },
         h('b', {}, `${cl.icon} ${cl.name}`), h('small', { class: 'dim' }, cl.desc), h('small', { class: 'good' }, cl.passive),
         h('small', {}, cl.skills.slice(0, 2).map((id) => GD.ABILITIES[id].name).join(' · ') + ` · ${GD.ABILITIES[cl.skills[2]].name} at level 5`)))),
-      h('h4', {}, 'Race'),
-      h('div', { class: 'choices' }, Object.entries(GD.RACES).map(([k, r]) => h('div', { class: 'choice' + (sel.race === k ? ' on' : ''), onclick: () => { sel.race = k; sel.name = genName(k); UI.replaceModal(draw(), opts); } },
-        racePortrait(k), h('b', {}, r.name), h('small', {}, `Comes of age at ${r.maturity} · lives ${r.life[0]}–${r.life[1]}`), h('small', { class: 'dim' }, r.desc)))),
-      h('h4', {}, 'Birth'),
+      ],
+      () => [
       h('div', { class: 'choices' }, Object.entries(GD.BIRTH).map(([k, b]) => h('div', { class: 'choice' + (sel.birth === k ? ' on' : ''), onclick: () => { sel.birth = k; UI.replaceModal(draw(), opts); } },
         h('b', {}, b.name), h('small', { class: 'dim' }, b.desc),
         h('small', {}, k === 'highborn' ? 'Start: +10 prestige, +100 gold' : k === 'lowborn' ? 'Start: +1 potion' : k === 'bastard' ? 'Start: −3 prestige' : 'Start: no family, +2 formative')))),
-      act('Next: choose your partner →', () => { if (!sel.name.trim() || !sel.house.trim()) return UI.toast('Name yourself and your House.'); this.found(sel); }, { cls: 'hl' }),
+      ],
+      () => [
+      h('div', { class: 'row' },
+        h('label', {}, 'Your name ', h('input', { value: sel.name, maxlength: 20, oninput: (e) => { nameEdited = true; sel.name = e.target.value; } })),
+        h('label', {}, 'House ', h('input', { value: sel.house, maxlength: 20, oninput: (e) => { sel.house = e.target.value; } })),
+        h('div', { class: 'colors' }, GD.HOUSE_COLORS.map((c) => h('span', { class: 'swatch' + (sel.color === c ? ' on' : ''), style: `background:${c}`, onclick: () => { sel.color = c; UI.replaceModal(draw(), opts); } })))),
+      ],
+    ];
+    return h('div', { class: 'create' },
+      h('p', { class: 'dim small', role: 'status' }, `Step ${step + 1} of 7 · ${titles[step]}`),
+      h('nav', { class: 'creation-steps', 'aria-label': 'House creation progress' },
+        titles.map((title, i) => h('button', { type: 'button', disabled: i > step,
+          'aria-current': i === step ? 'step' : null, onclick: () => go(i) }, `${i + 1}. ${title}`))),
+      h('h2', {}, titles[step]),
+      sections[step](),
+      h('div', { class: 'row creation-nav' },
+        step ? act('← Back', () => go(step - 1)) : act('Back to title', () => { UI.closeAll(); this.title(); }),
+        act(step === 4 ? 'Next: choose your partner →' : `Next: ${titles[step + 1]} →`, () => {
+          if (step === 4) {
+            if (!sel.name.trim() || !sel.house.trim()) return UI.toast('Name yourself and your House.');
+            this.found(sel);
+          } else go(step + 1);
+        }, { cls: 'hl' })),
     );
-    return body;
   };
-  const opts = { title: 'Found your House', wide: true, locked: true };
   UI.modal(draw(), opts);
 };
 
@@ -95,6 +118,31 @@ Game.found = function (sel) {
   G.house.reigns = [{ id: mc.id, from: year(), to: null, gen: 1 }];
   G.house.heirloom = makeHeirloom();
   this.matchmaker(mc, { opening: true });
+};
+
+// The final page reviews the actual founder and chosen partner before play begins.
+Game.creationSummary = function () {
+  const mc = ch(G.mcId), partner = spouseOf(mc);
+  const detail = (label, value) => h('div', {}, h('dt', {}, label), h('dd', {}, value));
+  UI.modal(h('div', { class: 'create house-summary' },
+    h('p', { class: 'dim small' }, 'Step 7 of 7 · Review your House'),
+    h('h2', {}, `House ${G.house.name}`),
+    h('div', { class: 'row' }, portrait(mc, 100), partner ? portrait(partner, 100) : null),
+    h('dl', {},
+      detail('Founder', mc.name),
+      detail('Sex & preferences', `${GD.GENDERS[mc.gender].name} · ${GD.ORIENTATIONS[mc.orientation].name} · ${GD.PREFERENCES[mc.pref].name}`),
+      detail('Race', GD.RACES[mc.race].name), detail('Class', GD.CLASSES[mc.cls].name),
+      detail('Appearance', `${GD.HEIGHTS[mc.height].name} · ${GD.BUILDS[mc.build].name}`),
+      detail('Background', mc.orphaned ? 'Orphan' : GD.BIRTH[birthKey(mc)].name),
+      detail('Partner', partner ? `${partner.name} · ${GD.RACES[partner.race].name} · ${GD.CLASSES[partner.cls]?.name || 'Adventurer'}` : 'None'),
+      detail('Starting resources', `${Math.round(G.house.gold)} gold · ${Math.round(G.house.prestige)} prestige · ${G.house.potions} potions`),
+      detail('Estate', GD.ESTATE[G.house.tier].name),
+      detail('Heirloom', G.house.heirloom.name)),
+    h('p', {}, 'Travel, earn prestige and raise an heir. Your family will carry the House into the next generation.'),
+    h('div', { class: 'row creation-nav' },
+      act('Create a different House', () => { UI.closeAll(); this.create(); }),
+      act('Start the game', () => { UI.closeAll(); this.enterWorld(true); }, { cls: 'hl' }))),
+    { title: 'Your House', wide: true, locked: true });
 };
 
 // Find a spouse for someone of the House (the head, or one of their kin).
@@ -141,7 +189,7 @@ Game.matchmaker = function (who, opts = {}) {
       } else if (!self) addBond(who, mc, 8);
       if (!opening) advanceDays(15);
     }
-    if (opening) this.enterWorld(true);
+    if (opening) this.creationSummary();
     else this.after();
   };
   const note = (c) => {
@@ -157,6 +205,7 @@ Game.matchmaker = function (who, opts = {}) {
       ? `A matchmaker presents three suitors. With ${Math.round(G.house.prestige)} prestige and a ${GD.ESTATE[G.house.tier].name}, you can attract tier ${tier} matches.`
       : `A match for ${who.name} (${GD.GENDERS[who.gender].name}, ${GD.ORIENTATIONS[who.orientation].name}${who.pref !== 'none' ? ', ' + GD.PREFERENCES[who.pref].name.toLowerCase() : ''}).`;
   const body = h('div', {},
+    opening ? h('p', { class: 'dim small' }, 'Step 6 of 7 · Choose your partner') : null,
     h('p', { class: 'dim' }, intro),
     h('div', { class: 'choices partners' }, cands.map((c) => h('div', { class: 'choice' },
       portrait(c, 110),
