@@ -44,7 +44,8 @@ Game.create = function () {
     h('select', { id, onchange: (e) => { sel[key] = e.target.value; if (extra) extra(); } },
       Object.entries(table).map(([k, v]) => h('option', { value: k, selected: sel[key] === k }, v.name))));
   let step = 0, nameEdited = false;
-  const titles = ['Sex & preferences', 'Race', 'Class', 'Birth & background', 'Name your House'];
+  const titles = ['Sex & preferences', 'Race', 'Class', 'Birth & background', 'Name your House', 'Flag & sigil'];
+  sel.heraldry = Heraldry.random();
   const opts = { title: 'Found your House', wide: true, locked: true };
   const go = (n) => { step = n; UI.replaceModal(draw(), opts); };
   const draw = () => {
@@ -77,12 +78,12 @@ Game.create = function () {
       () => [
       h('div', { class: 'row' },
         h('label', {}, 'Your name ', h('input', { value: sel.name, maxlength: 20, oninput: (e) => { nameEdited = true; sel.name = e.target.value; } })),
-        h('label', {}, 'House ', h('input', { value: sel.house, maxlength: 20, oninput: (e) => { sel.house = e.target.value; } })),
-        h('div', { class: 'colors' }, GD.HOUSE_COLORS.map((c) => h('span', { class: 'swatch' + (sel.color === c ? ' on' : ''), style: `background:${c}`, onclick: () => { sel.color = c; UI.replaceModal(draw(), opts); } })))),
+        h('label', {}, 'House ', h('input', { value: sel.house, maxlength: 20, oninput: (e) => { sel.house = e.target.value; } }))),
       ],
+      () => [Heraldry.editor(sel.heraldry, flag => { sel.heraldry=flag; sel.color=Heraldry.color(flag.primary); })],
     ];
     return h('div', { class: 'create' },
-      h('p', { class: 'dim small', role: 'status' }, `Step ${step + 1} of 7 · ${titles[step]}`),
+      h('p', { class: 'dim small', role: 'status' }, `Step ${step + 1} of 8 · ${titles[step]}`),
       h('nav', { class: 'creation-steps', 'aria-label': 'House creation progress' },
         titles.map((title, i) => h('button', { type: 'button', disabled: i > step,
           'aria-current': i === step ? 'step' : null, onclick: () => go(i) }, `${i + 1}. ${title}`))),
@@ -90,8 +91,9 @@ Game.create = function () {
       sections[step](),
       h('div', { class: 'row creation-nav' },
         step ? act('← Back', () => go(step - 1)) : act('Back to title', () => { UI.closeAll(); this.title(); }),
-        act(step === 4 ? 'Next: choose your partner →' : `Next: ${titles[step + 1]} →`, () => {
-          if (step === 4) {
+        act(step === 5 ? 'Next: choose your partner →' : `Next: ${titles[step + 1]} →`, () => {
+          if (step === 4 && (!sel.name.trim() || !sel.house.trim())) return UI.toast('Name yourself and your House.');
+          if (step === 5) {
             if (!sel.name.trim() || !sel.house.trim()) return UI.toast('Name yourself and your House.');
             this.found(sel);
           } else go(step + 1);
@@ -108,7 +110,9 @@ function racePortrait(race) {
 Game.found = function (sel, random = false) {
   UI.closeAll();
   G.house.name = sel.house.trim().slice(0, 20);
-  G.house.color = sel.color;
+  G.house.heraldry = sel.heraldry || Heraldry.random();
+  G.house.color = Heraldry.color(G.house.heraldry.primary);
+  Heraldry.ensureAll();
   const r = GD.RACES[sel.race];
   const mc = makeChar({
     name: sel.name.trim().slice(0, 20), race: sel.race, birth: sel.birth === 'orphan' ? 'lowborn' : sel.birth,
@@ -133,15 +137,17 @@ Game.found = function (sel, random = false) {
 };
 
 // The final page reviews the actual founder and chosen partner before play begins.
-Game.creationSummary = function (random = false) {
+Game.creationSummary = function (random = false, draftName) {
   const mc = ch(G.mcId), partner = spouseOf(mc);
-  let houseName = G.house.name;
+  let houseName = draftName ?? G.house.name;
   const detail = (label, value) => h('div', {}, h('dt', {}, label), h('dd', {}, value));
   UI.modal(h('div', { class: 'create house-summary' },
-    h('p', { class: 'dim small' }, random ? 'Random Lineage · Ready to play' : 'Step 7 of 7 · Review your House'),
+    h('p', { class: 'dim small' }, random ? 'Random Lineage · Ready to play' : 'Step 8 of 8 · Review your House'),
     random ? h('p', {}, 'Your lineage is ready. Random Lineage is the intended way to start: discover your family as you play. Keep this House name or make it your own.') : null,
     random ? h('label', {}, 'House name ', h('input', { value: houseName, maxlength: 20, oninput: e => { houseName = e.target.value; } })) : null,
     h('h2', {}, `House ${G.house.name}`),
+    Heraldry.canvas(G.house.heraldry),
+    act('Edit flag & sigil', () => UI.modal([Heraldry.editor(G.house.heraldry, flag => { G.house.heraldry=flag; G.house.color=Heraldry.color(flag.primary); }), act('Done', () => { UI.closeModal(); UI.closeModal(); this.creationSummary(random, houseName); })], { title: 'House heraldry', wide: true, locked: true })),
     h('div', { class: 'row' }, portrait(mc, 100), partner ? portrait(partner, 100) : null),
     h('dl', {},
       detail('Founder', mc.name),
@@ -162,7 +168,10 @@ Game.creationSummary = function (random = false) {
         if (name !== G.house.name) {
           // Rename only this founding family, never an unrelated NPC House.
           for (const c of [mc, partner].filter(Boolean)) c.house = name;
+          const flag=G.house.heraldry;
+          delete G.heraldry[G.house.name];
           G.house.name = name;
+          G.heraldry[name]=flag;
         }
         UI.closeAll(); this.enterWorld(true);
       }, { cls: 'hl' }))),
@@ -230,7 +239,7 @@ Game.matchmaker = function (who, opts = {}) {
       ? `A matchmaker presents three suitors. With ${Math.round(G.house.prestige)} prestige and a ${GD.ESTATE[G.house.tier].name}, you can attract tier ${tier} matches.`
       : `A match for ${who.name} (${GD.GENDERS[who.gender].name}, ${GD.ORIENTATIONS[who.orientation].name}${who.pref !== 'none' ? ', ' + GD.PREFERENCES[who.pref].name.toLowerCase() : ''}).`;
   const body = h('div', {},
-    opening ? h('p', { class: 'dim small' }, 'Step 6 of 7 · Choose your partner') : null,
+    opening ? h('p', { class: 'dim small' }, 'Step 7 of 8 · Choose your partner') : null,
     h('p', { class: 'dim' }, intro),
     h('div', { class: 'choices partners' }, cands.map((c) => h('div', { class: 'choice' },
       portrait(c, 110),
@@ -268,6 +277,7 @@ Game.enterWorld = function (fresh) {
     chron(`${ch(G.mcId).name} founds House ${G.house.name} in the ${era().name}. The ${G.house.heirloom.name} is its first heirloom.`, 'head', [G.mcId], 'head');
     Log.add('Tip: travel to towns to recruit and court, clear ruins for prestige, and invest at your estate.', 'dim');
   }
+  Heraldry.ensureAll();
   Guide.init();
   UI.refresh();
   saveGame();

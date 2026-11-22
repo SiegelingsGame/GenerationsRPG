@@ -643,7 +643,7 @@ Render.drawEstate = function (p, tier) {
   c.beginPath(); c.moveTo(bx, by + 22); c.lineTo(bx, by - 8); c.stroke();
   const wave = Math.sin(this.t / 300) * 2;
   c.fillStyle = col;
-  c.beginPath(); c.moveTo(bx, by - 8); c.lineTo(bx + 14, by - 6 + wave); c.lineTo(bx, by + 2); c.closePath(); c.fill();
+  Heraldry.paint(c, G.house.heraldry, bx, by - 8, 22, 15);
 };
 
 Render.drawRuins = function (p, cleared) {
@@ -845,7 +845,7 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
     c.beginPath(); c.moveTo(x - 12 * s, y - 2); c.lineTo(x - 12 * s, y - 62 * s); c.stroke();
     c.fillStyle = o.banner;
     const w = Math.sin(this.t / 250) * 2;
-    c.beginPath(); c.moveTo(x - 12 * s, y - 62 * s); c.lineTo(x + 2 * s, y - 58 * s + w); c.lineTo(x - 12 * s, y - 50 * s); c.closePath(); c.fill();
+    Heraldry.paint(c, G.house.heraldry, x - 12*s, y - 62*s, 26*s, 18*s);
   }
   if (o.dead) c.restore();
 };

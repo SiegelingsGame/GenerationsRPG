@@ -174,7 +174,7 @@ UI.renderTop = function () {
   const hs = G.house, w = G.world, E = era();
   const yearsLeft = Math.max(0, w.era.end - year());
   $('#topbar').replaceChildren(
-    h('div', { class: 'crest', style: `background:${hs.color}` }, hs.name[0]),
+    Heraldry.canvas(hs.heraldry, 54),
     h('div', { class: 'house' }, h('b', {}, `House ${hs.name}`), h('small', {}, `Generation ${hs.generation} · ${GD.ESTATE[hs.tier].name}`)),
     h('div', { class: 'tb' }, h('small', {}, 'Year'), h('b', {}, `${seasonName()} ${year()}`)),
     h('div', { class: 'tb' }, h('small', {}, 'Era'), h('b', { style: `color:${E.color}` }, E.name), h('small', {}, w.era.type === 'golden' ? 'Victory!' : `${yearsLeft} yr left`)),
@@ -429,6 +429,7 @@ UI.showChar = function (c) {
 };
 
 UI.charBody = function (c) {
+  Heraldry.ensureAll();
   const mc = ch(G.mcId);
   const bk = birthKey(c);
   const sp = ch(c.spouse);
@@ -460,6 +461,7 @@ UI.charBody = function (c) {
   const grand = bloodline(c).filter((x) => x.depth === 2).map((x) => x.c);
   const actions = this.charActions(c);
   return h('div', { class: 'sheet' },
+    c.house && G.heraldry[c.house] ? Heraldry.canvas(G.heraldry[c.house], 120) : null,
     h('div', { class: 'sheet-left' },
       portrait(c, 140),
       h('div', { class: 'tags' }, tags),
@@ -908,6 +910,7 @@ UI.checkForUpdate = function () {
 UI.showMenu = function () {
   this.modal([
     h('p', { class: 'dim small' }, this.diagnostics()),
+    act('House flag & sigil', () => { this.closeModal(); this.modal([Heraldry.canvas(G.house.heraldry, 288), act('Edit heraldry', () => { this.closeModal(); this.modal([Heraldry.editor(G.house.heraldry, flag => { G.house.heraldry=flag; G.house.color=Heraldry.color(flag.primary); saveGame(); UI.refresh(); })], { title: 'House heraldry', wide: true }); })], { title: `House ${G.house.name}` }); }),
     act('Save Game', () => { UI.toast(saveGame() ? 'Game saved.' : 'Could not save (storage unavailable).'); this.closeModal(); }),
     act('Interactive starter guide', () => { this.closeModal(); Guide.show(); }),
     act('Concept & How to Play', () => { this.closeModal(); this.showHelp(); }),

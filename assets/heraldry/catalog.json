@@ -1,0 +1,762 @@
+[
+  {
+    "id": 0,
+    "name": "Arctic Wolf",
+    "category": "Animals",
+    "row_id": 392456,
+    "subject": "arctic wolf",
+    "caption": "sleepy arctic wolf with frosty breath"
+  },
+  {
+    "id": 1,
+    "name": "Brown Bear",
+    "category": "Animals",
+    "row_id": 254418,
+    "subject": "brown bear",
+    "caption": "angry brown bear with frosty breath"
+  },
+  {
+    "id": 2,
+    "name": "Fox",
+    "category": "Animals",
+    "row_id": 191530,
+    "subject": "fox",
+    "caption": "curious fox with a red scarf"
+  },
+  {
+    "id": 3,
+    "name": "Horse",
+    "category": "Animals",
+    "row_id": 269037,
+    "subject": "horse",
+    "caption": "giant black horse with a red scarf"
+  },
+  {
+    "id": 4,
+    "name": "Panther",
+    "category": "Animals",
+    "row_id": 171898,
+    "subject": "panther",
+    "caption": "baby panther on a patch of grass"
+  },
+  {
+    "id": 5,
+    "name": "Tiger",
+    "category": "Animals",
+    "row_id": 129193,
+    "subject": "tiger",
+    "caption": "baby tiger with a leaf on its head"
+  },
+  {
+    "id": 6,
+    "name": "Bald Eagle",
+    "category": "Animals",
+    "row_id": 90902,
+    "subject": "bald eagle",
+    "caption": "baby bald eagle perched on a branch"
+  },
+  {
+    "id": 7,
+    "name": "Golden Eagle",
+    "category": "Animals",
+    "row_id": 42087,
+    "subject": "golden eagle",
+    "caption": "golden eagle"
+  },
+  {
+    "id": 8,
+    "name": "Hawk",
+    "category": "Animals",
+    "row_id": 6526,
+    "subject": "hawk",
+    "caption": "hawk"
+  },
+  {
+    "id": 9,
+    "name": "Crow",
+    "category": "Animals",
+    "row_id": 244416,
+    "subject": "crow",
+    "caption": "sleepy crow with a musical note"
+  },
+  {
+    "id": 10,
+    "name": "Barn Owl",
+    "category": "Animals",
+    "row_id": 87718,
+    "subject": "barn owl",
+    "caption": "sleepy barn owl"
+  },
+  {
+    "id": 11,
+    "name": "Snowy Owl",
+    "category": "Animals",
+    "row_id": 23768,
+    "subject": "snowy owl",
+    "caption": "tiny snowy owl with a red scarf"
+  },
+  {
+    "id": 12,
+    "name": "Dragon",
+    "category": "Mythical",
+    "row_id": 36785,
+    "subject": "dragon",
+    "caption": "dragon"
+  },
+  {
+    "id": 13,
+    "name": "Crystal Dragon",
+    "category": "Mythical",
+    "row_id": 105549,
+    "subject": "crystal dragon",
+    "caption": "cute crystal dragon with a glowing aura"
+  },
+  {
+    "id": 14,
+    "name": "Feathered Dragon",
+    "category": "Mythical",
+    "row_id": 25091,
+    "subject": "feathered dragon",
+    "caption": "feathered dragon curled up"
+  },
+  {
+    "id": 15,
+    "name": "Forest Dragon",
+    "category": "Mythical",
+    "row_id": 48420,
+    "subject": "forest dragon",
+    "caption": "giant forest dragon curled up"
+  },
+  {
+    "id": 16,
+    "name": "Ice Dragon",
+    "category": "Mythical",
+    "row_id": 133929,
+    "subject": "ice dragon",
+    "caption": "ancient ice dragon with a glowing aura"
+  },
+  {
+    "id": 17,
+    "name": "Storm Dragon",
+    "category": "Mythical",
+    "row_id": 77582,
+    "subject": "storm dragon",
+    "caption": "fierce storm dragon"
+  },
+  {
+    "id": 18,
+    "name": "Two-Headed Dragon",
+    "category": "Mythical",
+    "row_id": 272847,
+    "subject": "two-headed dragon",
+    "caption": "cute two-headed dragon with big eyes"
+  },
+  {
+    "id": 19,
+    "name": "Phoenix",
+    "category": "Mythical",
+    "row_id": 191698,
+    "subject": "phoenix",
+    "caption": "fierce phoenix with sparkles"
+  },
+  {
+    "id": 20,
+    "name": "Hippogriff",
+    "category": "Mythical",
+    "row_id": 9599,
+    "subject": "hippogriff",
+    "caption": "hippogriff"
+  },
+  {
+    "id": 21,
+    "name": "Nine-Tailed Fox",
+    "category": "Mythical",
+    "row_id": 80625,
+    "subject": "nine-tailed fox",
+    "caption": "tiny nine-tailed fox with a red scarf"
+  },
+  {
+    "id": 22,
+    "name": "Spirit Deer",
+    "category": "Mythical",
+    "row_id": 337731,
+    "subject": "spirit deer",
+    "caption": "glowing spirit deer with a tiny crown"
+  },
+  {
+    "id": 23,
+    "name": "Sea Serpent",
+    "category": "Mythical",
+    "row_id": 172182,
+    "subject": "sea serpent",
+    "caption": "angry sea serpent with sparkles"
+  },
+  {
+    "id": 24,
+    "name": "Arming Sword",
+    "category": "Weapons",
+    "row_id": 3460,
+    "subject": "arming sword",
+    "caption": "legendary arming sword with a black hilt"
+  },
+  {
+    "id": 25,
+    "name": "Bastard Sword",
+    "category": "Weapons",
+    "row_id": 14766,
+    "subject": "bastard sword",
+    "caption": "bastard sword"
+  },
+  {
+    "id": 26,
+    "name": "Greatsword",
+    "category": "Weapons",
+    "row_id": 179464,
+    "subject": "greatsword",
+    "caption": "greatsword with a chain on the hilt"
+  },
+  {
+    "id": 27,
+    "name": "Crossed Swords",
+    "category": "Weapons",
+    "row_id": 111728,
+    "subject": "crossed swords icon",
+    "caption": "crossed swords icon"
+  },
+  {
+    "id": 28,
+    "name": "Axe",
+    "category": "Weapons",
+    "row_id": 74338,
+    "subject": "axe",
+    "caption": "cursed steel axe"
+  },
+  {
+    "id": 29,
+    "name": "Bearded Axe",
+    "category": "Weapons",
+    "row_id": 84443,
+    "subject": "bearded axe",
+    "caption": "crystal bearded axe with a red gem"
+  },
+  {
+    "id": 30,
+    "name": "War Axe",
+    "category": "Weapons",
+    "row_id": 85423,
+    "subject": "war axe",
+    "caption": "war axe with a leather-wrapped handle"
+  },
+  {
+    "id": 31,
+    "name": "Spear",
+    "category": "Weapons",
+    "row_id": 232572,
+    "subject": "spear",
+    "caption": "chipped bronze spear"
+  },
+  {
+    "id": 32,
+    "name": "Barbed Spear",
+    "category": "Weapons",
+    "row_id": 154247,
+    "subject": "barbed spear",
+    "caption": "barbed spear with a gem below the head"
+  },
+  {
+    "id": 33,
+    "name": "Battle Hammer",
+    "category": "Weapons",
+    "row_id": 349178,
+    "subject": "battle hammer",
+    "caption": "polished battle hammer with gold trim"
+  },
+  {
+    "id": 34,
+    "name": "War Hammer",
+    "category": "Weapons",
+    "row_id": 289898,
+    "subject": "war hammer",
+    "caption": "enchanted war hammer"
+  },
+  {
+    "id": 35,
+    "name": "Shield",
+    "category": "Weapons",
+    "row_id": 102121,
+    "subject": "shield",
+    "caption": "bone shield with a dragon emblem"
+  },
+  {
+    "id": 36,
+    "name": "Oak Tree",
+    "category": "Nature",
+    "row_id": 45514,
+    "subject": "oak tree",
+    "caption": "ancient oak tree with a bird nest"
+  },
+  {
+    "id": 37,
+    "name": "Pine Tree",
+    "category": "Nature",
+    "row_id": 374341,
+    "subject": "pine tree",
+    "caption": "ancient pine tree with exposed roots"
+  },
+  {
+    "id": 38,
+    "name": "Aspen Tree",
+    "category": "Nature",
+    "row_id": 35195,
+    "subject": "aspen tree",
+    "caption": "ancient aspen tree with a bird nest"
+  },
+  {
+    "id": 39,
+    "name": "Cherry Tree",
+    "category": "Nature",
+    "row_id": 43009,
+    "subject": "cherry tree",
+    "caption": "dead cherry tree with a hollow in the trunk"
+  },
+  {
+    "id": 40,
+    "name": "Baobab Tree",
+    "category": "Nature",
+    "row_id": 345308,
+    "subject": "baobab tree",
+    "caption": "baobab tree with a bird nest"
+  },
+  {
+    "id": 41,
+    "name": "Juniper Tree",
+    "category": "Nature",
+    "row_id": 49505,
+    "subject": "juniper tree",
+    "caption": "tiny juniper tree with fireflies around it"
+  },
+  {
+    "id": 42,
+    "name": "Rose",
+    "category": "Nature",
+    "row_id": 61086,
+    "subject": "rose",
+    "caption": "red rose with a small butterfly"
+  },
+  {
+    "id": 43,
+    "name": "Four Leaf Clover",
+    "category": "Nature",
+    "row_id": 19454,
+    "subject": "four leaf clover",
+    "caption": "tiny four leaf clover"
+  },
+  {
+    "id": 44,
+    "name": "Silverleaf Sprig",
+    "category": "Nature",
+    "row_id": 353786,
+    "subject": "silverleaf sprig",
+    "caption": "shimmering silverleaf sprig with floating pollen"
+  },
+  {
+    "id": 45,
+    "name": "Acorn Charm",
+    "category": "Nature",
+    "row_id": 22313,
+    "subject": "acorn charm",
+    "caption": "glowing acorn charm on a silver chain"
+  },
+  {
+    "id": 46,
+    "name": "Leaf Brooch",
+    "category": "Nature",
+    "row_id": 159632,
+    "subject": "leaf brooch",
+    "caption": "tarnished pewter leaf brooch with a pearl"
+  },
+  {
+    "id": 47,
+    "name": "Eagle Feather",
+    "category": "Nature",
+    "row_id": 348837,
+    "subject": "eagle feather",
+    "caption": "eagle feather with a small gem attached"
+  },
+  {
+    "id": 48,
+    "name": "Sun",
+    "category": "Celestial",
+    "row_id": 144570,
+    "subject": "sun icon",
+    "caption": "bright sun icon with a drop shadow"
+  },
+  {
+    "id": 49,
+    "name": "Sun Amulet",
+    "category": "Celestial",
+    "row_id": 216249,
+    "subject": "sun amulet",
+    "caption": "sinister bronze sun amulet with a purple gem"
+  },
+  {
+    "id": 50,
+    "name": "Crescent Moon",
+    "category": "Celestial",
+    "row_id": 254957,
+    "subject": "crescent moon",
+    "caption": "crescent moon"
+  },
+  {
+    "id": 51,
+    "name": "Full Moon",
+    "category": "Celestial",
+    "row_id": 29373,
+    "subject": "full moon",
+    "caption": "full moon with a soft glow"
+  },
+  {
+    "id": 52,
+    "name": "Star",
+    "category": "Celestial",
+    "row_id": 242837,
+    "subject": "star",
+    "caption": "pastel star with a cute face"
+  },
+  {
+    "id": 53,
+    "name": "Shooting Star",
+    "category": "Celestial",
+    "row_id": 334252,
+    "subject": "shooting star",
+    "caption": "happy shooting star with a soft glow"
+  },
+  {
+    "id": 54,
+    "name": "Star Sparkle",
+    "category": "Celestial",
+    "row_id": 93218,
+    "subject": "star sparkle",
+    "caption": "crackling star sparkle with small sparks around"
+  },
+  {
+    "id": 55,
+    "name": "Fire Swirl",
+    "category": "Celestial",
+    "row_id": 280542,
+    "subject": "fire swirl",
+    "caption": "yellow fire swirl with flying sparks"
+  },
+  {
+    "id": 56,
+    "name": "Flame Wisp",
+    "category": "Celestial",
+    "row_id": 97670,
+    "subject": "flame wisp",
+    "caption": "glowing orange flame wisp"
+  },
+  {
+    "id": 57,
+    "name": "Fireball",
+    "category": "Celestial",
+    "row_id": 103894,
+    "subject": "fireball",
+    "caption": "red fireball with flying sparks"
+  },
+  {
+    "id": 58,
+    "name": "Spirit Flame",
+    "category": "Celestial",
+    "row_id": 59465,
+    "subject": "spirit flame",
+    "caption": "mischievous spirit flame with a spooky glow"
+  },
+  {
+    "id": 59,
+    "name": "Ice Crystal",
+    "category": "Celestial",
+    "row_id": 21588,
+    "subject": "ice crystal icon",
+    "caption": "glossy ice crystal icon with a black outline"
+  },
+  {
+    "id": 60,
+    "name": "Crown",
+    "category": "Regalia",
+    "row_id": 244577,
+    "subject": "crown",
+    "caption": "crown with pearls"
+  },
+  {
+    "id": 61,
+    "name": "Crown",
+    "category": "Regalia",
+    "row_id": 48546,
+    "subject": "crown icon",
+    "caption": "glossy orange crown icon with a sparkle"
+  },
+  {
+    "id": 62,
+    "name": "Antler Crown",
+    "category": "Regalia",
+    "row_id": 203733,
+    "subject": "antler crown",
+    "caption": "cursed bronze antler crown"
+  },
+  {
+    "id": 63,
+    "name": "Horned Crown",
+    "category": "Regalia",
+    "row_id": 290150,
+    "subject": "horned crown",
+    "caption": "dusty horned crown"
+  },
+  {
+    "id": 64,
+    "name": "King'S Crown",
+    "category": "Regalia",
+    "row_id": 135032,
+    "subject": "king's crown",
+    "caption": "cursed king's crown"
+  },
+  {
+    "id": 65,
+    "name": "Queen'S Crown",
+    "category": "Regalia",
+    "row_id": 299724,
+    "subject": "queen's crown",
+    "caption": "polished platinum queen's crown"
+  },
+  {
+    "id": 66,
+    "name": "Sunburst Crown",
+    "category": "Regalia",
+    "row_id": 198322,
+    "subject": "sunburst crown",
+    "caption": "crystal sunburst crown with engraved swirls"
+  },
+  {
+    "id": 67,
+    "name": "Tall Crown",
+    "category": "Regalia",
+    "row_id": 313877,
+    "subject": "tall crown",
+    "caption": "silver tall crown with a red gem"
+  },
+  {
+    "id": 68,
+    "name": "Chalice",
+    "category": "Regalia",
+    "row_id": 145761,
+    "subject": "chalice",
+    "caption": "bronze chalice"
+  },
+  {
+    "id": 69,
+    "name": "Medallion",
+    "category": "Regalia",
+    "row_id": 293181,
+    "subject": "medallion",
+    "caption": "medallion"
+  },
+  {
+    "id": 70,
+    "name": "Winged Key",
+    "category": "Regalia",
+    "row_id": 152319,
+    "subject": "winged key",
+    "caption": "cursed winged key"
+  },
+  {
+    "id": 71,
+    "name": "Dungeon Key",
+    "category": "Regalia",
+    "row_id": 344602,
+    "subject": "dungeon key",
+    "caption": "cursed dungeon key with a green gem"
+  },
+  {
+    "id": 72,
+    "name": "Castle",
+    "category": "Keeps & craft",
+    "row_id": 273793,
+    "subject": "castle",
+    "caption": "abandoned gray castle with a small flag on top"
+  },
+  {
+    "id": 73,
+    "name": "Castle Battlement",
+    "category": "Keeps & craft",
+    "row_id": 97753,
+    "subject": "castle battlement",
+    "caption": "ancient tan castle battlement with snow on top"
+  },
+  {
+    "id": 74,
+    "name": "Castle Gate",
+    "category": "Keeps & craft",
+    "row_id": 54699,
+    "subject": "castle gate",
+    "caption": "old iron castle gate with moss growing on it"
+  },
+  {
+    "id": 75,
+    "name": "Castle Tower",
+    "category": "Keeps & craft",
+    "row_id": 84708,
+    "subject": "castle tower",
+    "caption": "tiny castle tower"
+  },
+  {
+    "id": 76,
+    "name": "Watchtower",
+    "category": "Keeps & craft",
+    "row_id": 374821,
+    "subject": "watchtower",
+    "caption": "ruined blue watchtower"
+  },
+  {
+    "id": 77,
+    "name": "Wizard Tower",
+    "category": "Keeps & craft",
+    "row_id": 17239,
+    "subject": "wizard tower",
+    "caption": "yellow wizard tower with vines climbing it"
+  },
+  {
+    "id": 78,
+    "name": "Hammer",
+    "category": "Keeps & craft",
+    "row_id": 177943,
+    "subject": "hammer",
+    "caption": "heavy-duty red hammer with a black rubber grip"
+  },
+  {
+    "id": 79,
+    "name": "Book",
+    "category": "Keeps & craft",
+    "row_id": 199816,
+    "subject": "book",
+    "caption": "ornate velvet book with a skull on the cover"
+  },
+  {
+    "id": 80,
+    "name": "Spellbook",
+    "category": "Keeps & craft",
+    "row_id": 279036,
+    "subject": "spellbook",
+    "caption": "worn bone spellbook with an eye emblem"
+  },
+  {
+    "id": 81,
+    "name": "Alchemy Book",
+    "category": "Keeps & craft",
+    "row_id": 15723,
+    "subject": "alchemy book",
+    "caption": "velvet alchemy book"
+  },
+  {
+    "id": 82,
+    "name": "Lucky Horseshoe",
+    "category": "Keeps & craft",
+    "row_id": 366096,
+    "subject": "lucky horseshoe",
+    "caption": "tiny lucky horseshoe"
+  },
+  {
+    "id": 83,
+    "name": "Emerald",
+    "category": "Gems",
+    "row_id": 218388,
+    "subject": "emerald",
+    "caption": "emerald"
+  },
+  {
+    "id": 84,
+    "name": "Ruby",
+    "category": "Gems",
+    "row_id": 112935,
+    "subject": "ruby",
+    "caption": "enchanted ruby on a velvet cushion"
+  },
+  {
+    "id": 85,
+    "name": "Sapphire",
+    "category": "Gems",
+    "row_id": 269613,
+    "subject": "sapphire",
+    "caption": "polished sapphire on a velvet cushion"
+  },
+  {
+    "id": 86,
+    "name": "Gem",
+    "category": "Gems",
+    "row_id": 144754,
+    "subject": "gem",
+    "caption": "black gem"
+  },
+  {
+    "id": 87,
+    "name": "Gem",
+    "category": "Gems",
+    "row_id": 11014,
+    "subject": "gem icon",
+    "caption": "cyan gem icon inside a square frame"
+  },
+  {
+    "id": 88,
+    "name": "Crystal Cluster",
+    "category": "Gems",
+    "row_id": 192308,
+    "subject": "crystal cluster",
+    "caption": "frosted crystal cluster with floating particles"
+  },
+  {
+    "id": 89,
+    "name": "Crystal Shard",
+    "category": "Gems",
+    "row_id": 46595,
+    "subject": "crystal shard",
+    "caption": "red crystal shard"
+  },
+  {
+    "id": 90,
+    "name": "Heart-Cut Gem",
+    "category": "Gems",
+    "row_id": 39887,
+    "subject": "heart-cut gem",
+    "caption": "heart-cut gem with a bright sparkle"
+  },
+  {
+    "id": 91,
+    "name": "Hexagonal Gem",
+    "category": "Gems",
+    "row_id": 217206,
+    "subject": "hexagonal gem",
+    "caption": "hexagonal gem"
+  },
+  {
+    "id": 92,
+    "name": "Moonstone",
+    "category": "Gems",
+    "row_id": 32754,
+    "subject": "moonstone",
+    "caption": "large moonstone with sparkles"
+  },
+  {
+    "id": 93,
+    "name": "Star-Cut Gem",
+    "category": "Gems",
+    "row_id": 151622,
+    "subject": "star-cut gem",
+    "caption": "enchanted topaz star-cut gem"
+  },
+  {
+    "id": 94,
+    "name": "Rose Quartz",
+    "category": "Gems",
+    "row_id": 204973,
+    "subject": "rose quartz",
+    "caption": "sparkling rose quartz on a small display stand"
+  }
+]

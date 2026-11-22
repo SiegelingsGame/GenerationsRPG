@@ -870,6 +870,7 @@ function householdCount() { return Object.values(G.chars).filter((c) => c.alive 
 // ---------------------------------------------------------------- save / load
 const SAVE_KEY = 'generations-rpg-save-v1';
 function saveGame() {
+  Heraldry.ensureAll();
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(G)); return true; } catch (e) { return false; }
 }
 function loadGame() {
@@ -885,6 +886,7 @@ function loadGame() {
       c.height = c.height || 'average'; c.build = c.build || 'average'; c.looks = c.looks ?? 5; c.hairStyle = c.hairStyle || 'short';
     }
     G.house.reigns = G.house.reigns || [];
+    Heraldry.ensureAll();
     return true;
   } catch (e) { return false; }
 }

@@ -421,3 +421,16 @@ body:not(.has-game) #guide-goal { display: none; }
 #location-prompt strong { display: block; color: var(--gold); margin-bottom: 6px; }
 #location-prompt .row { display: flex; gap: 8px; }
 #location-prompt button { flex: 1; min-height: 44px; padding: 8px; margin: 0; }
+
+.house-flag { image-rendering: pixelated; max-width: 100%; object-fit: contain; flex-shrink: 0; }
+.heraldry-preview { position: sticky; top: 0; z-index: 1; text-align: center; background: var(--panel); padding: 10px; }
+.heraldry-editor label { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.heraldry-editor fieldset { border: 1px solid var(--line); margin: 12px 0; }
+.heraldry-editor input[type=range] { flex: 1; width: 120px; min-width: 80px; accent-color: var(--gold); }
+.heraldry-editor output { min-width: 28px; }
+.sigil-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(100px,1fr)); gap: 8px; margin: 12px 0; }
+.sigil-grid button { display: flex; align-items: center; flex-direction: column; gap: 6px; padding: 8px 4px; min-height: 86px; font-size: 12px; }
+.sigil-grid canvas { image-rendering: pixelated; }
+.sigil-grid button.selected { border: 2px solid var(--gold); background: #3a3122; }
+
+@media (max-width: 600px) { .heraldry-preview canvas { width: 216px; height: 144px; } }

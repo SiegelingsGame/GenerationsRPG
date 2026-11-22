@@ -22,6 +22,8 @@ test('mobile creation preserves choices and starts only after House summary', as
   await page.getByRole('button',{name:'← Back',exact:true}).click();
   await page.getByRole('button',{name:'Next: Name your House →',exact:true}).click();
   assert.equal(await page.getByLabel('Your name',{exact:true}).inputValue(),'Arden');
+  await page.getByRole('button',{name:'Next: Flag & sigil →',exact:true}).click();
+  await page.getByLabel('Sigil category',{exact:true}).selectOption('Animals');
   await page.getByRole('button',{name:'Next: choose your partner →',exact:true}).click();
   await page.getByRole('button',{name:'Choose',exact:true}).first().click();
   await page.getByRole('heading',{name:'House Dawn',exact:true}).waitFor();
