@@ -55,6 +55,7 @@ function regionLevel(x, y, bonus = 0) {
 // ---------------------------------------------------------------- moving the party
 Living.go = function (tile, agent) { return this.goPoint({ x: tile.x, y: tile.y }, agent); };
 Living.goPoint = function (pt, agent) {
+  LocationPrompt.pending = null;
   if (!this.ensure() || Battle.active || UI.modalStack.length || TownView.open || Campfire.open) return;
   if (!LS.ensure()) return;
   // snap onto places of note

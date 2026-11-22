@@ -415,3 +415,9 @@ body:not(.has-game) #guide-goal { display: none; }
 .house-summary dt { color: var(--dim); }
 .house-summary dd { margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .creation-nav { flex-direction: column; align-items: stretch; } .create input { max-width: 100%; } }
+
+#location-prompt { position: absolute; z-index: 5; width: 244px; max-width: calc(100% - 16px); padding: 10px; background: rgba(21,19,28,.97); border: 1px solid var(--gold); border-radius: 10px; box-shadow: 0 4px 20px #0008; text-align: center; }
+#location-prompt[hidden] { display: none; }
+#location-prompt strong { display: block; color: var(--gold); margin-bottom: 6px; }
+#location-prompt .row { display: flex; gap: 8px; }
+#location-prompt button { flex: 1; min-height: 44px; padding: 8px; margin: 0; }

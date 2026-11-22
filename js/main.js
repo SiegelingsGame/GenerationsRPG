@@ -332,10 +332,12 @@ Game.arrive = function () {
   }
   UI.refresh();
   saveGame();
+  LocationPrompt.arrive(t);
 };
 
 // ---------------------------------------------------------------- battle
 Game.battle = function (enemies, opts) {
+  LocationPrompt.pending = null;
   UI.targeting = null;
   Living.stop();
   if (TownView.open) TownView.close();

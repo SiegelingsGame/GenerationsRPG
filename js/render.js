@@ -145,6 +145,7 @@ Render.frame = function () {
   if (!G || !G.world || !G.world.map) { this.drawTitleBg(); return; }
   if (Battle.active) this.drawBattle();
   else this.drawWorld();
+  LocationPrompt.render();
 };
 
 Render.drawTitleBg = function () {
