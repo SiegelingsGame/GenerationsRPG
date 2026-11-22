@@ -7,7 +7,7 @@ test('mobile creation preserves choices and starts only after House summary', as
   const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   await page.goto(process.env.GAME_TEST_URL || 'http://127.0.0.1:8766');
-  await page.getByRole('button',{name:'Found a new House',exact:true}).click();
+  await page.getByRole('button',{name:/^Prepare Carefully/}).click();
   await page.getByRole('heading',{name:'Sex & preferences',exact:true}).waitFor();
   await page.selectOption('#c-orient','bi');
   await page.getByRole('button',{name:'Next: Race →',exact:true}).click();

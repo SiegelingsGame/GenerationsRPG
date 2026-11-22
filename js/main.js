@@ -18,9 +18,21 @@ Game.title = function () {
     h('p', { class: 'tag-line' }, 'A roguelike RPG about a family line. You will die. Your children will carry on.'),
     h('p', { class: 'dim small' }, `Version ${UI.buildVersion()}`),
     can ? act('Continue your House', () => { if (loadGame()) { UI.closeAll(); this.enterWorld(); } else UI.toast('Save could not be loaded.'); }, { cls: 'hl' }) : null,
-    act('Found a new House', () => { UI.closeAll(); this.create(); }),
+    h('p', { class: 'dim' }, 'Choose how your lineage begins.'),
+    act('Random Lineage', () => { UI.closeAll(); this.randomLineage(); }, { cls: 'hl', sub: 'Recommended · the intended way to play. QuickStart generates your founder, partner and House. You can change the House name.' }),
+    act('Prepare Carefully', () => { UI.closeAll(); this.create(); }, { sub: 'Customize your founder, race, class, background and partner step by step.' }),
     act('How to play', () => UI.showHelp()),
   ), { locked: true });
+};
+
+// QuickStart uses the same founding and partner rules as custom creation.
+Game.randomLineage = function () {
+  newGame();
+  const pick = (table) => R.pick(Object.keys(table));
+  const race = pick(GD.RACES);
+  this.found({ race, name: genName(race), house: R.pick(GD.HOUSE_NAMES), color: R.pick(GD.HOUSE_COLORS),
+    gender: pick(GD.GENDERS), orientation: pick(GD.ORIENTATIONS), pref: pick(GD.PREFERENCES),
+    height: pick(GD.HEIGHTS), build: pick(GD.BUILDS), cls: pick(GD.CLASSES), birth: pick(GD.BIRTH) }, true);
 };
 
 // ---------------------------------------------------------------- founding
@@ -93,7 +105,7 @@ function racePortrait(race) {
   return portrait({ race, hair: '#5a3a22', tunic: '#3d5a80', evil: false, alive: true, born: G.day - (GD.RACES[race].maturity + 4) * DAYS_PER_YEAR, lifespan: GD.RACES[race].life[1] }, 60);
 }
 
-Game.found = function (sel) {
+Game.found = function (sel, random = false) {
   UI.closeAll();
   G.house.name = sel.house.trim().slice(0, 20);
   G.house.color = sel.color;
@@ -117,15 +129,18 @@ Game.found = function (sel) {
   G.house.heroes = [mc.id];
   G.house.reigns = [{ id: mc.id, from: year(), to: null, gen: 1 }];
   G.house.heirloom = makeHeirloom();
-  this.matchmaker(mc, { opening: true });
+  this.matchmaker(mc, { opening: true, random });
 };
 
 // The final page reviews the actual founder and chosen partner before play begins.
-Game.creationSummary = function () {
+Game.creationSummary = function (random = false) {
   const mc = ch(G.mcId), partner = spouseOf(mc);
+  let houseName = G.house.name;
   const detail = (label, value) => h('div', {}, h('dt', {}, label), h('dd', {}, value));
   UI.modal(h('div', { class: 'create house-summary' },
-    h('p', { class: 'dim small' }, 'Step 7 of 7 · Review your House'),
+    h('p', { class: 'dim small' }, random ? 'Random Lineage · Ready to play' : 'Step 7 of 7 · Review your House'),
+    random ? h('p', {}, 'Your lineage is ready. Random Lineage is the intended way to start: discover your family as you play. Keep this House name or make it your own.') : null,
+    random ? h('label', {}, 'House name ', h('input', { value: houseName, maxlength: 20, oninput: e => { houseName = e.target.value; } })) : null,
     h('h2', {}, `House ${G.house.name}`),
     h('div', { class: 'row' }, portrait(mc, 100), partner ? portrait(partner, 100) : null),
     h('dl', {},
@@ -140,8 +155,17 @@ Game.creationSummary = function () {
       detail('Heirloom', G.house.heirloom.name)),
     h('p', {}, 'Travel, earn prestige and raise an heir. Your family will carry the House into the next generation.'),
     h('div', { class: 'row creation-nav' },
-      act('Create a different House', () => { UI.closeAll(); this.create(); }),
-      act('Start the game', () => { UI.closeAll(); this.enterWorld(true); }, { cls: 'hl' }))),
+      act('Back to start options', () => { UI.closeAll(); this.title(); }),
+      act('Start the game', () => {
+        const name = houseName.trim().slice(0, 20);
+        if (!name) return UI.toast('Give your House a name.');
+        if (name !== G.house.name) {
+          // Rename only this founding family, never an unrelated NPC House.
+          for (const c of [mc, partner].filter(Boolean)) c.house = name;
+          G.house.name = name;
+        }
+        UI.closeAll(); this.enterWorld(true);
+      }, { cls: 'hl' }))),
     { title: 'Your House', wide: true, locked: true });
 };
 
@@ -189,9 +213,10 @@ Game.matchmaker = function (who, opts = {}) {
       } else if (!self) addBond(who, mc, 8);
       if (!opening) advanceDays(15);
     }
-    if (opening) this.creationSummary();
+    if (opening) this.creationSummary(!!opts.random);
     else this.after();
   };
+  if (opening && opts.random) { done(R.pick(cands)); return; }
   const note = (c) => {
     const k = kinship(who, c);
     const kinNote = k.sev ? h('small', { class: k.sev > eraKinTolerance() ? 'bad' : 'dim' }, `${who.name}'s ${k.rel} · ${k.sev > eraKinTolerance() ? 'taboo in this era: a scandal' : 'accepted in this era'} · shared blood ${Math.round(k.coef * 100)}%`) : null;
@@ -696,6 +721,7 @@ Game.succession = function () {
   const startYear = year();
   const before = {};
   const watch = new Set();
+  if (opening && opts.random) { done(R.pick(cands)); return; }
   const note = (c) => { if (c && !before[c.id]) { before[c.id] = snapshot(c); watch.add(c.id); } };
   heirCandidates().slice(0, 2).forEach((x) => note(x.c));
   G.party.map(ch).forEach(note);

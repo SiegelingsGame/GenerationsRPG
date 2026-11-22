@@ -25,7 +25,7 @@ test('nearby town prompt enters streets or opens working quick tasks on mobile',
   await p.evaluate(()=>{const t=LocationPrompt.tile;Living.stop();G.pos={x:t.x,y:t.y};G.ppos={...G.pos};Game.arrive();});
   await p.getByRole('button',{name:/^Market/}).waitFor();
   assert.equal(await p.evaluate(()=>LocationPrompt.pending),null);
-  await p.evaluate(()=>{UI.closeAll();Living.stop();LocationPrompt.pending=null;G.ppos={x:0,y:0};G.pos={x:0,y:0};LocationPrompt.render();});
+  await p.evaluate(()=>{UI.closeAll();Living.stop();LocationPrompt.pending=null;const empty=G.world.map.tiles.find(t=>!G.world.map.tiles.some(n=>n.feature&&Math.hypot(n.x-t.x,n.y-t.y)<1.5));G.ppos={x:empty.x,y:empty.y};G.pos={...G.ppos};LocationPrompt.render();});
   assert.equal(await prompt.isVisible(),false);
   assert.deepEqual(errors,[]);
  }finally{await b.close();}
