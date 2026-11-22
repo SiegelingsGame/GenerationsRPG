@@ -117,13 +117,14 @@ Game.found = function (sel, random = false) {
   const mc = makeChar({
     name: sel.name.trim().slice(0, 20), race: sel.race, birth: sel.birth === 'orphan' ? 'lowborn' : sel.birth,
     born: G.day - (r.maturity + Math.max(1, Math.round((r.primeEnd - r.maturity) * 0.08))) * DAYS_PER_YEAR - 40,
-    house: G.house.name, status: 'party', loyalty: 100, corruption: 0, weapon: 1, trait: R.pick(['brave', 'wise', 'hardy', 'charming', 'ambitious', 'loyal']),
+    house: G.house.name, status: 'party', loyalty: 100, corruption: 0, weapon: 0, trait: R.pick(['brave', 'wise', 'hardy', 'charming', 'ambitious', 'loyal']),
     gender: sel.gender, orientation: sel.orientation, pref: sel.pref, height: sel.height, build: sel.build,
     cls: sel.cls,
     condition: null, infertile: R.chance(0.04), orientKnown: true, beard: sel.gender === 'man' ? R.chance(0.4) : sel.race === 'dwarf',
   });
   if (sel.birth === 'orphan') { mc.orphaned = true; mc.formative = 2; mc.lineageKnown = true; mc.secret = 'common'; }
-  if (sel.birth === 'highborn') { G.house.prestige += 10; G.house.gold += 100; mc.gear.armor = 1; }
+  if (sel.birth === 'highborn') { G.house.prestige += 10; G.house.gold += 100; Equip.seedStarter(mc, 1); }
+  else Equip.seedStarter(mc, 1);
   if (sel.birth === 'lowborn') G.house.potions++;
   if (sel.birth === 'bastard') G.house.prestige = 0;
   mc.hp = maxHp(mc);
@@ -279,6 +280,8 @@ Game.enterWorld = function (fresh) {
   }
   Heraldry.ensureAll();
   WorldArt.ensure();
+  Equip.loadUi();
+  Equip.ensureHouse();
   Guide.init();
   UI.refresh();
   saveGame();
@@ -513,6 +516,8 @@ Game.recruit = function (c) {
   G.house.gold -= hireCost(c);
   c.loyalty = clamp(c.loyalty + 20, -100, 100);
   c.corruption = Math.max(0, c.corruption - 15);
+  Equip.ensureChar(c);
+  if (!Equip.worn(c).length) Equip.seedStarter(c, Math.min(3, Math.max(1, c.level - 1)));
   if (G.party.length < 4) { c.status = 'party'; G.party.push(c.id); } else c.status = 'household';
   c.servedHouse = true;
   const parentComp = c.parents.map(ch).find((p) => p && p.alive && (p.status === 'party' || p.status === 'household'));
@@ -658,7 +663,32 @@ Game.dismiss = function (c) {
   chron(`${c.name} was dismissed and leaves bitter.`, 'bad', [c.id], 'leave');
   this.after();
 };
-Game.buyGear = function (c, slot, cost) { G.house.gold -= cost; c.gear[slot]++; this.after(true); };
+Game.buyGear = function (c, slot, cost) {
+  // Legacy market path: upgrade weapon/armor tiers into class kit items.
+  Equip.ensureChar(c);
+  const kit = Equip.kitFor(c);
+  const eqSlot = slot === 'weapon' ? 'hand' : slot === 'armor' ? 'body' : slot;
+  const kind = kit[eqSlot];
+  if (!kind) return;
+  const cur = c.equip[eqSlot];
+  const next = (cur ? cur.tier : 0) + 1;
+  const item = Equip.makeItem(kind, next);
+  G.house.gold -= cost;
+  if (cur) Equip.addToStash(cur);
+  c.equip[eqSlot] = item;
+  Equip.syncLegacy(c);
+  this.after(true);
+};
+Game.buyEquipOffer = function (c, offer) {
+  if (!offer || G.house.gold < offer.cost) return;
+  Equip.ensureChar(c);
+  G.house.gold -= offer.cost;
+  const item = Equip.makeItem(offer.kind, offer.item.tier);
+  Equip.addToStash(item);
+  Equip.equipItem(c, item, true);
+  Log.add(`Bought ${item.name} for ${c.name}.`, 'good');
+  this.after(true);
+};
 Game.buyPotion = function () { if (G.house.gold < 25) return; G.house.gold -= 25; G.house.potions++; this.after(true); };
 Game.upgradeEstate = function () {
   const next = GD.ESTATE[G.house.tier + 1];

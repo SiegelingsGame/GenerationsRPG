@@ -12,7 +12,7 @@ function unitFromChar(c, side, slot, boss) {
     kind: 'char', shape: 'humanoid', boss: !!boss,
     lvl: c.level,
     atk: stat(c, 'str') * 1.4 + weaponAtk(c) + c.level,
-    mag: stat(c, 'int') * 1.5 + c.level,
+    mag: stat(c, 'int') * 1.5 + gearMag(c) + c.level,
     heal: stat(c, 'wil') * 2.4 + c.level * 2,
     def: stat(c, 'vit') * 0.6 + armorDef(c) + c.level * 0.5,
     spd: stat(c, 'agi'),

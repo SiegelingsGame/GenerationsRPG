@@ -112,17 +112,22 @@ Events.ev_trader = function (ev) {
   const party = G.party.map(ch).filter(Boolean);
   const maxTier = Math.min(GD.GEAR.length, 3 + G.house.up.armory + Math.floor(G.house.tier / 2));
   const who = R.pick(party);
-  const slot = R.chance(0.5) ? 'weapon' : 'armor';
-  const next = who.gear[slot] + 1;
-  const gear = next <= maxTier ? GD.GEAR[next - 1] : null;
-  const gearCost = gear ? Math.round(gear.cost * R.float(0.75, 1.0) * (2 - repMult())) : 0;
+  Equip.ensureChar(who);
+  const offers = Equip.marketOffers(who, maxTier).filter((o) => o.slot === 'hand' || o.slot === 'body');
+  const offer = offers.length ? R.pick(offers) : null;
+  const gearCost = offer ? Math.round(offer.cost * R.float(0.75, 1.0) * (2 - repMult())) : 0;
   const tonicStat = R.pick(STATS);
   const tonicCost = 140;
   const name = R.pick(['Odo the Peddler', 'a caravan from the far south', 'a dwarven tinker', 'an elven spice merchant', 'a halfling with a laden mule']);
   const buy = (fn) => () => { fn(); UI.closeAll(); this.ev_trader_more(ev, name); };
   this.frame('trader', tile, 'A Trader on the Road', `You meet ${name}. Their wares are laid out on a blanket by the road.`, [
     act('Potion', buy(() => { G.house.gold -= 18; G.house.potions++; }), { sub: '18g, cheaper than town', disabled: G.house.gold < 18 }),
-    gear ? act(`${gear.name} ${slot === 'weapon' ? 'weapon' : 'armour'} for ${who.name}`, buy(() => { G.house.gold -= gearCost; who.gear[slot] = next; }), { sub: `${gearCost}g`, disabled: G.house.gold < gearCost }) : null,
+    offer ? act(`${offer.item.name} for ${who.name}`, buy(() => {
+      G.house.gold -= gearCost;
+      const item = Equip.makeItem(offer.kind, offer.item.tier);
+      Equip.addToStash(item);
+      Equip.equipItem(who, item, true);
+    }), { sub: `${gearCost}g`, disabled: G.house.gold < gearCost }) : null,
     act(`Tonic of ${STAT_NAMES[tonicStat]}`, buy(() => { G.house.gold -= tonicCost; const c = R.pick(party); c.bonus[tonicStat] += 1; UI.toast(`${c.name} drinks it: +1 ${STAT_NAMES[tonicStat]} for life.`); }), { sub: `${tonicCost}g · +1 ${STAT_NAMES[tonicStat]} for life, to a random companion`, disabled: G.house.gold < tonicCost }),
     act('Buy a map of the area', buy(() => { G.house.gold -= 40; this.revealNearby(tile); }), { sub: '40g · marks a nearby cave or mine', disabled: G.house.gold < 40 }),
     act('Go on your way', () => this.done()),
@@ -294,7 +299,24 @@ Crawl.room = function () {
         G.house.gold += gold; this.loot += gold;
         let msg = `${gold}g`;
         if (R.chance(0.4)) { G.house.potions++; msg += ' and a potion'; }
-        if (R.chance(0.2)) { const c = R.pick(G.party.map(ch)); const slot = R.chance(0.5) ? 'weapon' : 'armor'; if (c.gear[slot] < 5) { c.gear[slot]++; msg += `, and ${GD.GEAR[c.gear[slot] - 1].name.toLowerCase()} ${slot === 'weapon' ? 'arms' : 'armour'} for ${c.name}`; } }
+        if (R.chance(0.2)) {
+          const c = R.pick(G.party.map(ch));
+          Equip.ensureChar(c);
+          const kit = Equip.kitFor(c);
+          const slot = R.chance(0.5) ? 'hand' : 'body';
+          const kind = kit[slot];
+          if (kind) {
+            const cur = c.equip[slot];
+            const next = (cur ? cur.tier : 0) + 1;
+            if (next <= 5) {
+              const item = Equip.makeItem(kind, next);
+              if (cur) Equip.addToStash(cur);
+              c.equip[slot] = item;
+              Equip.syncLegacy(c);
+              msg += `, and ${item.name.toLowerCase()} for ${c.name}`;
+            }
+          }
+        }
         UI.toast(`Inside: ${msg}.`);
         next();
       }),

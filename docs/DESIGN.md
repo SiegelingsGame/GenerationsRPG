@@ -293,4 +293,6 @@ Implemented in the playable concept (`index.html`):
 - [x] Family tree and character sheets
 - [x] Save/load (browser storage)
 
-Future work: authored quests and story events, more enemy and skill variety, equipment slots, rival houses with politics, sprite art, music, and a balance pass.
+- [x] Equipment slots and inventory try-on: class kits choose armour or robes, helms or crowns, blades/staves/bows, boots or shoes; house stash; Kasaya UI frames
+
+Future work: authored quests and story events, more enemy and skill variety, rival houses with politics, sprite art, music, and a balance pass.
