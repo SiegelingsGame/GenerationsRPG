@@ -50,8 +50,15 @@ const Guide = {
   },
   render() {
     const g = this.update();
-    if (g.hidden || Battle.active) return;
+    let banner = document.getElementById('guide-goal');
+    if (!banner) {
+      banner = h('button', { id: 'guide-goal', onclick: () => this.show(), 'aria-label': 'Current starter goal. Open guide' });
+      document.body.append(banner);
+    }
+    banner.hidden = false;
     const steps = this.steps(), next = steps.find(s => !g.done[s[0]]);
+    banner.textContent = next ? `Goal: ${next[1]} · ${steps.filter(s => g.done[s[0]]).length}/${steps.length}` : 'Starter goals complete · Review guide';
+    if (g.hidden || Battle.active) return;
     const card = h('section', { class: 'guide-card', 'aria-label': 'Starter guide' },
       h('b', {}, next ? `Next goal: ${next[1]}` : 'Your House is ready for its next chapter'),
       h('p', { class: 'small dim' }, `${steps.filter(s => g.done[s[0]]).length}/${steps.length} starter goals complete`),
