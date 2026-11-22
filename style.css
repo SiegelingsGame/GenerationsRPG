@@ -389,3 +389,8 @@ html.ios-short body { background: linear-gradient(#0e1018, #120e14); }
   html { min-height: calc(100% + env(safe-area-inset-top, 0px)); }
   body { min-height: 100%; }
 }
+
+/* Starter goals share the location panel, including the mobile drawer. */
+.guide-card { border: 1px solid #b89b60; border-radius: 8px; padding: 12px; margin-bottom: 12px; background: #20251e; }
+.guide-step { border-top: 1px solid #665a42; padding: 10px 0; }
+.guide-step h3 { margin: 4px 0; }

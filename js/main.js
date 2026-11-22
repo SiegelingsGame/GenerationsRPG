@@ -194,8 +194,10 @@ Game.enterWorld = function (fresh) {
     chron(`${ch(G.mcId).name} founds House ${G.house.name} in the ${era().name}. The ${G.house.heirloom.name} is its first heirloom.`, 'head', [G.mcId], 'head');
     Log.add('Tip: travel to towns to recruit and court, clear ruins for prestige, and invest at your estate.', 'dim');
   }
+  Guide.init();
   UI.refresh();
   saveGame();
+  if (fresh) Guide.show();
 };
 
 // ---------------------------------------------------------------- travel

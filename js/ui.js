@@ -167,6 +167,7 @@ UI.refresh = function () {
   this.renderParty();
   if (!Battle.active) this.renderPanel();
   this.renderLog();
+  Guide.render();
 };
 
 UI.renderTop = function () {
@@ -601,6 +602,7 @@ UI.showAdoption = function () {
 
 // ---------------------------------------------------------------- estate screens
 UI.showEstate = function () {
+  Guide.mark('estate');
   const hs = G.house;
   const next = GD.ESTATE[hs.tier + 1];
   const rows = [];
@@ -674,6 +676,7 @@ UI.treeEl = function (opts = {}) {
   return h('div', { class: 'tree' }, h('ul', {}, node(root)));
 };
 UI.showTree = function () {
+  Guide.mark('tree');
   this.modal([h('p', { class: 'dim' }, 'Your bloodline. ♛ is the current head, ♔ past heads, ★ the heir; faded entries are dead. Click anyone to see their sheet.'), this.treeEl()], { title: `The Line of House ${G.house.name}`, wide: true });
 };
 
@@ -906,6 +909,7 @@ UI.showMenu = function () {
   this.modal([
     h('p', { class: 'dim small' }, this.diagnostics()),
     act('Save Game', () => { UI.toast(saveGame() ? 'Game saved.' : 'Could not save (storage unavailable).'); this.closeModal(); }),
+    act('Interactive starter guide', () => { this.closeModal(); Guide.show(); }),
     act('Concept & How to Play', () => { this.closeModal(); this.showHelp(); }),
     act('Abandon & Start Over', () => {
       this.closeModal();
