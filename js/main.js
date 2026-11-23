@@ -144,6 +144,22 @@ Game.found = function (sel, random = false) {
   this.matchmaker(mc, { opening: true, random });
 };
 
+// Apply a House rename only to the founding family (never an unrelated NPC House).
+Game.applyFoundingHouseName = function (name) {
+  const mc = ch(G.mcId), partner = spouseOf(mc);
+  const next = name.trim().slice(0, 20);
+  if (!next) return false;
+  if (next !== G.house.name) {
+    for (const c of [mc, partner].filter(Boolean)) c.house = next;
+    const flag = G.house.heraldry;
+    if (G.heraldry) delete G.heraldry[G.house.name];
+    G.house.name = next;
+    G.heraldry = G.heraldry || {};
+    G.heraldry[next] = flag;
+  }
+  return true;
+};
+
 // The final page reviews the actual founder and chosen partner before play begins.
 Game.creationSummary = function (random = false, draftName) {
   const mc = ch(G.mcId), partner = spouseOf(mc);
@@ -153,6 +169,7 @@ Game.creationSummary = function (random = false, draftName) {
     h('p', { class: 'dim small' }, random ? 'Random Lineage · Ready to play' : 'Step 8 of 8 · Review your House'),
     random ? h('p', {}, 'Your lineage is ready. Random Lineage is the intended way to start: discover your family as you play. Keep this House name or make it your own.') : null,
     random ? h('label', {}, 'House name ', h('input', { value: houseName, maxlength: 20, oninput: e => { houseName = e.target.value; } })) : null,
+    !random ? h('p', {}, 'Your House is ready. Choose how this run begins: follow the normal story start, or open Careful Start to tune the world and share a seed.') : null,
     h('h2', {}, `House ${G.house.name}`),
     Heraldry.canvas(G.house.heraldry),
     act('Edit flag & sigil', () => UI.modal([Heraldry.editor(G.house.heraldry, flag => { G.house.heraldry=flag; G.house.color=Heraldry.color(flag.primary); }), act('Done', () => { UI.closeModal(); UI.closeModal(); this.creationSummary(random, houseName); })], { title: 'House heraldry', wide: true, locked: true })),
@@ -170,20 +187,138 @@ Game.creationSummary = function (random = false, draftName) {
     h('p', {}, 'Travel, earn prestige and raise an heir. Your family will carry the House into the next generation.'),
     h('div', { class: 'row creation-nav' },
       act('Back to start options', () => { UI.closeAll(); this.title(); }),
-      act('Start the game', () => {
-        const name = houseName.trim().slice(0, 20);
-        if (!name) return UI.toast('Give your House a name.');
-        if (name !== G.house.name) {
-          // Rename only this founding family, never an unrelated NPC House.
-          for (const c of [mc, partner].filter(Boolean)) c.house = name;
-          const flag=G.house.heraldry;
-          delete G.heraldry[G.house.name];
-          G.house.name = name;
-          G.heraldry[name]=flag;
+      act(random ? 'Start the game' : 'Finish up →', () => {
+        if (random) {
+          if (!this.applyFoundingHouseName(houseName)) return UI.toast('Give your House a name.');
+          UI.closeAll(); this.enterWorld(true);
+          return;
         }
-        UI.closeAll(); this.enterWorld(true);
+        this.startPathChoice();
       }, { cls: 'hl' }))),
     { title: 'Your House', wide: true, locked: true });
+};
+
+// Prepare Carefully only: Story Start (normal guided begin) vs Careful Start (custom run + seed).
+Game.startPathChoice = function () {
+  UI.modal(h('div', { class: 'create start-path-choice' },
+    h('p', { class: 'dim small' }, 'How should this run begin?'),
+    h('h2', {}, 'Choose your start'),
+    h('p', {}, 'You have prepared your founder and partner. Pick the normal story path, or customize the entire run and share a seed.'),
+    h('div', { class: 'choices' },
+      h('div', { class: 'choice', onclick: () => this.beginStoryStart() },
+        h('b', {}, 'Begin Story Start'),
+        h('small', { class: 'dim' }, 'Proceed into the normal guided start with your prepared House. The world is already generated; play as usual.')),
+      h('div', { class: 'choice', onclick: () => this.carefulStartScreen() },
+        h('b', {}, 'Careful Start (custom run)'),
+        h('small', { class: 'dim' }, 'Tune starting year, prosperity, doom, estate and world size. Generate a shareable seed so others can import the same run setup.'))),
+    h('div', { class: 'row creation-nav' },
+      act('← Back to House review', () => { UI.closeAll(); this.creationSummary(false); }))),
+  { title: 'Finish up', wide: true, locked: true });
+};
+
+Game.beginStoryStart = function () {
+  UI.closeAll();
+  this.enterWorld(true);
+};
+
+Game.carefulStartScreen = function (cfgIn) {
+  let cfg = CarefulStart.clampConfig(cfgIn || CarefulStart.defaultsFromGame());
+  let seedText = CarefulStart.encode(cfg);
+  let paste = '';
+  const opts = { title: 'Careful Start', wide: true, locked: true };
+  const refresh = () => UI.replaceModal(draw(), opts);
+  const syncSeed = () => { seedText = CarefulStart.encode(cfg); };
+  const field = (label, key, attrs = {}) => h('label', {}, label, ' ',
+    h('input', {
+      type: attrs.type || 'number', value: cfg[key], min: attrs.min, max: attrs.max, step: attrs.step || 1,
+      oninput: (e) => {
+        cfg[key] = attrs.type === 'text' ? e.target.value : Number(e.target.value);
+        cfg = CarefulStart.clampConfig(cfg);
+        syncSeed();
+        refresh();
+      },
+    }));
+  const draw = () => h('div', { class: 'create careful-start' },
+    h('p', { class: 'dim small' }, 'Custom run · shareable seed'),
+    h('p', {}, 'Set the baselines for this House’s world. The seed encodes these options plus a deterministic RNG seed used when the map is rebuilt.'),
+    h('div', { class: 'row idrow careful-fields' },
+      h('label', {}, 'House name ', h('input', { type: 'text', value: cfg.houseName, maxlength: 20, oninput: (e) => { cfg.houseName = e.target.value; syncSeed(); } })),
+      field('Starting year', 'startYear', { min: 1, max: 9999 }),
+      field('Prosperity', 'prosperity', { min: 0, max: 94 }),
+      field('Wards raised', 'wards', { min: 0, max: GD.WARDS_NEEDED }),
+      field('Years until doom', 'doomYears', { min: 100, max: 2000 }),
+      field('Gold', 'gold', { min: 0, max: 50000 }),
+      field('Prestige', 'prestige', { min: 0, max: 500 }),
+      field('Potions', 'potions', { min: 0, max: 99 })),
+    h('div', { class: 'row idrow careful-fields' },
+      h('label', {}, 'Estate tier ',
+        h('select', { onchange: (e) => { cfg.estateTier = Number(e.target.value); cfg = CarefulStart.clampConfig(cfg); syncSeed(); refresh(); } },
+          GD.ESTATE.map((e, i) => h('option', { value: i, selected: cfg.estateTier === i }, `${e.name}`)))),
+      h('label', {}, 'Starting era ',
+        h('select', { onchange: (e) => { cfg.era = e.target.value; syncSeed(); refresh(); } },
+          Object.entries(GD.ERAS).filter(([k]) => k !== 'golden').map(([k, e]) => h('option', { value: k, selected: cfg.era === k }, e.short)))),
+      h('label', {}, 'World size ',
+        h('select', { onchange: (e) => { cfg.worldSize = Number(e.target.value); syncSeed(); refresh(); } },
+          [44, 64, 80].map((n) => h('option', { value: n, selected: cfg.worldSize === n }, `${n}×${n}`)))),
+      h('label', {}, 'RNG seed ',
+        h('input', { type: 'number', value: cfg.seed, min: 1, max: 4294967295,
+          oninput: (e) => { cfg.seed = Number(e.target.value) >>> 0 || 1; syncSeed(); } })),
+      act('New seed', () => { cfg.seed = (Date.now() ^ R.hash(cfg.houseName || 'house')) >>> 0 || 1; syncSeed(); refresh(); })),
+    act('Edit flag & sigil', () => {
+      if (!cfg.heraldry) cfg.heraldry = G.house.heraldry ? JSON.parse(JSON.stringify(G.house.heraldry)) : Heraldry.random();
+      UI.modal([Heraldry.editor(cfg.heraldry, (flag) => { cfg.heraldry = flag; syncSeed(); }),
+        act('Done', () => { UI.closeModal(); refresh(); })], { title: 'House heraldry', wide: true, locked: true });
+    }),
+    h('section', { class: 'seed-box', 'aria-label': 'Shareable seed' },
+      h('h3', {}, 'Shareable seed'),
+      h('p', { class: 'dim small' }, 'Format: GR1. + base64url(JSON). JSON fields: v, seed, startYear, prosperity, wards, doomYears, estateTier, gold, prestige, potions, era, worldSize, houseName, optional heraldry. Paste a seed below to restore the same careful-start config.'),
+      h('label', {}, 'Current seed ',
+        (() => { const ta = h('textarea', { class: 'seed-text', rows: 3, readonly: true, 'aria-label': 'Copyable careful start seed' }); ta.value = seedText; return ta; })()),
+      h('div', { class: 'row' },
+        act('Copy seed', async () => {
+          syncSeed(); seedText = CarefulStart.encode(cfg);
+          try {
+            await navigator.clipboard.writeText(seedText);
+            UI.toast('Seed copied.');
+          } catch (e) {
+            UI.toast('Copy failed — select the seed text manually.');
+          }
+          refresh();
+        }),
+        act('Refresh seed text', () => { cfg = CarefulStart.clampConfig(cfg); syncSeed(); refresh(); })),
+      h('label', {}, 'Paste a shared seed ',
+        (() => {
+          const ta = h('textarea', { class: 'seed-text', rows: 3, placeholder: 'GR1.…',
+            oninput: (e) => { paste = e.target.value; }, 'aria-label': 'Paste shared careful start seed' });
+          ta.value = paste;
+          return ta;
+        })()),
+      act('Apply pasted seed', () => {
+        try {
+          cfg = CarefulStart.decode(paste);
+          paste = '';
+          syncSeed();
+          UI.toast('Seed applied.');
+          refresh();
+        } catch (e) {
+          UI.toast(e.message || 'Could not read that seed.');
+        }
+      }, { cls: 'hl' })),
+    h('div', { class: 'row creation-nav' },
+      act('← Back', () => { UI.closeAll(); this.startPathChoice(); }),
+      act('Begin Careful Start', () => {
+        cfg = CarefulStart.clampConfig(cfg);
+        if (!cfg.houseName) return UI.toast('Give your House a name.');
+        try {
+          CarefulStart.rebuildWorld(cfg);
+        } catch (e) {
+          return UI.toast(e.message || 'Could not build that run.');
+        }
+        UI.closeAll();
+        this.enterWorld(true);
+      }, { cls: 'hl', sub: 'Rebuild world from seed · start playing' })),
+  );
+  UI.modal(draw(), opts);
 };
 
 // Find a spouse for someone of the House (the head, or one of their kin).

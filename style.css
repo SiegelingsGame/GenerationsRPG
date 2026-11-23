@@ -451,6 +451,16 @@ body:not(.has-game) #guide-goal { display: none; }
 .house-summary dl > div { display: grid; grid-template-columns: minmax(100px, 1fr) 2fr; gap: 12px; }
 .house-summary dt { color: var(--dim); }
 .house-summary dd { margin: 0; overflow-wrap: anywhere; }
+.start-path-choice .choices { margin-top: 12px; }
+.careful-fields { flex-wrap: wrap; gap: 12px; }
+.careful-fields label { min-width: 140px; }
+.seed-box { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); }
+.seed-box .seed-text {
+  display: block; width: 100%; max-width: 100%; min-height: 4.5em;
+  background: var(--bg); border: 1px solid var(--line); color: var(--text);
+  padding: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px; border-radius: 4px; resize: vertical; box-sizing: border-box;
+}
 @media (max-width: 600px) { .creation-nav { flex-direction: column; align-items: stretch; } .create input { max-width: 100%; } }
 
 #location-prompt { position: absolute; z-index: 5; width: 244px; max-width: calc(100% - 16px); padding: 10px; background: rgba(21,19,28,.97); border: 1px solid var(--gold); border-radius: 10px; box-shadow: 0 4px 20px #0008; text-align: center; }

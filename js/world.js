@@ -3,12 +3,14 @@
 'use strict';
 
 // ---------------------------------------------------------------- map generation
-const WORLD_SIZE = 64;
+// Default map edge; Careful Start may shrink/grow it before initWorld().
+let WORLD_SIZE = 64;
+const DEFAULT_WORLD_SIZE = 64;
 
 function makeNoise(W, H, scale) {
   const gw = Math.ceil(W / scale) + 2, gh = Math.ceil(H / scale) + 2;
   const g = [];
-  for (let i = 0; i < gw * gh; i++) g.push(Math.random());
+  for (let i = 0; i < gw * gh; i++) g.push(R._rand());
   const sm = (t) => t * t * (3 - 2 * t);
   return (x, y) => {
     const fx = x / scale, fy = y / scale, ix = Math.floor(fx), iy = Math.floor(fy), tx = sm(fx - ix), ty = sm(fy - iy);

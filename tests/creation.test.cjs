@@ -35,7 +35,9 @@ test('mobile creation preserves choices and starts only after House summary', as
   await page.getByRole('heading',{name:'House Dawn',exact:true}).waitFor();
   assert.match(await page.locator('.house-summary').innerText(),/Arden/);
   assert.equal(await page.locator('#guide-goal').count(),0);
-  await page.getByRole('button',{name:'Start the game',exact:true}).click();
+  await page.getByRole('button',{name:'Finish up →',exact:true}).click();
+  await page.getByRole('heading',{name:'Choose your start',exact:true}).waitFor();
+  await page.getByText('Begin Story Start',{exact:true}).click();
   await page.getByText('Your first generation',{exact:true}).waitFor();
   assert.deepEqual(errors,[]);
  } finally { await browser.close(); }

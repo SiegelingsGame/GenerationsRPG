@@ -1,20 +1,44 @@
 // Core model: random helpers, characters, aging, genetics, world simulation, map, save/load.
 'use strict';
 
+// Deterministic RNG (mulberry32). Unseeded calls fall back to Math.random.
 const R = {
-  int: (a, b) => Math.floor(Math.random() * (b - a + 1)) + a,
-  float: (a, b) => a + Math.random() * (b - a),
-  pick: (arr) => arr[Math.floor(Math.random() * arr.length)],
-  chance: (p) => Math.random() < p,
+  _seeded: false,
+  _state: 0,
+  _rand() {
+    if (!this._seeded) return Math.random();
+    this._state |= 0; this._state = (this._state + 0x6D2B79F5) | 0;
+    let t = Math.imul(this._state ^ (this._state >>> 15), 1 | this._state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  },
+  // Seed with a 32-bit integer (or hash a string). Pass null/undefined to return to Math.random.
+  seed(n) {
+    if (n == null || n === '') { this._seeded = false; this._state = 0; return this; }
+    let s = typeof n === 'number' ? (n >>> 0) : this.hash(String(n));
+    if (!s) s = 1;
+    this._state = s;
+    this._seeded = true;
+    return this;
+  },
+  hash(str) {
+    let h = 2166136261 >>> 0;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return h >>> 0;
+  },
+  int: (a, b) => Math.floor(R._rand() * (b - a + 1)) + a,
+  float: (a, b) => a + R._rand() * (b - a),
+  pick: (arr) => arr[Math.floor(R._rand() * arr.length)],
+  chance: (p) => R._rand() < p,
   weighted(obj) {
     let total = 0;
     for (const k in obj) total += obj[k];
-    let r = Math.random() * total;
+    let r = R._rand() * total;
     for (const k in obj) { r -= obj[k]; if (r <= 0) return k; }
     return Object.keys(obj)[0];
   },
   shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(R._rand() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
     return arr;
   },
 };
@@ -493,10 +517,13 @@ function findPath(from, to) {
 
 // ---------------------------------------------------------------- new game
 function newGame() {
+  START_YEAR = DEFAULT_START_YEAR;
+  R.seed(null);
   G = {
     version: 2,
     day: 0,
     nextId: 1,
+    startYear: DEFAULT_START_YEAR,
     chars: {},
     party: [],
     mcId: null,
@@ -951,6 +978,8 @@ function loadGame() {
     if (!data || data.version !== 2) return false;
     G = data;
     G.ledger = G.ledger || [];
+    START_YEAR = G.startYear || DEFAULT_START_YEAR;
+    G.startYear = START_YEAR;
     for (const c of Object.values(G.chars)) {
       c.gender = c.gender || rollGender(); c.orientation = c.orientation || 'straight'; c.pref = c.pref || 'none';
       c.height = c.height || 'average'; c.build = c.build || 'average'; c.looks = c.looks ?? 5; c.hairStyle = c.hairStyle || 'short';

@@ -158,6 +158,15 @@ The land goes through **eras**, each 6–15 years long:
 
 **Prosperity (0–100)** is the world's long-term health. Deeds, cleared ruins and defeated rivals raise it. War and famine wear it down. Prosperity weights which era comes next, so each generation's work makes the next era more likely to be a good one. Reaching 95 prosperity starts the **Golden Age**, which is the goal of the whole game.
 
+## 7a. Prepare Carefully finish-up (Story vs Careful Start)
+
+After Prepare Carefully finishes House review (founder + partner), the player chooses:
+
+1. **Story Start** — enter the world with the prepared House and the normal first-generation guide (same path Random Lineage uses after its summary).
+2. **Careful Start** — customize run baselines that already exist in the model (House name/heraldry, estate tier, starting year, prosperity, wards, years-until-doom, gold/prestige/potions, starting era, world size) and a deterministic RNG seed. Starting Careful Start rebuilds the map/NPC population from that seed while keeping the prepared founder and partner.
+
+**Shareable seed format:** `GR1.` + base64url(JSON). JSON fields: `v`, `seed`, `startYear`, `prosperity`, `wards`, `doomYears`, `estateTier`, `gold`, `prestige`, `potions`, `era`, `worldSize`, `houseName`, optional `heraldry`. Paste a seed on the Careful Start screen to restore the same config (`js/careful-start.js`).
+
 ## 7b. The thousand years
 
 - **Opening (Random Lineage only):** before founding, a skipable chronicle cutscene shows a forgotten age’s champions fighting the Hollow King with spectacle spells, losing, and the King attempting to unmake the timeline. Something resets the weave; a white spirit then seeks the right bloodline in a continuous 2.5D tracking shot — across the world map (Black Spire → seas → starting isle), then through escalating intimacy of space (town → neighborhood → house → room → mother’s belly) with parallax layers, dolly/zoom/pitch, and the spirit’s bloodline monologue. The player’s House is that bloodline’s continuation (`Game.playOpeningCutscene` / `js/opening-cutscene.js`).
@@ -302,6 +311,7 @@ Bands for the UI: I (1–5), II (6–10), III (11–15), IV (16–20). Inspect a
 Implemented in the playable concept (`index.html`):
 
 - [x] House founding: name, race, birth status, choosing 1 of 3 partners
+- [x] Prepare Carefully finish-up: **Story Start** (normal guided begin) vs **Careful Start** (custom run baselines + shareable `GR1.` seed; seeded world rebuild). See README / `js/careful-start.js`.
 - [x] Random Lineage opening cutscene: throwaway high-level party vs the Hollow King (PackArt god-spell VFX), forced defeat, timeline reset, white spirit seeks/claims the bloodline; skipable (Esc / Skip), then normal QuickStart founding
 - [x] Aging, life stages, XP modifiers, formative points, old-age death
 - [x] Isometric overworld with towns, ruins and the estate; time cost per step
