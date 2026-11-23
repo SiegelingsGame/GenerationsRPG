@@ -130,6 +130,7 @@ button.act.danger { border-color: #6e3a33; }
 .tag { font-size: 11px; border: 1px solid var(--line); border-radius: 10px; padding: 2px 8px; }
 .tag.good { border-color: var(--good); color: var(--good); }
 .tag.bad { border-color: var(--bad); color: var(--bad); }
+.lore-tags .tag { cursor: pointer; }
 table.stats { border-collapse: collapse; margin: 8px 0; }
 table.stats td { padding: 2px 12px 2px 0; }
 table.stats td:first-child { color: var(--gold); }

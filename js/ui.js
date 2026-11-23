@@ -357,6 +357,15 @@ UI.battleChanged = function () {
   const p = $('#panel');
   const u = Battle.cur;
   const kids = [h('h3', {}, Battle.title)];
+  const foes = Battle.units.filter((x) => x.side === 'enemy' && x.alive);
+  if (foes.length) {
+    kids.push(h('div', { class: 'tags lore-tags' }, foes.map((f) =>
+      h('span', {
+        class: 'tag' + (f.type && EnemyLore.get(f.type) > 0 ? ' good' : ''),
+        title: f.type ? EnemyLore.summary(f.type) : f.name,
+        onclick: (e) => { e.stopPropagation(); this.showEnemy(f); },
+      }, f.type ? EnemyLore.shortTag(f.type) : f.name))));
+  }
   if (Battle.waiting && u && u.side === 'party') {
     const cl = GD.CLASSES[u.cls];
     const st = Object.keys(u.st || {}).filter((k) => Battle.st(u, k)).map((k) => ({ atkUp: 'inspired', bloodlust: 'bloodlust', guard: 'guarded', defDown: 'exposed', slow: 'slowed', mark: 'marked', shield: `shield ${u.st.shield && u.st.shield.v}`, riposte: 'riposte' }[k])).filter(Boolean);
@@ -402,7 +411,26 @@ UI.chooseTarget = function (x) {
 };
 UI.clickUnit = function (u) {
   if (this.targeting && this.validTarget(u)) this.chooseTarget(u);
+  else if (u.side === 'enemy') this.showEnemy(u);
   else if (u.charId && !Battle.waiting) { /* ignore */ }
+};
+
+UI.showEnemy = function (u) {
+  const d = u.type && GD.ENEMIES[u.type];
+  const rows = [
+    h('p', {}, h('b', {}, u.name), ` · Level ${u.lvl}${u.boss ? ' · Boss' : ''}`),
+    h('p', { class: 'dim' }, `HP ${Math.round(u.hp)}/${u.maxHp}${d ? ` · ${d.shape}` : ''}`),
+    u.type ? h('p', { class: u.type && EnemyLore.get(u.type) > 0 ? 'good' : 'dim' }, EnemyLore.summary(u.type))
+      : h('p', { class: 'dim' }, 'A named foe — no bestiary entry.'),
+  ];
+  if (u.type && EnemyLore.get(u.type) > 0) {
+    rows.push(h('p', { class: 'dim' }, `House lore ${EnemyLore.get(u.type)}/${EnemyLore.CAP}. Fight, strike and defeat this kind to learn more.`));
+  } else if (u.type) {
+    rows.push(h('p', { class: 'dim' }, 'Strike and defeat this foe to learn its weaknesses.'));
+  }
+  const st = Object.keys(u.st || {}).filter((k) => Battle.st(u, k));
+  if (st.length) rows.push(h('p', { class: 'dim' }, 'Status: ' + st.join(', ')));
+  this.modal(rows, { title: u.name });
 };
 
 UI.battleResults = function (res, done) {
@@ -498,7 +526,7 @@ UI.charBody = function (c) {
         const heir = G.mcId === c.id && G.house.heirloom ? ` · ${G.house.heirloom.name} (+${G.house.heirloom.power})` : '';
         return h('p', { class: 'dim' }, `Max HP ${maxHp(c)} · ${bits}${heir}`);
       })(),
-      (c.house === G.house.name || c.status === 'party' || c.status === 'household') && c.alive
+      !Battle.active && (c.house === G.house.name || c.status === 'party' || c.status === 'household') && c.alive
         ? act('Open equipment', () => { this.closeModal(); this.showEquipment(c); }, { sub: 'paper doll · class kit' }) : null,
       h('h4', {}, 'Family'),
       lineage,
@@ -512,7 +540,40 @@ UI.charBody = function (c) {
     ));
 };
 
+// Mid-battle party popup: combat info only — no estate social / equipment / courtship actions.
+UI.battleCharActions = function (c) {
+  const out = [];
+  const u = Battle.units.find((x) => x.charId === c.id);
+  if (u) {
+    const st = Object.keys(u.st || {}).filter((k) => Battle.st(u, k)).map((k) => ({
+      atkUp: 'inspired', bloodlust: 'bloodlust', guard: 'guarded', defDown: 'exposed',
+      slow: 'slowed', mark: 'marked', shield: 'shielded', riposte: 'riposte',
+    }[k] || k));
+    out.push(h('p', { class: 'dim' }, `In battle · ATK ${Math.round(u.atk)} · DEF ${Math.round(u.def)} · MAG ${Math.round(u.mag)} · Focus ${u.focus}/3`));
+    out.push(h('p', { class: 'dim' }, `HP ${Math.round(u.hp)}/${u.maxHp}${u.defending ? ' · guarding' : ''}${st.length ? ' · ' + st.join(', ') : ''}`));
+    out.push(h('p', { class: 'dim' }, `Bonuses · +${Equip.bonus(c, 'atk')} atk · +${Equip.bonus(c, 'def')} def · +${Equip.bonus(c, 'mag')} mag`));
+    if (u.alive && Battle.waiting && Battle.cur === u) {
+      out.push(act(`Use Potion (${G.house.potions})`, () => {
+        this.closeModal();
+        Battle.act('potion', u.uid);
+      }, { sub: 'restore ~45% HP', disabled: G.house.potions <= 0 }));
+    }
+  } else {
+    out.push(h('p', { class: 'dim' }, 'Not fighting in this battle.'));
+  }
+  const foes = Battle.units.filter((x) => x.side === 'enemy');
+  const types = [...new Set(foes.map((e) => e.type).filter(Boolean))];
+  if (types.length) {
+    out.push(h('h4', {}, 'Enemy knowledge'));
+    for (const type of types) {
+      out.push(h('p', { class: EnemyLore.get(type) > 0 ? 'good' : 'dim' }, EnemyLore.summary(type)));
+    }
+  }
+  return out;
+};
+
 UI.charActions = function (c) {
+  if (Battle.active) return this.battleCharActions(c);
   const mc = ch(G.mcId);
   const out = [];
   const close = c && (c.house === G.house.name || c.status === 'party' || c.status === 'household');

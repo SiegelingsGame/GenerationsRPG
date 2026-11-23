@@ -465,6 +465,8 @@ function newGame() {
       name: 'Ashford', color: GD.HOUSE_COLORS[0], prestige: 0, gold: 150, tier: 0,
       up: { horses: 0, livestock: 0, yard: 0, library: 0, chapel: 0, armory: 0 },
       retinue: 0, potions: 3, generation: 1, heirloom: null, heroes: [], reigns: [], stash: [],
+      // Enemy lore: knowledge 0–20 per enemy type. See EnemyLore / docs/DESIGN.md §8c.
+      lore: {},
     },
     world: { map: null, towns: [], prosperity: 30, era: null, eras: [], victory: false },
     pos: { x: 0, y: 0 },
@@ -910,6 +912,7 @@ function loadGame() {
     }
     G.house.reigns = G.house.reigns || [];
     G.house.stash = G.house.stash || [];
+    G.house.lore = G.house.lore || {};
     Equip.ensureHouse();
     Heraldry.ensureAll();
     return true;
@@ -917,3 +920,49 @@ function loadGame() {
 }
 function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch (e) { return false; } }
 function deleteSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ } }
+
+// ---------------------------------------------------------------- enemy lore (House familiarity)
+// Fighting the same foe teaches the House. Knowledge is per enemy type, capped at 20.
+// Each point: +0.5% damage dealt to that type, +0.4% resist vs their attacks (max +10% / +8%).
+// Gain: +1 the first time you hit a given foe in a battle, +2 when that foe is defeated.
+const EnemyLore = {
+  CAP: 20,
+  HIT: 1,
+  KILL: 2,
+  DMG_PER: 0.005,
+  RES_PER: 0.004,
+  ensure() { if (!G.house.lore) G.house.lore = {}; },
+  get(type) {
+    this.ensure();
+    return Math.min(this.CAP, G.house.lore[type] || 0);
+  },
+  add(type, n) {
+    if (!type || !GD.ENEMIES[type] || !n) return 0;
+    this.ensure();
+    const before = this.get(type);
+    G.house.lore[type] = Math.min(this.CAP, before + n);
+    return G.house.lore[type] - before;
+  },
+  dmgBonus(type) { return this.get(type) * this.DMG_PER; },
+  resist(type) { return this.get(type) * this.RES_PER; },
+  band(type) {
+    const k = this.get(type);
+    if (k <= 0) return 0;
+    return Math.min(4, Math.ceil(k / 5));
+  },
+  roman(n) { return ['', 'I', 'II', 'III', 'IV'][n] || ''; },
+  name(type) { return (GD.ENEMIES[type] && GD.ENEMIES[type].name) || type || 'Foe'; },
+  pct(n) { return Math.round(n * 100); },
+  summary(type) {
+    const k = this.get(type);
+    const name = this.name(type);
+    if (k <= 0) return `Unknown: ${name}`;
+    return `Known: ${name} ${this.roman(this.band(type))} — +${this.pct(this.dmgBonus(type))}% dmg / +${this.pct(this.resist(type))}% resist`;
+  },
+  shortTag(type) {
+    const k = this.get(type);
+    const name = this.name(type);
+    if (k <= 0) return name;
+    return `${name} ${this.roman(this.band(type))}`;
+  },
+};

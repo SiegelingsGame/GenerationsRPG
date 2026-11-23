@@ -140,17 +140,24 @@ Battle.inMult = function (t) {
   return m;
 };
 Battle.armour = function (t) { return t.def * (this.st(t, 'defDown') ? 0.5 : 1); };
+// Apply House enemy-lore multipliers: bonus damage vs studied types, resist vs their blows.
+Battle.loreMult = function (u, t) {
+  let m = 1;
+  if (u.side === 'party' && t && t.side === 'enemy' && t.type) m *= 1 + EnemyLore.dmgBonus(t.type);
+  if (u.side === 'enemy' && u.type && t && t.side === 'party') m *= Math.max(0.5, 1 - EnemyLore.resist(u.type));
+  return m;
+};
 Battle.physical = function (u, t, mult, extraCrit = 0, pierce = 0) {
   if (u.cls === 'knight') pierce = Math.min(0.9, pierce + 0.25);
   let dmg = u.atk * R.float(0.85, 1.15) * mult * this.outMult(u) - this.armour(t) * 0.5 * (1 - pierce);
   const crit = R.chance(0.05 + u.agi * 0.008 + extraCrit + (u.cls === 'ranger' ? 0.1 : 0) + (u.cls === 'knight' ? 0.08 : 0));
   if (crit) dmg *= 1.6;
-  dmg *= this.inMult(t);
+  dmg *= this.inMult(t) * this.loreMult(u, t);
   return { dmg: Math.max(1, Math.round(dmg)), crit };
 };
 Battle.magic = function (u, t, mult) {
   let dmg = u.mag * R.float(0.9, 1.1) * mult * this.outMult(u) - this.armour(t) * 0.15;
-  dmg *= this.inMult(t);
+  dmg *= this.inMult(t) * this.loreMult(u, t);
   return { dmg: Math.max(1, Math.round(dmg)), crit: false };
 };
 Battle.healUnit = function (u, t, amt, label) {
