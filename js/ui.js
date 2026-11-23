@@ -388,7 +388,16 @@ UI.battleChanged = function () {
   p.replaceChildren(...kids);
   if (this.isMobile() && this.mob) $('#stage').style.bottom = this.mob.sheet.offsetHeight + 'px';
 };
-UI.beginTarget = function (kind) { this.targeting = kind; this.battleChanged(); };
+UI.beginTarget = function (kind) {
+  this.targeting = kind;
+  // One valid target: skip the confirm/pick step and act immediately.
+  const targets = Battle.units.filter((x) => this.validTarget(x));
+  if (targets.length === 1) {
+    this.chooseTarget(targets[0]);
+    return;
+  }
+  this.battleChanged();
+};
 UI.validTarget = function (x) {
   const u = Battle.cur;
   if (!u || !x.alive || !this.targeting) return false;
