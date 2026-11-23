@@ -205,7 +205,10 @@ const Origins = {
 
   grantStory(mc, g, e) {
     const kit = Equip.kitFor(mc);
-    const opts = { rarity: g.rarity, skill: g.skill || null, passive: g.passive || null, name: g.name, mods: g.mods || [] };
+    const opts = {
+      rarity: g.rarity, skill: g.skill || null, passive: g.passive || null,
+      name: g.name, mods: g.mods || [], force: true,
+    };
     if (g.hand) {
       Equip.grant(mc, g.kind || kit.hand, g.tier || e.gearTier || 2, opts);
       return;

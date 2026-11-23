@@ -416,11 +416,12 @@ Equip.seedStarter = function (c, tier, o = {}) {
 };
 
 // Grant a named piece (often a story start reward) and equip it.
+// opts.force equips even when the class kit normally rejects the kind (origin story gear).
 Equip.grant = function (c, kind, tier, opts = {}) {
   this.ensureChar(c);
   const item = this.makeItem(kind, tier, opts);
   if (!item) return null;
-  if (this.canWear(c, item)) {
+  if (opts.force || this.canWear(c, item)) {
     if (c.equip[item.slot]) this.addToStash(c.equip[item.slot]);
     c.equip[item.slot] = item;
     this.syncLegacy(c);

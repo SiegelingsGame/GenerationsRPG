@@ -45,6 +45,10 @@ test('ten origins apply gear/rarity; intro photo and guided start open', async (
         // restore gold drift from apply for next loop roughly
       }
       const item = Equip.makeItem('blade', 3, { rarity: 'legendary', mods: ['keen', 'strong'], skill: 'cleave', passive: 'bloodthirst' });
+      // Story grants equip even when the class kit would normally refuse them.
+      const priest = makeChar({ cls: 'priest', race: 'human', birth: 'lowborn', house: G.house.name, status: 'party' });
+      Origins.apply(priest, 'debtor');
+      const debtAxe = priest.equip.hand;
       return {
         originCount: ids.length,
         originName: origin.name,
@@ -54,6 +58,7 @@ test('ten origins apply gear/rarity; intro photo and guided start open', async (
         item: { rarity: item.rarity, atk: item.atk, skill: item.skill, passive: item.passive, stats: item.stats },
         applied: applied.length,
         hasVeteranArm: applied.find((a) => a.id === 'veteran').injuries.includes('lostArm'),
+        debtAxe: debtAxe && { kind: debtAxe.kind, name: debtAxe.name, rarity: debtAxe.rarity },
       };
     });
     assert.equal(state.originCount, 10);
@@ -61,6 +66,8 @@ test('ten origins apply gear/rarity; intro photo and guided start open', async (
     assert.ok(state.goal);
     assert.equal(state.applied, 10);
     assert.ok(state.hasVeteranArm);
+    assert.equal(state.debtAxe.kind, 'axe');
+    assert.equal(state.debtAxe.name, 'Debt-Axe');
     assert.equal(state.item.rarity, 'legendary');
     assert.equal(state.item.skill, 'cleave');
     assert.equal(state.item.passive, 'bloodthirst');
