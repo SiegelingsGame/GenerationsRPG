@@ -387,6 +387,8 @@ Render.drawLandscape = function () {
       c.fillStyle = t.feature === 'estate' ? 'rgba(255, 215, 120, 0.14)' : 'rgba(200, 190, 160, 0.1)';
       c.beginPath(); c.ellipse(p.x, p.y + 4, 22, 11, 0, 0, Math.PI * 2); c.fill();
     }
+    // nearby place owns this spot as a live nametag chip
+    if (typeof LocationPrompt !== 'undefined' && LocationPrompt.hidesLabel(t)) continue;
     const town = t.feature === 'town' ? G.world.towns[t.townIdx] : null;
     const label = town ? `${town.name}${town.size >= 4 ? ' ★' : ''}` : t.feature === 'estate' ? `House ${G.house.name}`
       : Events.label(t) ? Events.label(t) : t.feature === 'spire' ? 'The Black Spire' : t.feature === 'shrine' ? (t.lit ? 'Beacon (lit)' : 'Beacon Shrine')
@@ -779,6 +781,7 @@ Render.drawWorldTiles = function () {
   c.textAlign = 'center';
   for (const t of map.tiles) {
     if (!t.feature) continue;
+    if (typeof LocationPrompt !== 'undefined' && LocationPrompt.hidesLabel(t)) continue;
     const p = this.iso(t.x, t.y, t.h);
     const zx = (p.x - this.w / 2) * this.zoom + this.w / 2, zy = (p.y - this.h / 2) * this.zoom + this.h / 2;
     if (zx < -60 || zx > this.w + 60 || zy < -60 || zy > this.h + 100) continue;
