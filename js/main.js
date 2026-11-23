@@ -373,8 +373,12 @@ Game.arrive = function () {
   const t = tileAt(G.pos.x, G.pos.y);
   const q = G.world.doom.quest;
   if (q && q.x === t.x && q.y === t.y) {
-    if (q.type === 'herald') return this.heraldBattle();
+    if (q.type === 'herald') {
+      LocationPrompt.pending = null;
+      return this.heraldBattle();
+    }
     if (q.type === 'beacon') {
+      LocationPrompt.pending = null;
       if (R.chance(0.5)) {
         return this.battle(buildEncounter(t, { hard: true, count: 3 }), { kind: 'dungeon', title: 'Guardians of the Beacon',
           after: (res) => { if (res.outcome === 'victory') completeQuest(); } });

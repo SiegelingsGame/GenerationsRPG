@@ -58,9 +58,11 @@ Living.goPoint = function (pt, agent) {
   LocationPrompt.pending = null;
   if (!this.ensure() || Battle.active || UI.modalStack.length || TownView.open || Campfire.open) return;
   if (!LS.ensure()) return;
-  // snap onto places of note
+  // snap onto places of note (features and the active doom-quest marker — heralds have no feature)
+  const q = G.world.doom && G.world.doom.quest;
+  if (q && q.x != null && Math.hypot(pt.x - q.x, pt.y - q.y) < 0.85) pt = { x: q.x, y: q.y };
   const t = tileAt(clamp(Math.round(pt.x), 0, G.world.map.W - 1), clamp(Math.round(pt.y), 0, G.world.map.H - 1));
-  if (t && t.feature && Math.hypot(pt.x - t.x, pt.y - t.y) < 0.6) pt = { x: t.x, y: t.y };
+  if (t && (t.feature || questAt(t.x, t.y)) && Math.hypot(pt.x - t.x, pt.y - t.y) < 0.6) pt = { x: t.x, y: t.y };
   if (agent && Math.hypot(agent.x - G.ppos.x, agent.y - G.ppos.y) < 0.7) { this.stop(); return this.encounter(agent, true); }
   const path = LS.path(G.ppos, pt);
   if (!path) {
@@ -141,9 +143,19 @@ Living.frame = function (ts) {
 Living.enterTile = function (t) {
   for (const id of G.party) { const c = ch(id); if (c) c.hp = Math.min(maxHp(c), c.hp + maxHp(c) * 0.03); }
   UI.refresh();
+  const q = questAt(t.x, t.y);
+  // Herald markers have no feature; force the encounter as soon as you step onto the marked tile
+  // (do not wait for the path to finish elsewhere, and do not let a random ambush steal the tile).
+  if (q && q.type === 'herald') {
+    this.stop();
+    this.path = [];
+    this.dest = null;
+    G.pos = { x: t.x, y: t.y };
+    G.ppos = { x: t.x, y: t.y };
+    return Game.arrive();
+  }
   if (isWater(t) || t.feature) return;
-  const q = G.world.doom.quest;
-  if (q && q.x === t.x && q.y === t.y) return;
+  if (q) return;
   const rough = { forest: 1.4, jungle: 1.5, swamp: 1.4, hills: 1.2, mountain: 1.3, desert: 1.1, snow: 1.1 }[t.type] || 1;
   if (R.chance(0.13 * Math.sqrt(era().enc) * rough)) {
     this.stop();

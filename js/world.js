@@ -418,6 +418,11 @@ function repMult() { return 1 + reputation() * 0.25; }
 
 // ---------------------------------------------------------------- the thousand-year doom and its quests
 function doomYearsLeft() { return G.world.doom.year - year(); }
+// Active doom quest sitting on these map coords (herald markers have no tile.feature).
+function questAt(x, y) {
+  const q = G.world && G.world.doom && G.world.doom.quest;
+  return q && q.x === x && q.y === y ? q : null;
+}
 function questPlace(t) {
   if (t.feature === 'town') return G.world.towns[t.townIdx].name;
   const near = liveTowns().sort((a, b) => (Math.abs(a.x - t.x) + Math.abs(a.y - t.y)) - (Math.abs(b.x - t.x) + Math.abs(b.y - t.y)))[0];
