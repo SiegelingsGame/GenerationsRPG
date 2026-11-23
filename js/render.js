@@ -684,18 +684,38 @@ Render.drawParty = function (pp) {
   this.drawFigure(p.x + 4, p.y + 6, figLook(mc), 0.62, { bob: (this.move || Living.moving) ? Math.sin(this.t / 90) : 0, banner: G.house.color });
 };
 
-function figLook(c) {
+function figLook(c, overlay) {
   const inj = {};
   for (const k of c.injuries || []) if (GD.INJURIES[k].look) inj[GD.INJURIES[k].look] = true;
+  const full = Equip.isChar(c);
+  if (full) Equip.ensureChar(c);
+  const eq = overlay || (full && c.equip) || {};
+  const body = eq.body;
+  const head = eq.head;
+  const feet = eq.feet;
+  const hand = eq.hand;
+  const off = eq.offhand;
+  const armorTier = body ? body.tier : (full && c.gear && c.gear.armor) || 0;
+  const clsKey = full ? classFor(c) : (c.cls && GD.CLASSES[c.cls] ? c.cls : null);
+  const stage = (c.born != null && c.lifespan != null) ? stageKey(c) : (c.stage || 'prime');
   return {
-    skin: GD.RACES[c.race].skin, hair: c.hair, tunic: c.tunic, stage: stageKey(c), race: c.race, evil: c.evil,
-    house: G && G.house && c.house === G.house.name, inj, armor: (c.gear && c.gear.armor) || 0,
+    skin: (GD.RACES[c.race] || GD.RACES.human).skin, hair: c.hair, tunic: c.tunic, stage, race: c.race || 'human', evil: c.evil,
+    house: full && G && G.house && c.house === G.house.name, inj, armor: armorTier,
+    bodyStyle: body ? (body.kind === 'robe' ? 'robe' : body.kind === 'leather' ? 'leather' : 'armor') : null,
+    headStyle: head ? head.kind : null, headTier: head ? head.tier : 0,
+    feetStyle: feet ? feet.kind : null, feetTier: feet ? feet.tier : 0,
+    weapon: hand && hand.weapon ? hand.weapon : (off && off.weapon === 'shield' ? 'shield' : ((clsKey && GD.CLASSES[clsKey]) || {}).weapon || null),
+    hasShield: !!(off && off.weapon === 'shield'),
     gender: c.gender || 'man', hairStyle: c.hairStyle || 'short', beard: !!c.beard,
     hScale: GD.HEIGHTS[c.height || 'average'].scale, wScale: GD.BUILDS[c.build || 'average'].width,
     cane: c.condition === 'lame', cloudy: c.condition === 'cloudedEye',
   };
 }
 const ARMOR_COLORS = ['', '#7d7f84', '#a9b1b9', '#c8d0d8', '#d4b05a', '#8fd8f0'];
+const ROBE_COLORS = ['', '#5a4a7a', '#6a5a9a', '#7a6aba', '#9a7ad4', '#c9a0ff'];
+const LEATHER_COLORS = ['', '#6b4a32', '#7a5538', '#8a6440', '#a8782e', '#c49a4a'];
+const HELM_COLORS = ['', '#7d7f84', '#a9b1b9', '#c8d0d8', '#d4b05a', '#8fd8f0'];
+const CROWN_COLORS = ['', '#b08a4a', '#c9a24a', '#e0c27a', '#ffd76a', '#fff3a0'];
 
 // ---------------------------------------------------------------- figures
 Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
@@ -740,20 +760,39 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
   c.moveTo(x - hip * s * wd, by); c.lineTo(x + hip * s * wd, by);
   c.lineTo(x + sh * s * wd + stoop * 0.5, by - 20 * s); c.lineTo(x - sh * s * wd + stoop * 0.5, by - 20 * s);
   c.closePath(); c.fill();
-  // armour: a breastplate and pauldrons that change with its tier
+  // body gear: plate, leather, or flowing robes by class kit
   if (look.armor && !fl) {
-    const ac = ARMOR_COLORS[look.armor];
-    c.fillStyle = ac;
-    c.beginPath();
-    c.moveTo(x - 6.5 * s * wd, by - 4 * s); c.lineTo(x + 6.5 * s * wd, by - 4 * s);
-    c.lineTo(x + 6 * s * wd + stoop * 0.5, by - 18 * s); c.lineTo(x - 6 * s * wd + stoop * 0.5, by - 18 * s);
-    c.closePath(); c.fill();
-    c.fillStyle = shade(ac, 0.3); c.fillRect(x - 1 * s + stoop * 0.25, by - 17 * s, 2 * s, 12 * s);
-    if (look.armor >= 2) {
-      c.fillStyle = shade(ac, -0.15);
-      c.beginPath(); c.arc(x - 8 * s * wd + stoop * 0.5, by - 18 * s, 3.5 * s, 0, Math.PI * 2); c.fill();
-      if (!inj.arm) { c.beginPath(); c.arc(x + 8 * s * wd + stoop * 0.5, by - 18 * s, 3.5 * s, 0, Math.PI * 2); c.fill(); }
+    const style = look.bodyStyle || 'armor';
+    if (style === 'robe') {
+      const rc = ROBE_COLORS[look.armor] || ROBE_COLORS[1];
+      c.fillStyle = rc;
+      c.beginPath();
+      c.moveTo(x - hip * s * wd - 1 * s, by + 2 * s); c.lineTo(x + hip * s * wd + 1 * s, by + 2 * s);
+      c.lineTo(x + sh * s * wd + stoop * 0.5, by - 20 * s); c.lineTo(x - sh * s * wd + stoop * 0.5, by - 20 * s);
+      c.closePath(); c.fill();
+      c.fillStyle = shade(rc, 0.25);
+      c.fillRect(x - 1.2 * s + stoop * 0.25, by - 18 * s, 2.4 * s, 16 * s);
+    } else {
+      const ac = style === 'leather' ? (LEATHER_COLORS[look.armor] || LEATHER_COLORS[1]) : ARMOR_COLORS[look.armor];
+      c.fillStyle = ac;
+      c.beginPath();
+      c.moveTo(x - 6.5 * s * wd, by - 4 * s); c.lineTo(x + 6.5 * s * wd, by - 4 * s);
+      c.lineTo(x + 6 * s * wd + stoop * 0.5, by - 18 * s); c.lineTo(x - 6 * s * wd + stoop * 0.5, by - 18 * s);
+      c.closePath(); c.fill();
+      c.fillStyle = shade(ac, 0.3); c.fillRect(x - 1 * s + stoop * 0.25, by - 17 * s, 2 * s, 12 * s);
+      if (look.armor >= 2 && style === 'armor') {
+        c.fillStyle = shade(ac, -0.15);
+        c.beginPath(); c.arc(x - 8 * s * wd + stoop * 0.5, by - 18 * s, 3.5 * s, 0, Math.PI * 2); c.fill();
+        if (!inj.arm) { c.beginPath(); c.arc(x + 8 * s * wd + stoop * 0.5, by - 18 * s, 3.5 * s, 0, Math.PI * 2); c.fill(); }
+      }
     }
+  }
+  // boots / shoes
+  if (look.feetStyle && !fl && !o.seated) {
+    const dark = look.feetStyle === 'boots' ? '#2a2018' : '#4a3a55';
+    c.fillStyle = dark;
+    c.fillRect(x - 5.5 * s * wd, y - 4 * s, 5 * s * wd, 4 * s);
+    if (!inj.leg) c.fillRect(x + 0.5 * s * wd, y - 4 * s, 5 * s * wd, 4 * s);
   }
   // belt / house sash
   c.fillStyle = look.house ? G.house.color : '#4a3a2a';
@@ -769,10 +808,11 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
     c.strokeStyle = '#6b4a2a'; c.lineWidth = 1.6 * s;
     c.beginPath(); c.moveTo(x - (sh + 2) * s * wd, by - 6 * s); c.lineTo(x - (sh + 4) * s * wd, y); c.stroke();
   }
-  // weapon
-  if (o.weapon && !(inj.arm && o.weapon !== 'shield')) {
+  // weapon (options override, else the look from equipped gear / class)
+  const wield = o.weapon || look.weapon;
+  if (wield && !(inj.arm && wield !== 'shield')) {
     const hx0 = x + 10 * s * wd, hy0 = by - 6 * s;
-    const w = o.weapon;
+    const w = wield;
     if (w === 'bow') {
       c.strokeStyle = '#7a5a3a'; c.lineWidth = 2 * s;
       c.beginPath(); c.arc(hx0 + 4 * s, hy0 - 10 * s, 12 * s, -Math.PI * 0.45, Math.PI * 0.45); c.stroke();
@@ -806,18 +846,44 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
     c.beginPath(); c.moveTo(hx - 6 * s, hy); c.lineTo(hx - 11 * s, hy - 5 * s); c.lineTo(hx - 5 * s, hy - 2 * s); c.fill();
     c.beginPath(); c.moveTo(hx + 6 * s, hy); c.lineTo(hx + 11 * s, hy - 5 * s); c.lineTo(hx + 5 * s, hy - 2 * s); c.fill();
   }
-  // hair, in the person's own style
+  // hair, in the person's own style (hidden under a full helm)
+  const helmOn = look.headStyle === 'helm' && look.headTier;
   c.fillStyle = hair;
   const style = look.hairStyle || 'short';
-  if (style !== 'shaved') {
-    c.beginPath(); c.arc(hx, hy - 1.5 * s, (style === 'crop' ? 6.6 : 6.9) * s, Math.PI * 1.05, Math.PI * 1.95); c.fill();
-  } else {
-    c.globalAlpha = 0.35; c.beginPath(); c.arc(hx, hy - 1 * s, 6.6 * s, Math.PI * 1.1, Math.PI * 1.9); c.fill(); c.globalAlpha = 1;
+  if (!helmOn) {
+    if (style !== 'shaved') {
+      c.beginPath(); c.arc(hx, hy - 1.5 * s, (style === 'crop' ? 6.6 : 6.9) * s, Math.PI * 1.05, Math.PI * 1.95); c.fill();
+    } else {
+      c.globalAlpha = 0.35; c.beginPath(); c.arc(hx, hy - 1 * s, 6.6 * s, Math.PI * 1.1, Math.PI * 1.9); c.fill(); c.globalAlpha = 1;
+    }
+    if (style === 'long') { c.fillRect(hx - 7 * s, hy - 2 * s, 2.6 * s, 11 * s); c.fillRect(hx + 4.4 * s, hy - 2 * s, 2.6 * s, 11 * s); }
+    if (style === 'bun') { c.beginPath(); c.arc(hx - 3 * s, hy - 7.5 * s, 3 * s, 0, Math.PI * 2); c.fill(); }
+    if (style === 'braid') { c.fillRect(hx - 6.8 * s, hy - 1 * s, 2.2 * s, 14 * s); c.beginPath(); c.arc(hx - 5.7 * s, hy + 13.5 * s, 1.6 * s, 0, Math.PI * 2); c.fill(); }
   }
-  if (style === 'long') { c.fillRect(hx - 7 * s, hy - 2 * s, 2.6 * s, 11 * s); c.fillRect(hx + 4.4 * s, hy - 2 * s, 2.6 * s, 11 * s); }
-  if (style === 'bun') { c.beginPath(); c.arc(hx - 3 * s, hy - 7.5 * s, 3 * s, 0, Math.PI * 2); c.fill(); }
-  if (style === 'braid') { c.fillRect(hx - 6.8 * s, hy - 1 * s, 2.2 * s, 14 * s); c.beginPath(); c.arc(hx - 5.7 * s, hy + 13.5 * s, 1.6 * s, 0, Math.PI * 2); c.fill(); }
-  if (st === 'venerable') { c.fillStyle = look.skin; c.beginPath(); c.arc(hx, hy - 4 * s, 3 * s, Math.PI, 0); c.fill(); }
+  if (st === 'venerable' && !helmOn) { c.fillStyle = look.skin; c.beginPath(); c.arc(hx, hy - 4 * s, 3 * s, Math.PI, 0); c.fill(); }
+  // headgear: helm, crown, or hood
+  if (look.headStyle && look.headTier && !fl) {
+    if (look.headStyle === 'helm') {
+      const hc = HELM_COLORS[look.headTier] || HELM_COLORS[1];
+      c.fillStyle = hc;
+      c.beginPath(); c.arc(hx, hy - 1.5 * s, 7.2 * s, Math.PI, 0); c.fill();
+      c.fillRect(hx - 7.2 * s, hy - 1.5 * s, 14.4 * s, 4 * s);
+      c.fillStyle = shade(hc, -0.25);
+      c.beginPath(); c.moveTo(hx - 3 * s, hy + 1 * s); c.lineTo(hx, hy - 2 * s); c.lineTo(hx + 3 * s, hy + 1 * s); c.closePath(); c.fill();
+    } else if (look.headStyle === 'crown') {
+      const cc = CROWN_COLORS[look.headTier] || CROWN_COLORS[1];
+      c.fillStyle = cc;
+      c.fillRect(hx - 6.5 * s, hy - 7 * s, 13 * s, 2.4 * s);
+      for (let i = -2; i <= 2; i++) {
+        c.fillRect(hx + i * 2.6 * s - 0.8 * s, hy - (i === 0 ? 11 : 9.5) * s, 1.6 * s, (i === 0 ? 4.5 : 3) * s);
+      }
+    } else if (look.headStyle === 'hood') {
+      c.fillStyle = '#3a2a22';
+      c.beginPath(); c.arc(hx, hy - 1 * s, 7.4 * s, Math.PI * 1.05, Math.PI * 1.95); c.fill();
+      c.fillRect(hx - 7.5 * s, hy - 2 * s, 3 * s, 10 * s);
+      c.fillRect(hx + 4.5 * s, hy - 2 * s, 3 * s, 10 * s);
+    }
+  }
   // beard
   if (look.beard && st !== 'child') {
     c.fillStyle = hair;

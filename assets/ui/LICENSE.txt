@@ -1,0 +1,9 @@
+Kasaya's Frames — free pixel UI pack by Kasaya
+Source: https://kasayaa.itch.io/kasayas-inventory-and-frames
+
+You CAN use this pack in personal and commercial projects.
+You CAN modify the asset files.
+You CAN NOT resell or redistribute this asset pack (or any part of it), even if modified.
+Crediting is optional but appreciated.
+
+Only the sprites listed in sources.json are bundled for use inside Generations RPG.

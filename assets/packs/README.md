@@ -9,3 +9,5 @@ This directory contains only sprites used by Generations RPG, extracted from use
 `sources.json` maps bundled assets back to their ZIP members and crop coordinates. `scripts/import-game-packs.py` regenerates these resources from the three supplied ZIP files (Pillow required). `js/pack-data.js` preserves frame dimensions, counts and original frame rates. No assets are loaded from external servers during gameplay.
 
 The scenery layout, gameplay, collision and world simulation remain game code. Furniture layouts derive from the world seed and location coordinates so they survive save/load. Decorations do not create invisible movement barriers. Effects are cosmetic and do not change damage, turn costs, target selection, or AI decisions. Motion reduction uses static effect frames when the device requests reduced motion.
+
+Inventory and equipment UI chrome lives in `assets/ui/` (Kasaya's Frames). See that folder's README and LICENSE.

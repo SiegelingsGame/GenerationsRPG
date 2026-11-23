@@ -1,0 +1,202 @@
+{
+  "slot-helm.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/helm.png",
+    "size": [
+      80,
+      80
+    ]
+  },
+  "slot-armour.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/armour.png",
+    "size": [
+      80,
+      80
+    ]
+  },
+  "slot-boot.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/boot.png",
+    "size": [
+      80,
+      80
+    ]
+  },
+  "slot-bracelet.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/bracelet.png",
+    "size": [
+      80,
+      80
+    ]
+  },
+  "slot-neck.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/neck.png",
+    "size": [
+      80,
+      80
+    ]
+  },
+  "slot-ring.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/ring.png",
+    "size": [
+      80,
+      80
+    ]
+  },
+  "slot-legs.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/legs.png",
+    "size": [
+      80,
+      80
+    ]
+  },
+  "slot-brown.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/brown slot.png",
+    "size": [
+      84,
+      84
+    ]
+  },
+  "slot-empty.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/1/slot1.png",
+    "size": [
+      16,
+      16
+    ]
+  },
+  "slot-empty-alt.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/1/slot2.png",
+    "size": [
+      16,
+      16
+    ]
+  },
+  "slots-grid.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/1/slots 8x5.png",
+    "size": [
+      145,
+      94
+    ]
+  },
+  "inventory-panel.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/1/inventory1.png",
+    "size": [
+      145,
+      178
+    ]
+  },
+  "inventory-panel-alt.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/1/inventory2.png",
+    "size": [
+      145,
+      178
+    ]
+  },
+  "item-describe.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/1/Item describe1.png",
+    "size": [
+      142,
+      89
+    ]
+  },
+  "inventory-icons.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/1/inventory icons.png",
+    "size": [
+      145,
+      259
+    ]
+  },
+  "select.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Slot select/slot select.png",
+    "size": [
+      120,
+      20
+    ]
+  },
+  "x.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/x.png",
+    "size": [
+      44,
+      44
+    ]
+  },
+  "confirm.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/confirm.png",
+    "size": [
+      181,
+      26
+    ]
+  },
+  "shop-weapons.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/shop/weapons.png",
+    "size": [
+      62,
+      62
+    ]
+  },
+  "shop-armors.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/shop/armors.png",
+    "size": [
+      62,
+      62
+    ]
+  },
+  "hotbar.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/2/hotbar frame.png",
+    "size": [
+      572,
+      126
+    ]
+  },
+  "slot-atlas.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "atlas": [
+      "helm",
+      "neck",
+      "armour",
+      "boot",
+      "ring",
+      "bracelet",
+      "legs",
+      "brown"
+    ],
+    "cell": 80
+  },
+  "item-icons.png": {
+    "pack": "Kasaya_s_Frames_06e7.zip",
+    "path": "Inventory & chests/1/inventory icons.png",
+    "crop": "white 3x4 set into 32px atlas",
+    "order": [
+      "sword",
+      "bow",
+      "staff",
+      "helm",
+      "armor",
+      "legs",
+      "necklace",
+      "glove",
+      "ring",
+      "gem",
+      "boots"
+    ]
+  }
+}

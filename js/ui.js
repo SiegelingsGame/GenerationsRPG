@@ -21,7 +21,7 @@ function h(tag, props = {}, ...kids) {
 }
 const $ = (s) => document.querySelector(s);
 
-function portrait(c, size = 64, bg = true) {
+function portrait(c, size = 64, bg = true, overlay) {
   const cv = document.createElement('canvas');
   const d = 2;
   cv.width = size * d; cv.height = size * d;
@@ -34,9 +34,10 @@ function portrait(c, size = 64, bg = true) {
     g.addColorStop(0, c.evil ? '#3a1a22' : '#3a3550'); g.addColorStop(1, '#1d1a26');
     ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
   }
+  const look = figLook(c, overlay);
   const saved = Render.ctx;
   Render.ctx = ctx;
-  try { Render.drawFigure(size / 2, size - 5, figLook(c), size / 60, {}); } finally { Render.ctx = saved; }
+  try { Render.drawFigure(size / 2, size - 5, look, size / 60, { weapon: look.weapon }); } finally { Render.ctx = saved; }
   if (!c.alive) { ctx.fillStyle = 'rgba(20,20,20,0.55)'; ctx.fillRect(0, 0, size, size); }
   return cv;
 }
@@ -274,6 +275,7 @@ UI.estatePanel = function () {
     act('Let a year pass', () => Game.rest(360), { sub: '360 days · watch your family grow' }),
     act('Improve the Estate', () => this.showEstate(), { sub: 'tiers, upgrades, retinue' }),
     act('Household & Heir', () => this.showHousehold(), { sub: 'party, children, succession' }),
+    act('Armory & Inventory', () => this.showInventory(ch(G.mcId)), { sub: 'try on armour, robes, helms, weapons' }),
     unmarried ? act('Arranged Match', () => Game.arrangedMatch(), { sub: 'choose 1 of 3 partners', cls: 'hl' }) : null,
     act('Adopt a Child', () => this.showAdoption(), { sub: 'give an orphan a family and a name' }),
     act('Family Tree', () => this.showTree()),
@@ -487,7 +489,17 @@ UI.charBody = function (c) {
       (c.injuries || []).length ? h('div', { class: 'tags' }, c.injuries.map((k) => h('span', { class: 'tag ' + (GD.INJURIES[k].good ? 'good' : 'bad'), title: Object.entries(GD.INJURIES[k].mods).map(([s2, v]) => `${STAT_NAMES[s2]} ${v > 0 ? '+' : ''}${v}`).join(', ') }, GD.INJURIES[k].name))) : null,
       c.alive ? h('div', {}, bar(c.xp, xpNeed(c.level), 'xp'), h('small', { class: 'dim' }, `XP ${Math.round(c.xp)}/${xpNeed(c.level)}`)) : null,
       h('table', { class: 'stats' }, statRows),
-      h('p', { class: 'dim' }, `Max HP ${maxHp(c)} · Weapon ${c.gear.weapon ? GD.GEAR[c.gear.weapon - 1].name : 'none'}${G.mcId === c.id && G.house.heirloom ? ` + ${G.house.heirloom.name} (+${G.house.heirloom.power})` : ''} · Armour ${c.gear.armor ? GD.GEAR[c.gear.armor - 1].name : 'none'}`),
+      (() => {
+        Equip.ensureChar(c);
+        const worn = Equip.worn(c);
+        const bits = worn.length
+          ? worn.map((it) => it.name).join(' · ')
+          : 'nothing equipped';
+        const heir = G.mcId === c.id && G.house.heirloom ? ` · ${G.house.heirloom.name} (+${G.house.heirloom.power})` : '';
+        return h('p', { class: 'dim' }, `Max HP ${maxHp(c)} · ${bits}${heir}`);
+      })(),
+      (c.house === G.house.name || c.status === 'party' || c.status === 'household') && c.alive
+        ? act('Open equipment', () => { this.closeModal(); this.showEquipment(c); }, { sub: 'paper doll · class kit' }) : null,
       h('h4', {}, 'Family'),
       lineage,
       grand.length ? h('p', { class: 'dim' }, 'Grandparents: ', grand.map((g, i) => [i ? ', ' : '', link(g)])) : null,
@@ -503,6 +515,11 @@ UI.charBody = function (c) {
 UI.charActions = function (c) {
   const mc = ch(G.mcId);
   const out = [];
+  const close = c && (c.house === G.house.name || c.status === 'party' || c.status === 'household');
+  if (c && c.alive && close) {
+    out.push(act('Equipment', () => { this.closeModal(); this.showEquipment(c); }, { sub: 'wear armour, robes, helms, crowns, weapons…' }));
+    out.push(act('Inventory & Try On', () => { this.closeModal(); this.showInventory(c); }, { sub: 'house stash · try gear on this character' }));
+  }
   if (!c.alive || !mc || c.id === mc.id) {
     if (c.id === mc?.id && !spouseOf(mc) && tileAt(G.pos.x, G.pos.y).feature === 'estate') out.push(act('Arranged Match', () => { this.closeModal(); Game.arrangedMatch(); }));
     return out;
@@ -523,7 +540,6 @@ UI.charActions = function (c) {
     out.push(act('Research Lineage', () => { Game.research(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: `${cost}g`, disabled: G.house.gold < cost }));
   }
   // relationships with kin and companions
-  const close = c.house === G.house.name || c.status === 'party' || c.status === 'household';
   if (close && c.status !== 'rival') {
     out.push(act('Spend time together', () => { Game.interact(c, 'time'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '7 days · bond' }));
     out.push(act('Give a gift', () => { Game.interact(c, 'gift'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '30g · bond', disabled: G.house.gold < 30 }));
@@ -571,25 +587,204 @@ UI.miniCard = function (c, onclick, extra = []) {
 };
 
 UI.showMarket = function () {
+  Equip.loadUi();
+  Equip.ensureHouse();
   const maxTier = Math.min(GD.GEAR.length, 2 + G.house.up.armory + Math.floor(G.house.tier / 2));
   const party = G.party.map(ch);
   const rows = [];
   rows.push(WorldArt.room('market', WorldArt.seedHere()));
   rows.push(h('div', { class: 'row' }, act('Buy Potion', () => { Game.buyPotion(); this.closeModal(); this.showMarket(); }, { sub: `25g · you have ${G.house.potions}`, disabled: G.house.gold < 25 })));
+  rows.push(h('p', { class: 'dim' }, 'Smiths stock armour or robes, helms or crowns, blades or staves — whatever your class can wear.'));
   for (const c of party) {
-    const cells = [h('b', {}, c.name)];
-    for (const slot of ['weapon', 'armor']) {
-      const next = c.gear[slot] + 1;
-      if (next <= maxTier) {
-        const g = GD.GEAR[next - 1];
-        const cost = Math.round(g.cost * (slot === 'armor' ? 1.1 : 1));
-        cells.push(act(`${g.name} ${slot === 'weapon' ? 'Weapon' : 'Armour'}`, () => { Game.buyGear(c, slot, cost); this.closeModal(); this.showMarket(); }, { sub: `${cost}g · ${slot === 'weapon' ? '+' + g.atk + ' atk' : '+' + g.def + ' def'}`, disabled: G.house.gold < cost }));
-      } else cells.push(h('small', { class: 'dim' }, `${slot === 'weapon' ? 'Weapon' : 'Armour'}: best available`));
-    }
-    rows.push(h('div', { class: 'row market' }, cells));
+    const kit = Equip.kitFor(c);
+    rows.push(h('div', { class: 'market-char' },
+      h('div', { class: 'row' }, portrait(c, 44), h('div', {}, h('b', {}, c.name), h('small', { class: 'dim' }, ` · ${classOf(c).icon} ${classOf(c).name}`))),
+      h('div', { class: 'eq-offers' }, Equip.marketOffers(c, maxTier).map((offer) =>
+        act(offer.item.name, () => { Game.buyEquipOffer(c, offer); this.closeModal(); this.showMarket(); }, {
+          sub: `${offer.cost}g · ${Equip.itemDesc(offer.item)} · ${Equip.slotLabel(c, offer.slot)}`,
+          disabled: G.house.gold < offer.cost,
+        }))),
+      act('Try on / equip', () => { this.closeModal(); this.showInventory(c); }, { sub: 'open inventory with this character' }),
+    ));
   }
-  rows.push(h('p', { class: 'dim' }, `Gear up to tier ${maxTier} is available. An armory and a bigger estate unlock better smiths.`));
-  this.modal(rows, { title: 'Market' });
+  rows.push(h('p', { class: 'dim' }, `Gear up to tier ${maxTier}. An armory and a bigger estate unlock better smiths. House stash: ${G.house.stash.length} item${G.house.stash.length === 1 ? '' : 's'}.`));
+  this.modal(rows, { title: 'Market', wide: true });
+};
+
+// ---------------------------------------------------------------- inventory try-on & equipment screens
+UI.equipPortrait = function (c, tryItem, size = 160) {
+  const overlay = tryItem ? Equip.tryOverlay(c, tryItem) : null;
+  return portrait(c, size, true, overlay);
+};
+
+UI.slotButton = function (c, slot, opts = {}) {
+  Equip.ensureChar(c);
+  const item = (opts.overlay && opts.overlay[slot]) || c.equip[slot];
+  const trying = opts.tryItem && opts.tryItem.slot === slot;
+  const emptySrc = `assets/ui/${GD.EQ_SLOTS[slot].empty}.png`;
+  const btn = h('button', {
+    class: 'eq-slot' + (item ? ' filled' : '') + (trying ? ' trying' : '') + (opts.selected === slot ? ' selected' : ''),
+    title: item ? `${item.name} (${Equip.itemDesc(item)})` : `Empty ${Equip.slotLabel(c, slot)}`,
+    onclick: opts.onclick || (() => {}),
+  },
+    h('img', { class: 'eq-slot-bg', src: emptySrc, alt: '' }),
+    item ? (() => {
+      const cv = document.createElement('canvas');
+      cv.width = 40; cv.height = 40; cv.className = 'eq-slot-icon';
+      Equip.drawIcon(cv.getContext('2d'), item, 4, 4, 32);
+      return cv;
+    })() : null,
+    h('small', { class: 'eq-slot-label' }, Equip.slotLabel(c, slot)),
+    item ? h('small', { class: 'eq-slot-name' }, item.name) : null,
+  );
+  return btn;
+};
+
+UI.showEquipment = function (c, selSlot) {
+  Equip.loadUi();
+  Equip.ensureHouse();
+  Equip.ensureChar(c);
+  const kit = Equip.kitFor(c);
+  const slots = Object.keys(GD.EQ_SLOTS).filter((s) => kit[s] || s === 'neck' || s === 'ring').sort((a, b) => GD.EQ_SLOTS[a].order - GD.EQ_SLOTS[b].order);
+  const selected = selSlot && slots.includes(selSlot) ? selSlot : null;
+  const worn = selected ? c.equip[selected] : null;
+  const body = h('div', { class: 'equip-screen' },
+    h('div', { class: 'equip-left' },
+      this.equipPortrait(c, null, 180),
+      h('p', {}, h('b', {}, `${classOf(c).icon} ${classOf(c).name}`), h('small', { class: 'dim' }, ` · ${c.name}`)),
+      h('p', { class: 'dim' }, (() => {
+        const body = Equip.slotLabel(c, 'body').toLowerCase();
+        const hand = Equip.slotLabel(c, 'hand').toLowerCase();
+        const head = Equip.slotLabel(c, 'head').toLowerCase();
+        const an = (w) => (/^[aeiou]/.test(w) ? 'an' : 'a') + ' ' + w;
+        return `${classOf(c).name}s wear ${body}, wield ${an(hand)}, and cover the head with ${an(head)}.`;
+      })()),
+      h('p', { class: 'dim' }, `Bonuses · +${Equip.bonus(c, 'atk')} atk · +${Equip.bonus(c, 'def')} def · +${Equip.bonus(c, 'mag')} mag`),
+      h('div', { class: 'row' },
+        act('Inventory & Try On', () => { this.closeModal(); this.showInventory(c); }),
+        act('Character', () => { this.closeModal(); this.showChar(c); })),
+    ),
+    h('div', { class: 'equip-doll' },
+      h('h4', {}, 'Worn'),
+      h('div', { class: 'eq-slots' }, slots.map((slot) => this.slotButton(c, slot, {
+        selected,
+        onclick: () => {
+          if (c.equip[slot]) this.replaceModal(this._equipBody(c, slot), { title: `${c.name} — Equipment`, wide: true });
+          else this.replaceModal(this._equipBody(c, slot), { title: `${c.name} — Equipment`, wide: true });
+        },
+      }))),
+    ),
+    h('div', { class: 'equip-detail' },
+      h('h4', {}, selected ? Equip.slotLabel(c, selected) : 'Slot'),
+      selected && worn ? h('div', { class: 'item-card' },
+        h('b', {}, worn.name),
+        h('p', { class: 'dim' }, Equip.itemDesc(worn)),
+        act('Unequip to stash', () => { Equip.unequip(c, selected); saveGame(); this.replaceModal(this._equipBody(c, selected), { title: `${c.name} — Equipment`, wide: true }); UI.refresh(); }),
+      ) : selected ? h('p', { class: 'dim' }, `No ${Equip.slotLabel(c, selected).toLowerCase()} equipped. Open Inventory to try one on.`) : h('p', { class: 'dim' }, 'Tap a slot to inspect or unequip.'),
+      h('div', { class: 'item-desc-frame' }, h('img', { src: 'assets/ui/item-describe.png', alt: '' }),
+        h('div', { class: 'item-desc-text' }, selected && worn ? `${worn.name}: ${Equip.itemDesc(worn)}` : 'Choose a worn piece.')),
+    ),
+  );
+  this._equipBody = (chara, slot) => {
+    // rebuild helper bound for replaceModal
+    const prev = this.showEquipment;
+    // inline rebuild without nesting another modal open
+    Equip.ensureChar(chara);
+    const k = Equip.kitFor(chara);
+    const sl = Object.keys(GD.EQ_SLOTS).filter((s) => k[s] || s === 'neck' || s === 'ring').sort((a, b) => GD.EQ_SLOTS[a].order - GD.EQ_SLOTS[b].order);
+    const sel = slot && sl.includes(slot) ? slot : null;
+    const w = sel ? chara.equip[sel] : null;
+    return h('div', { class: 'equip-screen' },
+      h('div', { class: 'equip-left' },
+        this.equipPortrait(chara, null, 180),
+        h('p', {}, h('b', {}, `${classOf(chara).icon} ${classOf(chara).name}`), h('small', { class: 'dim' }, ` · ${chara.name}`)),
+        h('p', { class: 'dim' }, `Bonuses · +${Equip.bonus(chara, 'atk')} atk · +${Equip.bonus(chara, 'def')} def · +${Equip.bonus(chara, 'mag')} mag`),
+        h('div', { class: 'row' },
+          act('Inventory & Try On', () => { this.closeModal(); this.showInventory(chara); }),
+          act('Character', () => { this.closeModal(); this.showChar(chara); })),
+      ),
+      h('div', { class: 'equip-doll' },
+        h('h4', {}, 'Worn'),
+        h('div', { class: 'eq-slots' }, sl.map((s) => this.slotButton(chara, s, {
+          selected: sel,
+          onclick: () => this.replaceModal(this._equipBody(chara, s), { title: `${chara.name} — Equipment`, wide: true }),
+        }))),
+      ),
+      h('div', { class: 'equip-detail' },
+        h('h4', {}, sel ? Equip.slotLabel(chara, sel) : 'Slot'),
+        sel && w ? h('div', { class: 'item-card' },
+          h('b', {}, w.name),
+          h('p', { class: 'dim' }, Equip.itemDesc(w)),
+          act('Unequip to stash', () => { Equip.unequip(chara, sel); saveGame(); this.replaceModal(this._equipBody(chara, sel), { title: `${chara.name} — Equipment`, wide: true }); UI.refresh(); }),
+        ) : sel ? h('p', { class: 'dim' }, `No ${Equip.slotLabel(chara, sel).toLowerCase()} equipped.`) : h('p', { class: 'dim' }, 'Tap a slot to inspect or unequip.'),
+      ),
+    );
+  };
+  this.modal(body, { title: `${c.name} — Equipment`, wide: true });
+};
+
+UI.showInventory = function (c, tryId) {
+  Equip.loadUi();
+  Equip.ensureHouse();
+  Equip.ensureChar(c);
+  const tryItem = tryId ? Equip.findInStash(tryId) : null;
+  const canTry = tryItem && Equip.canWear(c, tryItem);
+  const party = G.party.map(ch).filter(Boolean);
+  const stash = G.house.stash;
+  const fit = stash.filter((it) => Equip.canWear(c, it));
+  const other = stash.filter((it) => !Equip.canWear(c, it));
+
+  const rebuild = (id) => { this.replaceModal(this._invBody(c, id), { title: `${c.name} — Inventory`, wide: true }); };
+  this._invBody = (chara, tid) => {
+    const tItem = tid ? Equip.findInStash(tid) : null;
+    const ok = tItem && Equip.canWear(chara, tItem);
+    const overlay = ok ? Equip.tryOverlay(chara, tItem) : null;
+    const fit2 = G.house.stash.filter((it) => Equip.canWear(chara, it));
+    const other2 = G.house.stash.filter((it) => !Equip.canWear(chara, it));
+    const slots = Object.keys(GD.EQ_SLOTS).filter((s) => Equip.kitFor(chara)[s] || s === 'neck' || s === 'ring')
+      .sort((a, b) => GD.EQ_SLOTS[a].order - GD.EQ_SLOTS[b].order);
+
+    const stashCell = (it, wearable) => h('button', {
+      class: 'inv-cell' + (tid === it.id ? ' trying' : '') + (wearable ? '' : ' locked'),
+      title: `${it.name} · ${Equip.itemDesc(it)}${wearable ? '' : ' · wrong class kit'}`,
+      onclick: () => rebuild(it.id),
+    },
+      (() => { const cv = document.createElement('canvas'); cv.width = 36; cv.height = 36; Equip.drawIcon(cv.getContext('2d'), it, 2, 2, 32); return cv; })(),
+      h('small', {}, it.name),
+    );
+
+    return h('div', { class: 'inv-screen' },
+      h('div', { class: 'inv-left' },
+        h('div', { class: 'inv-preview' + (ok ? ' trying' : '') }, this.equipPortrait(chara, ok ? tItem : null, 170)),
+        h('p', {}, h('b', {}, chara.name), h('small', { class: 'dim' }, ` · ${classOf(chara).icon} ${classOf(chara).name}`)),
+        ok ? h('p', { class: 'good' }, `Trying on ${tItem.name}`) : h('p', { class: 'dim' }, 'Pick a stash item to try it on.'),
+        h('p', { class: 'dim' }, `Preview bonuses · +${(ok ? Object.values(overlay).filter(Boolean) : Equip.worn(chara)).reduce((s, it) => s + (it.atk || 0), 0)} atk · +${(ok ? Object.values(overlay).filter(Boolean) : Equip.worn(chara)).reduce((s, it) => s + (it.def || 0), 0)} def · +${(ok ? Object.values(overlay).filter(Boolean) : Equip.worn(chara)).reduce((s, it) => s + (it.mag || 0), 0)} mag`),
+        h('div', { class: 'row' },
+          ok ? act('Wear it', () => { Equip.equipItem(chara, tItem, true); saveGame(); UI.refresh(); rebuild(null); UI.toast(`${chara.name} equips ${tItem.name}.`); }, { cls: 'hl' }) : null,
+          ok ? act('Clear try-on', () => rebuild(null)) : null,
+        ),
+        h('div', { class: 'eq-slots compact' }, slots.map((slot) => this.slotButton(chara, slot, {
+          overlay, tryItem: ok ? tItem : null,
+          onclick: () => {
+            if (chara.equip[slot]) { Equip.unequip(chara, slot); saveGame(); UI.refresh(); rebuild(tid); }
+          },
+        }))),
+        h('p', { class: 'dim small' }, 'Tap a worn slot to unequip it into the stash.'),
+      ),
+      h('div', { class: 'inv-right' },
+        h('div', { class: 'inv-chrome' }, h('img', { class: 'inv-panel-img', src: 'assets/ui/inventory-panel.png', alt: '' })),
+        h('h4', {}, `Fits ${chara.name}`),
+        fit2.length ? h('div', { class: 'inv-grid' }, fit2.map((it) => stashCell(it, true))) : h('p', { class: 'dim' }, 'Nothing in the house stash that this class can wear. Buy gear at the market.'),
+        other2.length ? h('h4', {}, 'Other kit (wrong class)') : null,
+        other2.length ? h('div', { class: 'inv-grid dimmed' }, other2.map((it) => stashCell(it, false))) : null,
+        h('h4', {}, 'Dress another'),
+        h('div', { class: 'row wrap' }, party.map((p) => act(p.name, () => { this.closeModal(); this.showInventory(p, tid); }, { cls: p.id === chara.id ? 'hl' : '' }))),
+        act('Equipment screen', () => { this.closeModal(); this.showEquipment(chara); }),
+      ),
+    );
+  };
+
+  this.modal(this._invBody(c, tryId), { title: `${c.name} — Inventory`, wide: true });
 };
 
 UI.showAdoption = function () {
@@ -913,6 +1108,7 @@ UI.showMenu = function () {
   this.modal([
     h('p', { class: 'dim small' }, this.diagnostics()),
     act('House flag & sigil', () => { this.closeModal(); this.modal([Heraldry.canvas(G.house.heraldry, 288), act('Edit heraldry', () => { this.closeModal(); this.modal([Heraldry.editor(G.house.heraldry, flag => { G.house.heraldry=flag; G.house.color=Heraldry.color(flag.primary); saveGame(); UI.refresh(); })], { title: 'House heraldry', wide: true }); })], { title: `House ${G.house.name}` }); }),
+    G && G.mcId ? act('Inventory & Equipment', () => { this.closeModal(); this.showInventory(ch(G.mcId)); }, { sub: 'try on gear by class' }) : null,
     act('Save Game', () => { UI.toast(saveGame() ? 'Game saved.' : 'Could not save (storage unavailable).'); this.closeModal(); }),
     act('Interactive starter guide', () => { this.closeModal(); Guide.show(); }),
     act('Art credits', () => { this.closeModal(); this.showArtCredits(); }),
@@ -948,6 +1144,7 @@ UI.showArtCredits = function () {
     h('p', {}, 'Pixel Burst VFX: Elemental Spells — dotplays. Used in combat projectiles.'),
     h('p', {}, 'Super Pixel Effects Gigapack — Will Tice / unTied Games. Used in combat impacts, healing and defensive effects.'),
     h('p', {}, 'Modern Interiors Free — LimeZu. Used in generated rooms and settlement details. The supplied free pack is licensed for noncommercial projects only.'),
+    h('p', {}, "Kasaya's Frames — Kasaya. Used in inventory, equipment slots and try-on screens."),
     h('p', {}, 'House sigils: Angais / Pixel Art Atlas (CC0 dedication).'),
     h('a', { href: 'assets/packs/README.md', target: '_blank', rel: 'noopener' }, 'Asset sources and license notes'),
   ], { title: 'Art credits' });

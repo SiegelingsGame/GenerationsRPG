@@ -194,14 +194,26 @@ function maxHp(c) {
   return Math.round(hp);
 }
 function weaponAtk(c) {
-  let a = c.gear.weapon ? GD.GEAR[c.gear.weapon - 1].atk : 0;
+  if (!Equip.isChar(c)) return 0;
+  Equip.ensureChar(c);
+  // Zero is a valid equipment total (e.g. a Cloth Robe or Glass Orb); do not fall back to GD.GEAR.
+  let a = Equip.bonus(c, 'atk');
   if (G.mcId === c.id && G.house.heirloom) a += G.house.heirloom.power;
   return a;
 }
-function armorDef(c) { return c.gear.armor ? GD.GEAR[c.gear.armor - 1].def : 0; }
+function armorDef(c) {
+  if (!Equip.isChar(c)) return 0;
+  Equip.ensureChar(c);
+  return Equip.bonus(c, 'def');
+}
+function gearMag(c) {
+  if (!Equip.isChar(c)) return 0;
+  Equip.ensureChar(c);
+  return Equip.bonus(c, 'mag');
+}
 function power(c) {
   // rough combat rating for UI and matchmaking
-  return Math.round(STATS.reduce((s, k) => s + stat(c, k), 0) + c.level * 2 + weaponAtk(c) + armorDef(c));
+  return Math.round(STATS.reduce((s, k) => s + stat(c, k), 0) + c.level * 2 + weaponAtk(c) + armorDef(c) + gearMag(c) * 0.5);
 }
 
 function xpMod(c) {
@@ -452,7 +464,7 @@ function newGame() {
     house: {
       name: 'Ashford', color: GD.HOUSE_COLORS[0], prestige: 0, gold: 150, tier: 0,
       up: { horses: 0, livestock: 0, yard: 0, library: 0, chapel: 0, armory: 0 },
-      retinue: 0, potions: 3, generation: 1, heirloom: null, heroes: [], reigns: [],
+      retinue: 0, potions: 3, generation: 1, heirloom: null, heroes: [], reigns: [], stash: [],
     },
     world: { map: null, towns: [], prosperity: 30, era: null, eras: [], victory: false },
     pos: { x: 0, y: 0 },
@@ -757,11 +769,20 @@ function liveAYear(c, heir) {
   if (['elder', 'venerable'].includes(st) && R.chance(0.06)) injure(c, 'as the years caught up with them');
   if (!c.extraSkill && R.chance(0.09)) learnSkill(c, R.pick([`from a master in ${place}`, 'from an old soldier', 'on the road', 'from forbidden books']));
   if (R.chance(0.12)) {
-    const slot = R.chance(0.5) ? 'armor' : 'weapon';
-    if (c.gear[slot] < 4) {
-      c.gear[slot]++;
-      const g = GD.GEAR[c.gear[slot] - 1];
-      chron(`${c.name} ${R.pick(['won', 'forged', 'was gifted', 'found'])} ${g.name.toLowerCase()} ${slot === 'armor' ? 'armour' : 'arms'}.`, 'gear', [c.id], 'gear');
+    Equip.ensureChar(c);
+    const kit = Equip.kitFor(c);
+    const slot = R.chance(0.5) ? 'body' : 'hand';
+    const kind = kit[slot];
+    if (kind) {
+      const cur = c.equip[slot];
+      const next = (cur ? cur.tier : 0) + 1;
+      if (next <= 4) {
+        const item = Equip.makeItem(kind, next);
+        if (cur) Equip.addToStash(cur);
+        c.equip[slot] = item;
+        Equip.syncLegacy(c);
+        chron(`${c.name} ${R.pick(['won', 'forged', 'was gifted', 'found'])} ${item.name.toLowerCase()}.`, 'gear', [c.id], 'gear');
+      }
     }
   }
   if (R.chance(0.06)) {
@@ -837,8 +858,8 @@ function genPartner(tier, forWhom, genders) {
     level: Math.max(1, Math.round((mc ? mc.level : 1) + tier - 1 + R.int(-1, 1))),
     loyalty: 30 + tier * 5,
     trait: R.chance(0.8) ? R.pick(Object.keys(GD.TRAITS).filter((t) => t !== 'frail' || tier === 0)) : null,
-    weapon: tier ? Math.min(tier, 5) : 0,
-    armor: tier ? Math.min(tier, 5) : 0,
+    weapon: 0,
+    armor: 0,
     gender: genders ? R.pick(genders) : undefined,
     looks: clamp(R.int(2, 9) + Math.round(tier / 2), 0, 9),
     infertile: R.chance(0.06),
@@ -850,6 +871,7 @@ function genPartner(tier, forWhom, genders) {
   if (c.orphaned) c.birth = 'lowborn';
   c.status = 'candidate';
   c.dowry = Math.round(30 * Math.pow(tier + 1, 2.2));
+  if (tier) Equip.seedStarter(c, Math.min(tier, 5));
   return c;
 }
 function discardCandidates(list, keepId) {
@@ -887,6 +909,8 @@ function loadGame() {
       c.height = c.height || 'average'; c.build = c.build || 'average'; c.looks = c.looks ?? 5; c.hairStyle = c.hairStyle || 'short';
     }
     G.house.reigns = G.house.reigns || [];
+    G.house.stash = G.house.stash || [];
+    Equip.ensureHouse();
     Heraldry.ensureAll();
     return true;
   } catch (e) { return false; }
