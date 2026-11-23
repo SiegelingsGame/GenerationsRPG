@@ -81,7 +81,12 @@ Battle.start = function (opts) {
   this.units = [];
   if (opts.partyUnits) opts.partyUnits.forEach((u, i) => { u.side = 'party'; u.slot = i; this.units.push(u); });
   else G.party.map(ch).filter((c) => c && c.alive).forEach((c, i) => this.units.push(unitFromChar(c, 'party', i)));
-  (opts.enemies || []).forEach((e, i) => this.units.push(e.charId ? e : makeEnemyUnit(e.type, e.lvl, i)));
+  // Accept pre-built enemy units (uid / kind) so cinematic scripts keep the same object
+  // Battle.start positions — otherwise PackArt aims at a discarded clone with no gx/gy.
+  (opts.enemies || []).forEach((e, i) => {
+    const built = e && (e.uid || e.kind === 'enemy' || e.charId);
+    this.units.push(built ? e : makeEnemyUnit(e.type, e.lvl, i));
+  });
   this.units.filter((u) => u.side === 'enemy').forEach((u, i) => { u.slot = i; });
   this.units.forEach((u) => Object.assign(u, unitPos(u)));
   this.queue = [];

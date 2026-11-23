@@ -153,8 +153,14 @@ Render.frame = function () {
     c.save();
     c.translate((Math.random() - 0.5) * p * 2, (Math.random() - 0.5) * p * 2);
   }
+  if (typeof OpeningCutscene !== 'undefined' && OpeningCutscene.active && OpeningCutscene.spirit && OpeningCutscene.spirit.active) {
+    OpeningCutscene.tickSpiritFlight(performance.now());
+  }
   if (!G || !G.world || !G.world.map) { this.drawTitleBg(); if (shaking) c.restore(); return; }
-  if (Battle.active) this.drawBattle();
+  const approach = typeof OpeningCutscene !== 'undefined' && OpeningCutscene.spirit && OpeningCutscene.spirit.active
+    && OpeningCutscene.isApproachStage && OpeningCutscene.isApproachStage(OpeningCutscene.spirit.stage);
+  if (approach) this.drawSpiritApproach(OpeningCutscene.spirit);
+  else if (Battle.active) this.drawBattle();
   else this.drawWorld();
   LocationPrompt.render();
   if (shaking) c.restore();
@@ -211,13 +217,16 @@ Render.drawLandscape = function () {
   const sky = c.createLinearGradient(0, 0, 0, this.h);
   sky.addColorStop(0, eraTint('#1d3550')); sky.addColorStop(1, eraTint('#0d1824'));
   c.fillStyle = sky; c.fillRect(0, 0, this.w, this.h);
+  const spiritCam = typeof OpeningCutscene !== 'undefined' && OpeningCutscene.spirit && OpeningCutscene.spirit.active;
   const pp = this.partyWorldPos();
-  const [prx, pry] = this.rotXY(pp.x, pp.y);
+  const camSrc = spiritCam ? OpeningCutscene.spirit : pp;
+  const [prx, pry] = this.rotXY(camSrc.x, camSrc.y);
   const tx = this.w / 2 - (prx - pry) * TW / 2;
   const ty = this.h / 2 - (prx + pry) * TH / 2;
   if (!this.camInit) { this.cam.x = tx; this.cam.y = ty; this.camInit = true; }
-  this.cam.x += (tx - this.cam.x) * 0.15;
-  this.cam.y += (ty - this.cam.y) * 0.15;
+  const camLerp = spiritCam ? 0.28 : 0.15;
+  this.cam.x += (tx - this.cam.x) * camLerp;
+  this.cam.y += (ty - this.cam.y) * camLerp;
   this.zoom += (this.zoomTarget - this.zoom) * 0.18;
   c.save();
   const sk = this.spin ? clamp((this.t - this.spin) / 220, 0, 1) : 1;
@@ -256,8 +265,10 @@ Render.drawLandscape = function () {
     items.push({ y: Math.min(e1.y, e2.y) - 4, bridge: b });
   }
   for (const a of G.world.parties || []) if (!Living.visible(a)) a._sx = null;
-  const ps = this.iso(pp.x, pp.y, 0);
-  items.push({ y: ps.y + 0.1 + (LS.bridgeLift(pp.x, pp.y) ? 30 : 0), party: true });
+  if (!spiritCam) {
+    const ps = this.iso(pp.x, pp.y, 0);
+    items.push({ y: ps.y + 0.1 + (LS.bridgeLift(pp.x, pp.y) ? 30 : 0), party: true });
+  }
   items.sort((p, q) => p.y - q.y);
   for (const it of items) {
     if (it.t) this.drawFeature(it.t);
@@ -289,6 +300,7 @@ Render.drawLandscape = function () {
     c.fillStyle = '#ffd76a'; c.strokeStyle = '#5a4210'; c.lineWidth = 2;
     c.beginPath(); c.moveTo(p.x, p.y - 88 + bob); c.lineTo(p.x + 9, p.y - 76 + bob); c.lineTo(p.x, p.y - 64 + bob); c.lineTo(p.x - 9, p.y - 76 + bob); c.closePath(); c.fill(); c.stroke();
   }
+  if (spiritCam && OpeningCutscene.spirit.stage !== 'mother') this.drawSpiritFlight(OpeningCutscene.spirit);
   c.restore();
   this.drawCompass();
   this.drawMinimap();
@@ -296,6 +308,305 @@ Render.drawLandscape = function () {
   v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.4)');
   c.fillStyle = v; c.fillRect(0, 0, this.w, this.h);
   if (G.world.era.type === 'war') this.drawEmbers();
+};
+
+// White pixel spirit + short trail for the opening cutscene tracking shot.
+Render.drawSpiritFlight = function (spirit) {
+  if (!spirit) return;
+  const c = this.ctx;
+  const lift = (pt) => {
+    const p = this.iso(pt.x, pt.y, 0);
+    return { x: p.x, y: p.y - (pt.alt || 0) };
+  };
+  const now = performance.now();
+  const trail = spirit.trail || [];
+  for (let i = 0; i < trail.length; i++) {
+    const pt = trail[i];
+    if (pt.mode === 'approach') continue;
+    const age = (now - pt.t) / 700;
+    if (age > 1) continue;
+    const p = lift(pt);
+    const a = (1 - age) * 0.55;
+    c.fillStyle = `rgba(255,252,240,${a})`;
+    const sz = 2 + (1 - age) * 2;
+    c.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
+  }
+  const p = lift(spirit);
+  const pulse = 0.75 + Math.sin(now / 90) * 0.25;
+  c.fillStyle = `rgba(255,255,255,${0.35 * pulse})`;
+  c.beginPath(); c.arc(p.x, p.y, 7 * pulse, 0, Math.PI * 2); c.fill();
+  c.fillStyle = '#fffef6';
+  c.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+  c.fillStyle = 'rgba(200,230,255,0.85)';
+  c.fillRect(p.x - 1, p.y - 1, 2, 2);
+};
+
+// ---------------------------------------------------------------- opening 2.5D approach (town → belly)
+// Camera looks toward decreasing world-z (dolly into town). Pitch tips the view for foreshortening.
+Render.spiritProj = function (spirit, x, y, z) {
+  const cam = spirit.cam || { x: 0, y: 2, z: 10, pitch: 0, fov: 1 };
+  const W = this.w, H = this.h;
+  const focal = Math.min(H * 0.98, W * 0.82) * (cam.fov || 1);
+  const hz = H * (0.42 + Math.max(-0.08, Math.min(0.12, (cam.pitch || 0) * 0.35)));
+  const rx = x - (cam.x || 0);
+  const ry = y - (cam.y || 0);
+  // Depth ahead of camera (camera faces -Z along the street).
+  let depth = (cam.z || 0) - z;
+  // Pitch: negative looks down so distant ground rises toward horizon.
+  const pitch = cam.pitch || 0;
+  const cos = Math.cos(pitch), sin = Math.sin(pitch);
+  const ry2 = ry * cos - depth * sin;
+  depth = ry * sin + depth * cos;
+  depth = Math.max(0.45, depth);
+  return {
+    x: W / 2 + (rx * focal) / depth,
+    y: hz - (ry2 * focal) / depth,
+    depth,
+    scale: focal / depth,
+  };
+};
+
+Render.drawSpiritApproach = function (spirit) {
+  if (!spirit) return;
+  const c = this.ctx;
+  const W = this.w, H = this.h;
+  const stage = spirit.stage || 'town';
+  const stageProg = spirit.stageProgress || 0;
+  const seed = spirit.seed || 1;
+  const rng = (k) => ((seed * (k + 7) * 9301 + 49297) % 233280) / 233280;
+  const camZ = (spirit.cam && spirit.cam.z) || 12;
+  const P = (x, y, z) => this.spiritProj(spirit, x, y, z);
+  const q = (pts, fill) => {
+    if (!pts || pts.length < 3) return;
+    // Skip degenerate / behind-camera quads
+    if (pts.some((p) => !p || !Number.isFinite(p.x) || !Number.isFinite(p.y))) return;
+    c.fillStyle = fill;
+    c.beginPath();
+    c.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
+    c.closePath();
+    c.fill();
+  };
+
+  // --- sky / atmosphere
+  const sky = c.createLinearGradient(0, 0, 0, H);
+  if (stage === 'belly') {
+    sky.addColorStop(0, '#3a1018'); sky.addColorStop(0.5, '#6a2438'); sky.addColorStop(1, '#1a080e');
+  } else if (stage === 'room') {
+    sky.addColorStop(0, '#1c1410'); sky.addColorStop(1, '#3a2818');
+  } else if (stage === 'house') {
+    sky.addColorStop(0, '#2a2018'); sky.addColorStop(0.55, '#4a3828'); sky.addColorStop(1, '#1a120e');
+  } else {
+    sky.addColorStop(0, eraTint('#3a5578'));
+    sky.addColorStop(0.5, eraTint('#7a9ab8'));
+    sky.addColorStop(1, eraTint('#c8b090'));
+  }
+  c.fillStyle = sky; c.fillRect(0, 0, W, H);
+
+  // Far hills + rooftop parallax (screen-space layer drifting with cam z)
+  if (stage === 'town' || stage === 'neighborhood') {
+    const hillShift = (26 - camZ) * 5;
+    c.fillStyle = eraTint('#4a5a48');
+    c.beginPath();
+    c.moveTo(-20, H * 0.48);
+    for (let i = 0; i <= 10; i++) {
+      const x = (i / 10) * (W + 40) - 20 + hillShift * 0.2;
+      c.lineTo(x, H * 0.34 + Math.sin(i * 0.9 + seed * 0.01) * 16 - (stage === 'town' ? 8 : -4));
+    }
+    c.lineTo(W + 20, H * 0.55); c.lineTo(-20, H * 0.55); c.closePath(); c.fill();
+    for (let i = 0; i < 16; i++) {
+      const x = ((i * 0.07 + rng(i) * 0.02) % 1) * W - 10 + hillShift * 0.45;
+      const hgt = 14 + rng(i + 3) * 26;
+      const y = H * 0.42 - hgt + (stage === 'neighborhood' ? 18 : 0);
+      c.fillStyle = eraTint('#6a4a3a');
+      c.fillRect(x, y, 18 + rng(i + 1) * 16, hgt);
+      c.fillStyle = eraTint(['#8c3b2a', '#5b4a8a', '#7a3022'][i % 3]);
+      c.beginPath();
+      c.moveTo(x - 2, y);
+      c.lineTo(x + 10 + rng(i) * 6, y - 8 - rng(i + 2) * 5);
+      c.lineTo(x + 24 + rng(i + 1) * 8, y);
+      c.closePath(); c.fill();
+    }
+  }
+
+  // Ground plane in perspective
+  if (stage !== 'belly') {
+    const nearZ = Math.max(0.6, camZ - 0.55);
+    const farZ = Math.max(nearZ + 1, camZ - 30);
+    const gNearL = P(-7, 0, nearZ), gNearR = P(7, 0, nearZ);
+    const gFarL = P(-7, 0, farZ), gFarR = P(7, 0, farZ);
+    const groundCol = (stage === 'room' || stage === 'house') ? '#4a3428' : eraTint('#8a7f6e');
+    q([gFarL, gFarR, gNearR, gNearL], groundCol);
+    // Fill below near edge to bottom of screen
+    c.fillStyle = (stage === 'room' || stage === 'house') ? '#2a1a14' : eraTint('#5e5446');
+    c.beginPath();
+    c.moveTo(gNearL.x, gNearL.y); c.lineTo(gNearR.x, gNearR.y);
+    c.lineTo(W + 40, H + 20); c.lineTo(-40, H + 20); c.closePath(); c.fill();
+    if (stage === 'town' || stage === 'neighborhood') {
+      c.strokeStyle = 'rgba(0,0,0,0.16)'; c.lineWidth = 1;
+      for (let z = nearZ; z > farZ; z -= Math.max(0.35, (nearZ - farZ) * 0.08)) {
+        const a = P(-5.5, 0, z), b = P(5.5, 0, z);
+        c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+      }
+      for (let x = -2.5; x <= 2.5; x += 0.7) {
+        const a = P(x, 0, nearZ), b = P(x, 0, farZ);
+        c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+      }
+    }
+  }
+
+  // Street buildings (far → near)
+  if (stage === 'town' || stage === 'neighborhood' || (stage === 'house' && stageProg < 0.45)) {
+    const drawBuilding = (side, z0, z1, hgt, col, roof) => {
+      if (z1 >= camZ - 0.4) return;
+      const sx = side === 'L' ? -2.6 : 2.6;
+      const out = side === 'L' ? -1 : 1;
+      const a0 = P(sx, 0, z0), a1 = P(sx, 0, z1), t1 = P(sx, hgt, z1), t0 = P(sx, hgt, z0);
+      const f0 = P(sx + out * 2.2, 0, z0), f1 = P(sx + out * 2.2, hgt, z0);
+      q([a0, f0, f1, t0], shade(eraTint(col), -0.22));
+      q([a0, a1, t1, t0], eraTint(col));
+      q([t0, t1, P(sx + out * 1.15, hgt + 1.05, z1), P(sx + out * 1.15, hgt + 1.05, z0)], eraTint(roof));
+      const n = Math.max(1, Math.round((z0 - z1) / 0.9));
+      for (let i = 0; i < n; i++) {
+        const za = z0 - (i + 0.3) * (z0 - z1) / n;
+        const zb = za - 0.28 * (z0 - z1) / n;
+        q([P(sx, hgt * 0.55, za), P(sx, hgt * 0.55, zb), P(sx, hgt * 0.72, zb), P(sx, hgt * 0.72, za)], 'rgba(40,30,25,0.72)');
+        if (hgt > 3.2) q([P(sx, hgt * 0.28, za), P(sx, hgt * 0.28, zb), P(sx, hgt * 0.42, zb), P(sx, hgt * 0.42, za)], 'rgba(255,220,140,0.45)');
+      }
+    };
+    const items = [];
+    // Place buildings ahead of camera along decreasing z
+    for (let k = 0; k < 12; k++) {
+      const z0 = camZ - 1.2 - k * 1.85 - rng(k) * 0.35;
+      if (z0 < 0.8) continue;
+      const z1 = Math.max(0.7, z0 - 1.4 - rng(k + 1) * 0.6);
+      items.push({ side: 'L', z0, z1, hgt: 2.5 + rng(k + 2) * 1.9, col: ['#c9b08a', '#d4c3a0', '#bfa57d'][k % 3], roof: ['#8c3b2a', '#5b4a8a', '#7a3022'][k % 3], z: (z0 + z1) / 2 });
+      items.push({ side: 'R', z0: z0 - 0.35, z1: Math.max(0.7, z0 - 1.7 - rng(k + 4) * 0.5), hgt: 2.3 + rng(k + 5) * 2.1, col: ['#d8cbb0', '#a99478', '#c9b08a'][k % 3], roof: ['#4a5a6a', '#6b4a2a', '#8c3b2a'][k % 3], z: z0 - 0.9 });
+    }
+    items.sort((a, b) => a.z - b.z); // far first
+    for (const b of items) drawBuilding(b.side, b.z0, b.z1, b.hgt, b.col, b.roof);
+  }
+
+  // Target house facade / doorway
+  if (stage === 'neighborhood' || stage === 'house') {
+    const doorZ = Math.min(camZ - 0.9, 2.6);
+    if (doorZ < camZ - 0.35) {
+      const wall = '#b89a74';
+      const a0 = P(-1.6, 0, doorZ), a1 = P(1.6, 0, doorZ), t1 = P(1.6, 3.5, doorZ), t0 = P(-1.6, 3.5, doorZ);
+      q([a0, a1, t1, t0], eraTint(wall));
+      q([t0, t1, P(0, 4.5, doorZ)], eraTint('#7a3022'));
+      // Side thickness for 2.5D
+      q([a1, P(1.6, 0, doorZ - 0.7), P(1.6, 3.5, doorZ - 0.7), t1], shade(eraTint(wall), -0.25));
+      q([P(-0.5, 0, doorZ - 0.02), P(0.5, 0, doorZ - 0.02), P(0.5, 2.15, doorZ - 0.02), P(-0.5, 2.15, doorZ - 0.02)], '#0e0a0c');
+      const door = P(0, 1.05, doorZ);
+      const glow = c.createRadialGradient(door.x, door.y, 3, door.x, door.y, 70);
+      glow.addColorStop(0, 'rgba(255,180,100,0.4)'); glow.addColorStop(1, 'rgba(255,180,100,0)');
+      c.fillStyle = glow; c.beginPath(); c.arc(door.x, door.y, 70, 0, Math.PI * 2); c.fill();
+    }
+  }
+
+  // Interior box (house → room → belly)
+  if (stage === 'house' || stage === 'room' || stage === 'belly') {
+    const fade = stage === 'house' ? Math.min(1, Math.max(0, (stageProg - 0.25) / 0.75)) : 1;
+    c.save();
+    c.globalAlpha = fade;
+    const back = Math.max(0.35, camZ - (stage === 'belly' ? 1.15 : stage === 'room' ? 1.55 : 1.9));
+    const near = Math.max(back + 0.35, camZ - 0.55);
+    const bw = stage === 'belly' ? 0.7 : 1.45;
+    const bh = stage === 'belly' ? 1.5 : 2.55;
+    const warm = stage === 'belly';
+    q([P(-bw, 0, back), P(bw, 0, back), P(bw * 1.8, 0, near), P(-bw * 1.8, 0, near)], warm ? '#4a1824' : '#4a3428');
+    q([P(-bw, 0, back), P(-bw, bh, back), P(-bw * 1.8, bh * 1.1, near), P(-bw * 1.8, 0, near)], warm ? '#5a2030' : '#5a4030');
+    q([P(bw, 0, back), P(bw, bh, back), P(bw * 1.8, bh * 1.1, near), P(bw * 1.8, 0, near)], warm ? '#2e1018' : '#3a2818');
+    q([P(-bw, bh, back), P(bw, bh, back), P(bw * 1.8, bh * 1.1, near), P(-bw * 1.8, bh * 1.1, near)], warm ? '#1a080e' : '#2a1c18');
+    q([P(-bw, 0, back), P(bw, 0, back), P(bw, bh, back), P(-bw, bh, back)], warm ? '#6a2840' : '#6a4a38');
+
+    if (stage !== 'belly') {
+      const bedZ = (back + near) * 0.55;
+      q([P(-0.95, 0.05, bedZ), P(0.95, 0.05, bedZ), P(0.95, 0.5, bedZ), P(-0.95, 0.5, bedZ)], '#6a4a3a');
+      q([P(-0.9, 0.5, bedZ), P(0.9, 0.5, bedZ), P(0.9, 0.62, bedZ - 0.15), P(-0.9, 0.62, bedZ - 0.15)], '#8a6a5a');
+      q([P(-0.4, 1.35, back + 0.02), P(0.4, 1.35, back + 0.02), P(0.4, 2.05, back + 0.02), P(-0.4, 2.05, back + 0.02)], 'rgba(255,210,140,0.4)');
+      // Side props
+      q([P(-1.2, 0, back + 0.25), P(-0.85, 0, back + 0.25), P(-0.85, 1.1, back + 0.25), P(-1.2, 1.1, back + 0.25)], '#5a4030');
+    }
+    c.restore();
+  }
+
+  // Mother paper-doll (room → belly) — keep her framed in the viewport
+  if (stage === 'room' || stage === 'belly') {
+    const motherAlpha = stage === 'room' ? Math.min(1, 0.55 + stageProg * 0.6) : 1;
+    c.save();
+    c.globalAlpha = motherAlpha;
+    const mx = 0;
+    const mz = Math.max(0.55, camZ - (stage === 'belly' ? 0.85 : 1.15));
+    let foot = P(mx, 0.02, mz);
+    // Fallback screen placement if projection drifts off-frame at extreme dolly.
+    if (foot.y > H * 0.92 || foot.y < H * 0.2 || foot.x < 0 || foot.x > W) {
+      foot = { x: W / 2, y: H * (stage === 'belly' ? 0.62 : 0.7), depth: 1, scale: 80 };
+    }
+    const sc = Math.max(0.7, Math.min(2.4, (foot.scale || 80) / 55)) * (stage === 'belly' ? 1.35 + stageProg * 0.7 : 1.05);
+    const look = {
+      skin: '#c9a88a', hair: '#3a2418', tunic: '#5a3a4a', stage: 'prime', race: 'human',
+      gender: 'woman', hairStyle: 'long', beard: false, hScale: 1, wScale: 1.12,
+    };
+    this.drawFigure(foot.x, foot.y, look, sc, {});
+    const bellyY = foot.y - 18 * sc;
+    const br = 14 * sc * (stage === 'belly' ? 1.55 + stageProg : 1);
+    const bg = c.createRadialGradient(foot.x, bellyY, 2, foot.x, bellyY, br);
+    bg.addColorStop(0, `rgba(180,70,90,${0.35 + (spirit.motherK || 0) * 0.4})`);
+    bg.addColorStop(1, 'rgba(160,60,80,0)');
+    c.fillStyle = bg;
+    c.beginPath(); c.arc(foot.x, bellyY, br, 0, Math.PI * 2); c.fill();
+    c.restore();
+  }
+
+  // Belly bloom
+  if (stage === 'belly') {
+    const k = spirit.motherK || stageProg;
+    const sp = spirit.spiritLocal || { x: 0, y: 1, z: camZ - 0.8 };
+    const core = P(sp.x, sp.y, sp.z);
+    const bloom = c.createRadialGradient(core.x, core.y, 6, W / 2, H * 0.55, Math.max(W, H) * (0.35 + k * 0.3));
+    bloom.addColorStop(0, `rgba(255,140,160,${0.2 + k * 0.25})`);
+    bloom.addColorStop(0.4, `rgba(90,24,40,${0.3 + k * 0.2})`);
+    bloom.addColorStop(1, `rgba(8,2,6,${0.4 + k * 0.35})`);
+    c.fillStyle = bloom; c.fillRect(0, 0, W, H);
+  }
+
+  this.drawSpiritApproachSprite(spirit);
+
+  const v = c.createRadialGradient(W / 2, H / 2, H * 0.22, W / 2, H / 2, H * 0.95);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, stage === 'belly' ? 'rgba(10,2,6,0.72)' : 'rgba(0,0,0,0.42)');
+  c.fillStyle = v; c.fillRect(0, 0, W, H);
+};
+
+Render.drawSpiritApproachSprite = function (spirit) {
+  if (!spirit) return;
+  const c = this.ctx;
+  const now = performance.now();
+  const sp = spirit.spiritLocal || { x: 0, y: 1.5, z: 5 };
+  const trail = spirit.trail || [];
+  for (let i = 0; i < trail.length; i++) {
+    const pt = trail[i];
+    if (pt.mode !== 'approach') continue;
+    const age = (now - pt.t) / 650;
+    if (age > 1) continue;
+    const p = this.spiritProj(spirit, pt.x, pt.y, pt.z);
+    const a = (1 - age) * 0.65;
+    const sz = Math.max(2, 3.2 * (p.scale / 70) * (1 - age));
+    c.fillStyle = `rgba(255,252,240,${a})`;
+    c.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
+  }
+  const p = this.spiritProj(spirit, sp.x, sp.y, sp.z);
+  const pulse = 0.75 + Math.sin(now / 90) * 0.25;
+  const glowR = Math.max(5, 7 * (p.scale / 60) * pulse);
+  c.fillStyle = `rgba(255,255,255,${0.45 * pulse})`;
+  c.beginPath(); c.arc(p.x, p.y, glowR, 0, Math.PI * 2); c.fill();
+  const pix = Math.max(2.5, 3.5 * (p.scale / 80));
+  c.fillStyle = '#fffef6';
+  c.fillRect(p.x - pix / 2, p.y - pix / 2, pix, pix);
+  c.fillStyle = 'rgba(200,230,255,0.95)';
+  c.fillRect(p.x - pix / 3, p.y - pix / 3, pix * 0.66, pix * 0.66);
 };
 Render.drawWorldTiles = function () {
   const c = this.ctx;
@@ -305,13 +616,15 @@ Render.drawWorldTiles = function () {
   sky.addColorStop(0, eraTint('#253a55')); sky.addColorStop(1, eraTint('#0f1a26'));
   c.fillStyle = sky; c.fillRect(0, 0, this.w, this.h);
 
-  // camera follows party smoothly
+  // camera follows party (or opening-cutscene spirit)
+  const spiritCam = typeof OpeningCutscene !== 'undefined' && OpeningCutscene.spirit && OpeningCutscene.spirit.active;
   const pp = this.partyWorldPos();
-  const [prx, pry] = this.rotXY(pp.x, pp.y);
+  const camSrc = spiritCam ? OpeningCutscene.spirit : pp;
+  const [prx, pry] = this.rotXY(camSrc.x, camSrc.y);
   const tx = this.w / 2 - (prx - pry) * TW / 2;
-  const ty = this.h / 2 - (prx + pry) * TH / 2 + pp.h * HSTEP;
-  this.cam.x += (tx - this.cam.x) * 0.12;
-  this.cam.y += (ty - this.cam.y) * 0.12;
+  const ty = this.h / 2 - (prx + pry) * TH / 2 + (spiritCam ? 0 : pp.h * HSTEP);
+  this.cam.x += (tx - this.cam.x) * (spiritCam ? 0.28 : 0.12);
+  this.cam.y += (ty - this.cam.y) * (spiritCam ? 0.28 : 0.12);
   if (!this.camInit) { this.cam.x = tx; this.cam.y = ty; this.camInit = true; }
   this.zoom += (this.zoomTarget - this.zoom) * 0.18;
 
@@ -353,7 +666,7 @@ Render.drawWorldTiles = function () {
       this.drawFeature(t);
     }
     for (const a of agentsAt.get(s) || []) Living.drawAgent(this, a);
-    if (s === partyTileOrder || (s === map.W + map.H - 2 && !partyDrawn)) {
+    if (!spiritCam && (s === partyTileOrder || (s === map.W + map.H - 2 && !partyDrawn))) {
       if (!partyDrawn) { Living.drawDest(this); this.drawParty(pp); partyDrawn = true; }
     }
   }
@@ -384,6 +697,7 @@ Render.drawWorldTiles = function () {
     c.fillStyle = '#ffd76a'; c.strokeStyle = '#5a4210'; c.lineWidth = 2;
     c.beginPath(); c.moveTo(p.x, p.y - 96 + bob); c.lineTo(p.x + 9, p.y - 84 + bob); c.lineTo(p.x, p.y - 72 + bob); c.lineTo(p.x - 9, p.y - 84 + bob); c.closePath(); c.fill(); c.stroke();
   }
+  if (spiritCam && OpeningCutscene.spirit.stage !== 'mother') this.drawSpiritFlight(OpeningCutscene.spirit);
   c.restore();
   // compass: which way is north on the rotated map
   this.drawCompass();

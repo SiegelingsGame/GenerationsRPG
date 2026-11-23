@@ -159,7 +159,7 @@ The land goes through **eras**, each 6–15 years long:
 
 ## 7b. The thousand years
 
-- **Opening (Random Lineage only):** before founding, a skipable chronicle cutscene shows a forgotten age’s champions fighting the Hollow King with spectacle spells, losing, and the King attempting to unmake the timeline. Something resets the weave; the King flees into a mother’s womb seeking “the right bloodline.” The player’s House is that bloodline’s continuation (`Game.playOpeningCutscene` / `js/opening-cutscene.js`).
+- **Opening (Random Lineage only):** before founding, a skipable chronicle cutscene shows a forgotten age’s champions fighting the Hollow King with spectacle spells, losing, and the King attempting to unmake the timeline. Something resets the weave; a white spirit then seeks the right bloodline in a continuous 2.5D tracking shot — across the world map (Black Spire → seas → starting isle), then through escalating intimacy of space (town → neighborhood → house → room → mother’s belly) with parallax layers, dolly/zoom/pitch, and the spirit’s bloodline monologue. The player’s House is that bloodline’s continuation (`Game.playOpeningCutscene` / `js/opening-cutscene.js`).
 - **The doom:** the world ends 1,000 years after the House is founded, when the Hollow King comes forth from the Black Spire, unless the House destroys it first.
 - **Quests:** each generation gets a quest: recover a Seal from a ruin, slay a Herald, rally three towns with deeds, raise a champion, or relight a beacon shrine on a far island.
 - **Wards:** every quest completed raises a Ward, and each Ward takes 3 levels off the Hollow King, which otherwise grows stronger every year. Seven Wards make it beatable.
@@ -301,7 +301,7 @@ Bands for the UI: I (1–5), II (6–10), III (11–15), IV (16–20). Inspect a
 Implemented in the playable concept (`index.html`):
 
 - [x] House founding: name, race, birth status, choosing 1 of 3 partners
-- [x] Random Lineage opening cutscene: throwaway high-level party vs the Hollow King (PackArt god-spell VFX), forced defeat, timeline reset, King seeks the bloodline; skipable (Esc / Skip), then normal QuickStart founding
+- [x] Random Lineage opening cutscene: throwaway high-level party vs the Hollow King (PackArt god-spell VFX), forced defeat, timeline reset, white spirit seeks/claims the bloodline; skipable (Esc / Skip), then normal QuickStart founding
 - [x] Aging, life stages, XP modifiers, formative points, old-age death
 - [x] Isometric overworld with towns, ruins and the estate; time cost per step
 - [x] Turn-based combat with skills, focus, retinue, flee, permanent death
