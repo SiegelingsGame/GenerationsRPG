@@ -271,9 +271,9 @@ Every character has a class. You choose yours at founding. Others take theirs fr
 | Knight | High defence, precision attacks | Plate and precision: −20% damage taken; every attack pierces a quarter of armour and crits more often | Precision Strike (170%, +30% crit, pierces armour) · Riposte (guard 2 rounds, counter-attacks every attacker) · Challenge (marks a foe and draws its attacks) |
 | Thief | Trickster / traps | Ambush: first strike each battle +40% damage | Lay Snare (next round: AoE damage + slow) · Venom Blade (160% + poison DoT) · Caltrops (AoE 75%, expose armour) |
 | Noble | Commander / focus | Banner: allies begin battle with +1 focus | Basic: Strategize (command an ally to strike) · Synchronize Attack (ally strikes, then you follow up) · Muster (+2 focus to all) · Coordinated Strike (every other ally hits one foe) |
-| Warlock | High-focus caster | Dark pact: max and starting focus is **5** (others cap at 3) | Basic: strong pact-bolt · Hexbolt (280% magic, marks) · Soulfire (AoE 150%, expose) · Obliterate (5 focus, 420%+ magic nuke) |
+| Warlock | High-focus caster | Dark pact: max and starting focus is **4** (others cap at 3) | Basic: strong pact-bolt · Hexbolt (1 focus, 280% magic, marks) · Soulfire (2, AoE 150%, expose) · Obliterate (3, 420%+ magic nuke) |
 
-Status effects (inspired, bloodlust, guarded, shielded, exposed, slowed, venom, marked, riposte) show as markers over each fighter. The battle AI picks abilities by role: heal the wounded, shield or guard, buff, rally / muster, command, mark, lay traps, then area or single-target damage. Focus is normally capped at 3; warlocks hold 5.
+Status effects (inspired, bloodlust, guarded, shielded, exposed, slowed, venom, marked, riposte) show as markers over each fighter. The battle AI picks abilities by role: heal the wounded, shield or guard, buff, rally / muster, command, mark, lay traps, then area or single-target damage. Focus is normally capped at 3; warlocks hold 4.
 
 Mid-battle, opening a party character sheet shows **combat info only** (ATK/DEF/MAG, focus, potions on your turn, enemy knowledge). Estate social actions, equipment try-on, courtship and household management stay out of battle.
 

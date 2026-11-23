@@ -78,11 +78,11 @@ GD.CLASSES = {
   warlock: {
     name: 'Warlock', icon: '⛧', weapon: 'orb', top: ['int'],
     desc: 'Bound by a dark pact. Holds five focus from the first breath of battle, and spends it on ruinous spells.',
-    passive: 'Dark pact: always holds up to 5 focus, and begins every battle with it full.',
+    passive: 'Dark pact: always holds up to 4 focus, and begins every battle with it full.',
     mods: { atk: 0.65, def: 0.75, hp: 0.85, mag: 1.55, heal: 0.7, spd: 1.05 },
     growth: { int: 0.55, wil: 0.1 },
     skills: ['hexbolt', 'soulfire', 'obliterate'],
-    maxFocus: 5,
+    maxFocus: 4,
   },
 };
 
@@ -117,9 +117,9 @@ GD.ABILITIES = {
   synchronize:    { name: 'Synchronize Attack', cost: 2, target: 'ally', role: 'command', anim: 'cast', desc: 'An ally strikes a foe, then you follow up with a blow of your own.' },
   muster:         { name: 'Muster',          cost: 2, target: 'allies',  role: 'rally', anim: 'cast',  desc: 'Every ally gains 2 focus (up to their limit).' },
   coordinatedStrike: { name: 'Coordinated Strike', cost: 3, target: 'enemy', role: 'aoe', anim: 'cast', desc: 'Every other ally strikes the chosen foe in turn.' },
-  hexbolt:        { name: 'Hexbolt',         cost: 3, target: 'enemy',   role: 'nuke',  anim: 'cast',  desc: 'A heavy curse-bolt for 280% magic damage that marks the foe.' },
-  soulfire:       { name: 'Soulfire',        cost: 4, target: 'enemies', role: 'aoe',   anim: 'cast',  desc: 'Black fire on every enemy for 150% magic damage; strips half their armour.' },
-  obliterate:     { name: 'Obliterate',      cost: 5, target: 'enemy',   role: 'nuke',  anim: 'cast',  desc: 'Spend your full pact: 420% magic damage that ignores most armour.' },
+  hexbolt:        { name: 'Hexbolt',         cost: 1, target: 'enemy',   role: 'nuke',  anim: 'cast',  desc: 'A heavy curse-bolt for 280% magic damage that marks the foe.' },
+  soulfire:       { name: 'Soulfire',        cost: 2, target: 'enemies', role: 'aoe',   anim: 'cast',  desc: 'Black fire on every enemy for 150% magic damage; strips half their armour.' },
+  obliterate:     { name: 'Obliterate',      cost: 3, target: 'enemy',   role: 'nuke',  anim: 'cast',  desc: 'Spend most of your pact: 420% magic damage that ignores most armour.' },
 };
 // skills learned the old way (by stat) map onto abilities
 GD.LEGACY_SKILL = { str: 'cleave', agi: 'flurry', int: 'firebolt', wil: 'mend', vit: 'bulwark' };
@@ -404,7 +404,7 @@ Battle.useAbility = function (u, id, t) {
       this.damage(u, f, dmg, false);
       fx(f, '#2a0840');
       label(f, 'Obliterated', '#b48aff');
-      msg = `${u.name} spends the full pact — Obliterate hits ${f.name} for ${dmg}!`;
+      msg = `${u.name} spends the pact — Obliterate hits ${f.name} for ${dmg}!`;
       break;
     }
     default: msg = `${u.name} hesitates.`;

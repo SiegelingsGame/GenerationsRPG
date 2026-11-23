@@ -1384,7 +1384,7 @@ Render.drawBattle = function () {
       c.fillRect(bx, byy, bw * (u.hp / u.maxHp), 5);
       c.fillStyle = '#f2ead8'; c.font = u.giant ? 'bold 13px Georgia, serif' : '11px Georgia, serif'; c.textAlign = 'center';
       c.fillText(`${u.boss ? '☠ ' : ''}${u.name} · L${u.lvl}`, p.x, byy - 4);
-      // focus pips (warlocks hold 5)
+      // focus pips (warlocks hold 4)
       const focusMax = typeof Battle.maxFocus === 'function' ? Battle.maxFocus(u) : 3;
       const pipW = focusMax > 3 ? 5 : 6;
       const pipGap = focusMax > 3 ? 6 : 8;

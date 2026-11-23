@@ -27,7 +27,7 @@ function unitFromChar(c, side, slot, boss) {
   // the class shapes how this person fights
   const m = GD.CLASSES[u.cls].mods;
   u.atk *= m.atk; u.def *= m.def; u.mag *= m.mag; u.heal *= m.heal; u.spd *= m.spd;
-  // warlocks begin battle with their full pact (5 focus)
+  // warlocks begin battle with their full pact (4 focus)
   if (u.cls === 'warlock') u.focus = Battle.maxFocus(u);
 
   if (boss) {
@@ -92,7 +92,7 @@ Battle.start = function (opts) {
   });
   this.units.filter((u) => u.side === 'enemy').forEach((u, i) => { u.slot = i; });
   this.units.forEach((u) => Object.assign(u, unitPos(u)));
-  // Noble banner: party starts with +1 focus (warlocks stay capped at 5)
+  // Noble banner: party starts with +1 focus (warlocks stay capped at 4)
   if (this.units.some((u) => u.side === 'party' && u.alive && u.cls === 'noble')) {
     this.units.filter((u) => u.side === 'party' && u.alive).forEach((u) => this.gainFocus(u, 1));
   }

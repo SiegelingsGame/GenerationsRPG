@@ -19,7 +19,7 @@ async function boot(page) {
   await page.getByRole('button', { name: 'Continue playing', exact: true }).click();
 }
 
-test('noble strategizes and musters focus; warlock holds 5 AP and casts obliterate', async () => {
+test('noble strategizes and musters focus; warlock holds 4 AP and casts obliterate', async () => {
   const b = await chromium.launch({
     headless: true,
     ...(chrome ? { executablePath: chrome } : { channel: 'chrome' }),
@@ -34,10 +34,10 @@ test('noble strategizes and musters focus; warlock holds 5 AP and casts oblitera
     const result = await p.evaluate(() => {
       const ok = (cond, msg) => { if (!cond) throw new Error(msg); };
       ok(GD.CLASSES.noble && GD.CLASSES.warlock, 'classes exist');
-      ok(GD.CLASSES.warlock.maxFocus === 5, 'warlock maxFocus');
+      ok(GD.CLASSES.warlock.maxFocus === 4, 'warlock maxFocus');
       ok(GD.ABILITIES.synchronize && GD.ABILITIES.muster && GD.ABILITIES.coordinatedStrike, 'noble abilities');
       ok(GD.ABILITIES.hexbolt && GD.ABILITIES.soulfire && GD.ABILITIES.obliterate, 'warlock abilities');
-      ok(GD.ABILITIES.obliterate.cost === 5, 'obliterate costs 5');
+      ok(GD.ABILITIES.hexbolt.cost === 1 && GD.ABILITIES.soulfire.cost === 2 && GD.ABILITIES.obliterate.cost === 3, 'warlock costs');
       ok(GD.CLASS_KIT.noble.hand === 'banner', 'noble banner kit');
       ok(GD.CLASS_KIT.warlock.hand === 'orb', 'warlock orb kit');
 
@@ -51,10 +51,10 @@ test('noble strategizes and musters focus; warlock holds 5 AP and casts oblitera
       G.chars[wc.id] = wc;
       Equip.ensureChar(wc);
       const wu = unitFromChar(wc, 'party', 0);
-      ok(wu.focus === 5, 'warlock starts at 5 focus');
-      ok(Battle.maxFocus(wu) === 5, 'warlock cap 5');
+      ok(wu.focus === 4, 'warlock starts at 4 focus');
+      ok(Battle.maxFocus(wu) === 4, 'warlock cap 4');
       Battle.gainFocus(wu, 1);
-      ok(wu.focus === 5, 'warlock cannot exceed 5');
+      ok(wu.focus === 4, 'warlock cannot exceed 4');
 
       // --- Noble banner + strategize + muster + synchronize ---
       const nc = makeChar({ cls: 'noble', race: 'human', birth: 'highborn', house: G.house.name, status: 'party', level: 5 });
@@ -117,13 +117,13 @@ test('noble strategizes and musters focus; warlock holds 5 AP and casts oblitera
       const foe = Battle.units.find((u) => u.side === 'enemy');
       foe.hp = foe.maxHp = 500;
       foe.def = 0;
-      ok(warlock.focus === 5, 'warlock enters battle at 5');
+      ok(warlock.focus === 4, 'warlock enters battle at 4');
       Battle.useAbility(warlock, 'obliterate', foe);
-      ok(warlock.focus === 0, 'obliterate spends 5');
+      ok(warlock.focus === 1, 'obliterate spends 3');
       ok(foe.hp < 500, 'obliterate damaged');
 
       // Pact bolt is stronger than sorcerer bolt at same mag
-      const bolt = Battle.magic({ ...warlock, focus: 5, st: {}, brave: false }, { ...foe, st: {}, defending: false }, 1.35);
+      const bolt = Battle.magic({ ...warlock, focus: 4, st: {}, brave: false }, { ...foe, st: {}, defending: false }, 1.35);
       const arcane = Battle.magic({ ...warlock, cls: 'sorcerer', st: {}, brave: false }, { ...foe, st: {}, defending: false }, 0.95);
       ok(bolt.dmg > arcane.dmg, 'pact bolt stronger than arcane bolt');
 
