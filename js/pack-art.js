@@ -4,11 +4,16 @@ const PackArt = {
   images: {}, effects: [], reduced: window.matchMedia('(prefers-reduced-motion: reduce)'),
   load(key,path) { const image=new Image();image.src=path;this.images[key]=image;return image; },
   ready(key) { const im=this.images[key];return im?.complete && im.naturalWidth>0; },
+  aimLift(u) {
+    if (!u) return 30;
+    if (typeof Render !== 'undefined' && Render.unitAimLift) return Render.unitAimLift(u);
+    return Math.round(24 * (1.25 * (u.scale || 1)));
+  },
   emit(key,target,source=null,projectile=null) {
     if (!target || !PACK_EFFECTS[key]) return;
     const t0=performance.now();
     const pos=u=>({x:u.gx,y:u.gy});
-    this.effects.push({key,to:pos(target),from:source?pos(source):null,projectile,t0,delay:projectile?240:0});
+    this.effects.push({key,to:pos(target),from:source?pos(source):null,projectile,t0,delay:projectile?240:0,toAim:this.aimLift(target),fromAim:source?this.aimLift(source):35});
     if(this.effects.length>40)this.effects.splice(0,this.effects.length-40);
   },
   damage(src,target,crit) {
@@ -30,9 +35,9 @@ const PackArt = {
     const now=render.t,ctx=render.ctx;
     this.effects=this.effects.filter(f=>now-f.t0<f.delay+PACK_EFFECTS[f.key].frames/PACK_EFFECTS[f.key].fps*1000+80);
     for(const f of this.effects) {
-      const elapsed=now-f.t0,to=render.biso(f.to.x,f.to.y);to.y-=30;
+      const elapsed=now-f.t0,to=render.biso(f.to.x,f.to.y);to.y-=(f.toAim||30);
       if(f.projectile&&elapsed>=0&&elapsed<f.delay&&!this.reduced.matches) {
-        const from=render.biso(f.from.x,f.from.y);from.y-=35;
+        const from=render.biso(f.from.x,f.from.y);from.y-=(f.fromAim||35);
         const k=elapsed/f.delay;this.frame(ctx,f.projectile,from.x+(to.x-from.x)*k,from.y+(to.y-from.y)*k,elapsed,65,true,Math.atan2(to.y-from.y,to.x-from.x));
       }
       const size=f.size||(f.key==='explosion'?140:f.key==='lightning'?130:95);
@@ -42,12 +47,14 @@ const PackArt = {
   // Chained PackArt bursts for cinematic "god spells" — reuses the existing sprite sheet aggressively.
   godSpell(name, target, source=null) {
     const t=target,s=source;
+    const toAim=this.aimLift(t),fromAim=s?this.aimLift(s):35;
+    const giantBoost=(t&&(t.giant||(t.scale||1)>1.4))?1.35:1;
     const burst=(key,delay,extra={})=>{
       setTimeout(()=>{
         if(!t)return;
         const info=PACK_EFFECTS[key];if(!info)return;
         const t0=performance.now();
-        this.effects.push({key,to:{x:t.gx+(extra.dx||0),y:t.gy+(extra.dy||0)},from:s?{x:s.gx,y:s.gy}:null,projectile:extra.projectile||null,t0,delay:extra.projectile?220:0,size:extra.size,ox:extra.ox,oy:extra.oy,loop:!!extra.loop});
+        this.effects.push({key,to:{x:t.gx+(extra.dx||0),y:t.gy+(extra.dy||0)},from:s?{x:s.gx,y:s.gy}:null,projectile:extra.projectile||null,t0,delay:extra.projectile?220:0,size:(extra.size||95)*giantBoost,ox:extra.ox,oy:extra.oy,loop:!!extra.loop,toAim,fromAim});
         if(this.effects.length>48)this.effects.splice(0,this.effects.length-48);
       },delay);
     };

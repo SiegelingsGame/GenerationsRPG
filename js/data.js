@@ -229,7 +229,7 @@ Object.assign(GD.ENEMIES, {
   lurker:   { name: 'Bog Lurker',   shape: 'brute',    color: '#4d5a36', s: { str: 7, agi: 3, int: 2, wil: 3, vit: 9 }, xp: 18, gold: 6 },
   jaguar:   { name: 'Jungle Cat',   shape: 'beast',    color: '#a8782e', s: { str: 6, agi: 9, int: 1, wil: 2, vit: 4 }, xp: 15, gold: 3 },
   herald:   { name: 'Herald of the Hollow King', shape: 'wraith', color: '#3a1f4a', s: { str: 9, agi: 7, int: 10, wil: 8, vit: 10 }, xp: 120, gold: 150, skill: 'int' },
-  hollow:   { name: 'The Hollow King', shape: 'wraith', color: '#140a1c', s: { str: 13, agi: 8, int: 14, wil: 12, vit: 16 }, xp: 1000, gold: 0, skill: 'int' },
+  hollow:   { name: 'The Hollow King', shape: 'wraith', color: '#140a1c', s: { str: 13, agi: 8, int: 14, wil: 12, vit: 16 }, xp: 1000, gold: 0, skill: 'int', scale: 2.5, giant: true },
 });
 Object.assign(GD.ENCOUNTERS, {
   sand: ['bandit', 'wolf'], desert: ['stalker', 'stalker', 'bandit'], snow: ['frostwolf', 'frostwolf', 'troll'],

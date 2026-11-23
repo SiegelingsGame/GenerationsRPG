@@ -82,6 +82,9 @@ OpeningCutscene.setupBattle = function () {
   ];
   const king = makeEnemyUnit('hollow', 28, 0);
   king.boss = true;
+  // Giant scale comes from GD.ENEMIES.hollow (scale/giant); keep explicit for cutscene clarity.
+  king.scale = king.scale || 2.5;
+  king.giant = true;
   king.maxHp = Math.round(king.maxHp * 2.4);
   king.hp = king.maxHp;
   king.mag *= 1.4;

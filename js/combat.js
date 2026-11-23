@@ -49,6 +49,7 @@ function makeEnemyUnit(type, lvl, slot) {
     abilities: d.skill ? [GD.LEGACY_SKILL[d.skill]] : [], st: {}, focus: 0, defending: false, taunt: 0, alive: true,
     xp: Math.round(d.xp * (1 + lvl * 0.15)), gold: Math.round(d.gold * (1 + lvl * 0.2)),
     look: { color: d.color, skin: d.skin },
+    scale: d.scale || 1, giant: !!d.giant,
     anim: null, flash: 0,
   };
   u.hp = u.maxHp;
@@ -57,9 +58,15 @@ function makeEnemyUnit(type, lvl, slot) {
 
 function unitPos(u) {
   const col = u.side === 'party' ? 1.5 : 5.4;
-  const n = Battle.units.filter((x) => x.side === u.side).length;
-  const off = (4 - n) * 0.6;
-  return { gx: col + (u.side === 'party' ? (u.slot % 2) * -0.5 : (u.slot % 2) * 0.5), gy: 0.6 + off + u.slot * 1.2 };
+  const side = Battle.units.filter((x) => x.side === u.side);
+  const n = side.length;
+  const hasGiant = side.some((x) => x.giant || (x.scale || 1) > 1.4);
+  const step = hasGiant && u.side === 'enemy' ? 1.55 : 1.2;
+  const off = (4 - n) * (hasGiant && u.side === 'enemy' ? 0.4 : 0.6);
+  const zig = u.side === 'party' ? (u.slot % 2) * -0.5 : (u.slot % 2) * 0.5;
+  // Giants stand slightly forward/center so the tall sprite reads clearly.
+  const gx = col + (u.giant ? 0.2 : zig);
+  return { gx, gy: 0.6 + off + u.slot * step };
 }
 
 Battle.start = function (opts) {
