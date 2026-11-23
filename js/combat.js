@@ -151,12 +151,18 @@ Battle.damage = function (src, t, dmg, crit, label) {
     if (sh.v <= 0) delete t.st.shield;
   }
   t.hp = Math.max(0, t.hp - dmg);
+  // House lore: first strike on a foe teaches a little; finishing them teaches more
+  if (src && src.side === 'party' && t.side === 'enemy' && t.type && dmg > 0 && !t._loreHit) {
+    t._loreHit = true;
+    EnemyLore.add(t.type, EnemyLore.HIT);
+  }
   if (src && Battle.counter) setTimeout(() => { if (!this.over) this.counter(src, t); }, 120);
   t.flash = 1;
   this.fx.push({ uid: t.uid, text: (crit ? 'CRIT ' : '') + dmg, color: crit ? '#ffd23f' : '#ff5c5c', t0: performance.now() });
   if (label) this.fx.push({ uid: t.uid, text: label, color: '#ddd', t0: performance.now() + 60, small: true });
   if (t.hp <= 0 && t.alive) {
     t.alive = false;
+    if (t.side === 'enemy' && t.type) EnemyLore.add(t.type, EnemyLore.KILL);
     this.say(`${t.name} ${t.side === 'party' ? 'has fallen!' : 'is defeated.'}`);
   }
 };

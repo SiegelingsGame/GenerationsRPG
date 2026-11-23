@@ -271,6 +271,24 @@ Every character has a class. You choose yours at founding. Others take theirs fr
 
 Status effects (inspired, bloodlust, guarded, shielded, exposed, slowed, marked, riposte) show as markers over each fighter. The battle AI picks abilities by role: heal the wounded, shield or guard, buff, rally, mark, then area or single-target damage.
 
+Mid-battle, opening a party character sheet shows **combat info only** (ATK/DEF/MAG, focus, potions on your turn, enemy knowledge). Estate social actions, equipment try-on, courtship and household management stay out of battle.
+
+## 8c. Enemy lore (House familiarity)
+
+The House remembers foes. Knowledge is stored on `G.house.lore[enemyType]` (0–**20**), persists across fights and saves.
+
+| Event | Gain |
+|---|---|
+| First hit on a given enemy unit in a battle | +1 |
+| That enemy is defeated | +2 |
+
+| Bonus (per knowledge point) | Cap at 20 |
+|---|---|
+| Damage dealt to that type | +0.5% → **+10%** |
+| Damage taken from that type | −0.4% → **−8%** |
+
+Bands for the UI: I (1–5), II (6–10), III (11–15), IV (16–20). Inspect an enemy in battle (tap the field or a lore tag) or open a party member mid-fight to see lines like `Known: Bandit II — +6% dmg / +5% resist`.
+
 ## 9. 2.5D presentation
 
 - Isometric world built from height-extruded tiles. Lighting shifts with the era: warm gold in Abundance, cold grey in Famine, red haze in War.
@@ -287,6 +305,7 @@ Implemented in the playable concept (`index.html`):
 - [x] Aging, life stages, XP modifiers, formative points, old-age death
 - [x] Isometric overworld with towns, ruins and the estate; time cost per step
 - [x] Turn-based combat with skills, focus, retinue, flee, permanent death
+- [x] Battle-only party popup actions; House enemy lore (familiarity damage/resist)
 - [x] Yearly world simulation: births, marriages, bastards, orphans, corruption, rivals
 - [x] Eras, prosperity, Golden Age victory
 - [x] Succession, heir choice and timeskip with flat growth
