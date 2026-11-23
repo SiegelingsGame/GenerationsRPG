@@ -484,3 +484,57 @@ body:not(.has-game) #guide-goal { display: none; }
   .equip-left, .inv-left, .equip-doll { width: 100%; }
   .eq-slots { grid-template-columns: 1fr 1fr; }
 }
+
+/* Hollow King opening cutscene (Random Lineage) */
+.opening-cutscene {
+  position: fixed; inset: 0; z-index: 40; pointer-events: none;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  background: linear-gradient(180deg, rgba(8,6,14,0.15) 0%, rgba(8,6,14,0.25) 45%, rgba(8,6,14,0.82) 100%);
+}
+.opening-cutscene .oc-chrome { pointer-events: auto; position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); display: flex; align-items: center; gap: 10px; }
+.opening-cutscene .oc-skip {
+  pointer-events: auto; font-family: var(--font); font-size: 14px; letter-spacing: 1px;
+  padding: 8px 14px; background: rgba(33,30,43,0.92); color: var(--text);
+  border: 1px solid var(--accent); border-radius: 4px; cursor: pointer;
+}
+.opening-cutscene .oc-skip:hover { border-color: var(--gold); background: #353047; }
+.opening-cutscene .oc-hint { margin: 0; font-size: 11px; }
+.opening-cutscene .oc-stage {
+  pointer-events: none; padding: 18px 22px max(28px, env(safe-area-inset-bottom));
+  max-width: min(720px, 94vw); margin: 0 auto 8px;
+}
+.opening-cutscene .oc-chapter {
+  margin: 0 0 6px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold);
+}
+.opening-cutscene .oc-line {
+  margin: 0; font-size: clamp(16px, 2.4vw, 22px); line-height: 1.35; color: var(--text);
+  text-shadow: 0 2px 12px rgba(0,0,0,0.85);
+}
+.opening-cutscene .oc-line.oc-flash { animation: oc-line-in 0.45s ease-out; }
+.opening-cutscene .oc-speaker {
+  margin: 8px 0 0; font-size: 12px; font-style: italic; color: var(--dim); min-height: 1.2em;
+}
+.opening-cutscene .oc-vignette {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.55;
+  transition: background 0.8s ease, opacity 0.8s ease;
+}
+.opening-cutscene .oc-vignette.oc-void {
+  background: radial-gradient(ellipse at 70% 40%, rgba(80,20,100,0.55), rgba(8,4,14,0.75) 60%, #050308);
+}
+.opening-cutscene .oc-vignette.oc-reset {
+  background: radial-gradient(ellipse at 50% 45%, rgba(140,210,255,0.35), rgba(20,30,50,0.55) 55%, #0a1018);
+  opacity: 0.7;
+}
+.opening-cutscene .oc-vignette.oc-womb {
+  background: radial-gradient(ellipse at 50% 70%, rgba(160,40,70,0.45), rgba(40,10,20,0.7) 50%, #0a0408);
+  opacity: 0.75;
+}
+@keyframes oc-line-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+body.opening-cutscene-active #log,
+body.opening-cutscene-active #mobilebar,
+body.opening-cutscene-active .mapctl { display: none; }
+body.opening-cutscene-active #panel button.act,
+body.opening-cutscene-active #panel .auto { display: none; }

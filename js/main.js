@@ -19,14 +19,21 @@ Game.title = function () {
     h('p', { class: 'dim small' }, `Version ${UI.buildVersion()}`),
     can ? act('Continue your House', () => { if (loadGame()) { UI.closeAll(); this.enterWorld(); } else UI.toast('Save could not be loaded.'); }, { cls: 'hl' }) : null,
     h('p', { class: 'dim' }, 'Choose how your lineage begins.'),
-    act('Random Lineage', () => { UI.closeAll(); this.randomLineage(); }, { cls: 'hl', sub: 'Recommended · the intended way to play. QuickStart generates your founder, partner and House. You can change the House name.' }),
+    act('Random Lineage', () => { UI.closeAll(); this.randomLineage(); }, { cls: 'hl', sub: 'Recommended · the intended way to play. Opens with the Hollow King chronicle, then QuickStart generates your founder, partner and House.' }),
     act('Prepare Carefully', () => { UI.closeAll(); this.create(); }, { sub: 'Customize your founder, race, class, background and partner step by step.' }),
     act('How to play', () => UI.showHelp()),
   ), { locked: true });
 };
 
 // QuickStart uses the same founding and partner rules as custom creation.
-Game.randomLineage = function () {
+// Random Lineage plays the Hollow King opening cutscene first (skipable), then founds the House.
+Game.randomLineage = function (opts = {}) {
+  const begin = () => this.beginRandomLineage();
+  if (opts.skipCutscene || opts.cutscene === false) return begin();
+  this.playOpeningCutscene(begin);
+};
+
+Game.beginRandomLineage = function () {
   newGame();
   const pick = (table) => R.pick(Object.keys(table));
   const race = pick(GD.RACES);

@@ -135,6 +135,11 @@ Render.unrotXY = function (rx, ry) {
   }
 };
 
+Render.shake = function (ms = 400, power = 8) {
+  this.shakeUntil = performance.now() + ms;
+  this.shakePower = power;
+};
+
 Render.frame = function () {
   const c = this.ctx;
   const box = this.canvas.getBoundingClientRect();
@@ -142,10 +147,17 @@ Render.frame = function () {
   if (this.ctl) this.ctl.hidden = !(G && G.mode === 'world' && !Battle.active);
   c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   c.clearRect(0, 0, this.w, this.h);
-  if (!G || !G.world || !G.world.map) { this.drawTitleBg(); return; }
+  const shaking = this.shakeUntil && performance.now() < this.shakeUntil;
+  if (shaking) {
+    const p = this.shakePower || 8;
+    c.save();
+    c.translate((Math.random() - 0.5) * p * 2, (Math.random() - 0.5) * p * 2);
+  }
+  if (!G || !G.world || !G.world.map) { this.drawTitleBg(); if (shaking) c.restore(); return; }
   if (Battle.active) this.drawBattle();
   else this.drawWorld();
   LocationPrompt.render();
+  if (shaking) c.restore();
 };
 
 Render.drawTitleBg = function () {
@@ -943,6 +955,16 @@ Render.biso = function (gx, gy) {
   const oy = this.h / 2 - (3.5 + 2.5) * BTH / 2 + 30;
   return { x: (gx - gy) * BTW / 2 + ox, y: (gx + gy) * BTH / 2 + oy };
 };
+// Visual size: enemy defs may set scale (>1) / giant; party chars stay at 1.
+Render.unitScale = function (u) { return (u && u.scale) || 1; };
+Render.unitFigScale = function (u) {
+  const base = !u ? 1.25 : u.shape === 'beast' ? 1.1 : u.shape === 'brute' ? 1.7 : 1.25;
+  return base * this.unitScale(u);
+};
+// Mid-torso aim / pick height in battle pixels (feet at unitScreen.y).
+Render.unitAimLift = function (u) { return Math.round(24 * this.unitFigScale(u)); };
+// HP bar / name sit just above the tallest part of the figure.
+Render.unitBarLift = function (u) { return Math.round(52 * this.unitFigScale(u) + 16); };
 Render.unitScreen = function (u) {
   const p = this.biso(u.gx, u.gy);
   let dx = 0, dy = 0;
@@ -991,36 +1013,40 @@ Render.drawBattle = function () {
   const now = this.t;
   for (const u of units) {
     const p = this.unitScreen(u);
+    const figS = this.unitFigScale(u);
+    const footR = 26 * Math.sqrt(this.unitScale(u));
+    const aimLift = this.unitAimLift(u);
     u.flash = Math.max(0, (u.flash || 0) - 0.06);
     const isCur = Battle.cur === u && !Battle.over;
     if (isCur) {
       c.strokeStyle = u.side === 'party' ? '#ffd98a' : '#ff7a7a'; c.lineWidth = 2;
-      c.beginPath(); c.ellipse(p.x, p.y, 26, 11, 0, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.ellipse(p.x, p.y, footR, footR * 0.42, 0, 0, Math.PI * 2); c.stroke();
     }
     if (UI.targeting && UI.validTarget(u) && bm) {
-      const d = Math.hypot(bm.x - p.x, bm.y - (p.y - 30));
-      if (d < 40) { c.fillStyle = 'rgba(255,230,120,0.25)'; c.beginPath(); c.ellipse(p.x, p.y, 30, 13, 0, 0, Math.PI * 2); c.fill(); }
+      const d = Math.hypot(bm.x - p.x, bm.y - (p.y - aimLift));
+      if (d < 40 * Math.sqrt(this.unitScale(u))) { c.fillStyle = 'rgba(255,230,120,0.25)'; c.beginPath(); c.ellipse(p.x, p.y, footR * 1.15, footR * 0.5, 0, 0, Math.PI * 2); c.fill(); }
     }
     const o = { flash: u.flash, dead: !u.alive };
     const facing = u.side === 'enemy';
     c.save();
     if (facing) { c.translate(p.x, 0); c.scale(-1, 1); c.translate(-p.x, 0); }
-    if (u.shape === 'beast') this.drawBeast(p.x, p.y, u.look, 1.1, o);
-    else if (u.kind === 'char') this.drawFigure(p.x, p.y, u.look, 1.25, { ...o, weapon: (GD.CLASSES[u.cls] || {}).weapon || 'sword' });
+    if (u.shape === 'beast') this.drawBeast(p.x, p.y, u.look, figS, o);
+    else if (u.kind === 'char') this.drawFigure(p.x, p.y, u.look, figS, { ...o, weapon: (GD.CLASSES[u.cls] || {}).weapon || 'sword' });
     else {
       const look = { skin: u.look.skin || (u.shape === 'brute' ? '#7d8f72' : '#d8b08c'), hair: '#2a2a2a', tunic: u.look.color, race: u.shape === 'brute' ? 'orc' : 'human', stage: 'prime' };
       if (u.shape === 'wraith') { c.globalAlpha = 0.75; look.skin = '#c8d8f0'; look.tunic = u.look.color; }
-      this.drawFigure(p.x, p.y + (u.shape === 'wraith' ? -8 + Math.sin(now / 300) * 3 : 0), look, u.shape === 'brute' ? 1.7 : 1.25, { ...o, weapon: (u.abilities || []).includes('firebolt') ? 'orb' : 'sword' });
+      if (u.giant) { look.evil = true; look.hair = '#1a1020'; look.hairStyle = 'long'; }
+      this.drawFigure(p.x, p.y + (u.shape === 'wraith' ? -8 + Math.sin(now / 300) * 3 : 0), look, figS, { ...o, weapon: (u.abilities || []).includes('firebolt') ? 'orb' : 'sword' });
       c.globalAlpha = 1;
     }
     c.restore();
     // hp bar
     if (u.alive) {
-      const bw = 50, bx = p.x - bw / 2, byy = p.y - (u.shape === 'brute' ? 100 : 82);
+      const bw = u.giant ? 72 : 50, bx = p.x - bw / 2, byy = p.y - this.unitBarLift(u);
       c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(bx - 1, byy - 1, bw + 2, 7);
       c.fillStyle = u.side === 'party' ? '#5fd35f' : '#e0503a';
       c.fillRect(bx, byy, bw * (u.hp / u.maxHp), 5);
-      c.fillStyle = '#f2ead8'; c.font = '11px Georgia, serif'; c.textAlign = 'center';
+      c.fillStyle = '#f2ead8'; c.font = u.giant ? 'bold 13px Georgia, serif' : '11px Georgia, serif'; c.textAlign = 'center';
       c.fillText(`${u.boss ? '☠ ' : ''}${u.name} · L${u.lvl}`, p.x, byy - 4);
       // focus pips
       for (let i = 0; i < 3; i++) { c.fillStyle = i < u.focus ? '#8fd3ff' : 'rgba(255,255,255,0.15)'; c.fillRect(bx + i * 8, byy + 7, 6, 3); }
@@ -1048,18 +1074,20 @@ Render.drawBattle = function () {
     const u = Battle.find(f.uid);
     if (!u) continue;
     const p = this.biso(u.gx, u.gy);
+    const aim = this.unitAimLift(u);
+    const floatY = this.unitBarLift(u) + 8;
     const k = (now - f.t0) / 1100;
     if (k < 0) continue;
     if (f.burst) {
       c.fillStyle = f.burst; c.globalAlpha = 1 - k;
-      c.beginPath(); c.arc(p.x, p.y - 30, 10 + k * 40, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1;
+      c.beginPath(); c.arc(p.x, p.y - aim, 10 + k * 40, 0, Math.PI * 2); c.fill(); c.globalAlpha = 1;
       continue;
     }
     c.globalAlpha = 1 - k * k;
     c.font = f.small ? 'italic 12px Georgia, serif' : 'bold 20px Georgia, serif';
     c.textAlign = 'center';
-    c.fillStyle = '#000'; c.fillText(f.text, p.x + 1, p.y - 90 - k * 40 + 1 + (f.small ? 18 : 0));
-    c.fillStyle = f.color; c.fillText(f.text, p.x, p.y - 90 - k * 40 + (f.small ? 18 : 0));
+    c.fillStyle = '#000'; c.fillText(f.text, p.x + 1, p.y - floatY - k * 40 + 1 + (f.small ? 18 : 0));
+    c.fillStyle = f.color; c.fillText(f.text, p.x, p.y - floatY - k * 40 + (f.small ? 18 : 0));
     c.globalAlpha = 1;
   }
   c.restore();
@@ -1074,11 +1102,13 @@ Render.unbattle = function (p) {
 
 Render.pickUnit = function (p0) {
   const p = this.unbattle(p0);
-  let best = null, bd = 50;
+  let best = null, bd = 1e9;
   for (const u of Battle.units) {
     const s = this.unitScreen(u);
-    const d = Math.hypot(p.x - s.x, p.y - (s.y - 30));
-    if (d < bd) { bd = d; best = u; }
+    const lift = this.unitAimLift(u);
+    const reach = 50 * Math.sqrt(this.unitScale(u));
+    const d = Math.hypot(p.x - s.x, p.y - (s.y - lift));
+    if (d < reach && d < bd) { bd = d; best = u; }
   }
   return best;
 };

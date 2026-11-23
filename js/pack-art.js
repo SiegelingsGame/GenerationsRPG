@@ -4,11 +4,16 @@ const PackArt = {
   images: {}, effects: [], reduced: window.matchMedia('(prefers-reduced-motion: reduce)'),
   load(key,path) { const image=new Image();image.src=path;this.images[key]=image;return image; },
   ready(key) { const im=this.images[key];return im?.complete && im.naturalWidth>0; },
+  aimLift(u) {
+    if (!u) return 30;
+    if (typeof Render !== 'undefined' && Render.unitAimLift) return Render.unitAimLift(u);
+    return Math.round(24 * (1.25 * (u.scale || 1)));
+  },
   emit(key,target,source=null,projectile=null) {
     if (!target || !PACK_EFFECTS[key]) return;
     const t0=performance.now();
     const pos=u=>({x:u.gx,y:u.gy});
-    this.effects.push({key,to:pos(target),from:source?pos(source):null,projectile,t0,delay:projectile?240:0});
+    this.effects.push({key,to:pos(target),from:source?pos(source):null,projectile,t0,delay:projectile?240:0,toAim:this.aimLift(target),fromAim:source?this.aimLift(source):35});
     if(this.effects.length>40)this.effects.splice(0,this.effects.length-40);
   },
   damage(src,target,crit) {
@@ -28,14 +33,72 @@ const PackArt = {
   },
   drawBattle(render) {
     const now=render.t,ctx=render.ctx;
-    this.effects=this.effects.filter(f=>now-f.t0<f.delay+PACK_EFFECTS[f.key].frames/PACK_EFFECTS[f.key].fps*1000);
+    this.effects=this.effects.filter(f=>now-f.t0<f.delay+PACK_EFFECTS[f.key].frames/PACK_EFFECTS[f.key].fps*1000+80);
     for(const f of this.effects) {
-      const elapsed=now-f.t0,to=render.biso(f.to.x,f.to.y);to.y-=30;
+      const elapsed=now-f.t0,to=render.biso(f.to.x,f.to.y);to.y-=(f.toAim||30);
       if(f.projectile&&elapsed>=0&&elapsed<f.delay&&!this.reduced.matches) {
-        const from=render.biso(f.from.x,f.from.y);from.y-=35;
+        const from=render.biso(f.from.x,f.from.y);from.y-=(f.fromAim||35);
         const k=elapsed/f.delay;this.frame(ctx,f.projectile,from.x+(to.x-from.x)*k,from.y+(to.y-from.y)*k,elapsed,65,true,Math.atan2(to.y-from.y,to.x-from.x));
       }
-      this.frame(ctx,f.key,to.x,to.y,elapsed-f.delay, f.key==='explosion'?120:95);
+      const size=f.size||(f.key==='explosion'?140:f.key==='lightning'?130:95);
+      this.frame(ctx,f.key,to.x+(f.ox||0),to.y+(f.oy||0),elapsed-f.delay, size, !!f.loop);
+    }
+  },
+  // Chained PackArt bursts for cinematic "god spells" — reuses the existing sprite sheet aggressively.
+  godSpell(name, target, source=null) {
+    const t=target,s=source;
+    const toAim=this.aimLift(t),fromAim=s?this.aimLift(s):35;
+    const giantBoost=(t&&(t.giant||(t.scale||1)>1.4))?1.35:1;
+    const burst=(key,delay,extra={})=>{
+      setTimeout(()=>{
+        if(!t)return;
+        const info=PACK_EFFECTS[key];if(!info)return;
+        const t0=performance.now();
+        this.effects.push({key,to:{x:t.gx+(extra.dx||0),y:t.gy+(extra.dy||0)},from:s?{x:s.gx,y:s.gy}:null,projectile:extra.projectile||null,t0,delay:extra.projectile?220:0,size:(extra.size||95)*giantBoost,ox:extra.ox,oy:extra.oy,loop:!!extra.loop,toAim,fromAim});
+        if(this.effects.length>48)this.effects.splice(0,this.effects.length-48);
+      },delay);
+    };
+    const shake=(ms,power)=>{if(typeof Render!=='undefined'&&Render.shake)Render.shake(ms,power);};
+    const banner=(text,color)=>{
+      if(!t||typeof Battle==='undefined')return;
+      Battle.fx.push({uid:t.uid,text,color:color||'#ffd76a',t0:performance.now(),small:false});
+    };
+    if(name==='starfall'){
+      banner('STARFALL','#ffb347');shake(520,10);
+      burst('fire_proj',0,{projectile:'fire_proj',size:80});
+      burst('explosion',180,{size:160});burst('explosion',280,{dx:.35,size:120});burst('flame',320,{size:110,loop:true});
+      burst('critical',420,{size:100});burst('sparkle',500,{size:90});
+    }else if(name==='solarSmite'){
+      banner('SOLAR SMITE','#fff3a0');shake(480,8);
+      burst('holy_proj',0,{projectile:'holy_proj',size:90});
+      burst('lightning',160,{size:150});burst('critical',220,{size:120});
+      burst('sparkle',300,{size:100});burst('heal',380,{size:90});
+    }else if(name==='worldsong'){
+      banner('WORLDSONG','#b48aff');shake(400,6);
+      burst('music',0,{size:130});burst('buff',120,{size:110});
+      burst('wind_proj',80,{projectile:'wind_proj',size:80});
+      burst('sparkle',240,{size:100});burst('shield',320,{size:100});
+    }else if(name==='voidCascade'){
+      banner('VOID CASCADE','#c48aff');shake(700,14);
+      burst('dark_proj',0,{projectile:'dark_proj',size:95});
+      burst('explosion',200,{size:170});burst('lightning',260,{size:140});
+      burst('sparkle',340,{dx:-.3,size:110});burst('explosion',420,{dx:.4,size:130});
+      burst('flame',500,{size:120,loop:true});burst('critical',560,{size:110});
+    }else if(name==='unmaking'){
+      banner('ABSOLUTE UNMAKING','#ff5c5c');shake(900,18);
+      burst('dark_proj',0,{projectile:'dark_proj',size:110});
+      burst('lightning',120,{size:160});burst('explosion',200,{size:180});
+      burst('explosion',320,{dx:.5,size:140});burst('explosion',320,{dx:-.5,size:140});
+      burst('flame',400,{size:140,loop:true});burst('critical',480,{size:130});
+      burst('sparkle',560,{size:120});
+    }else if(name==='timelineBreak'){
+      banner('THE WEAVE FRACTURES','#8fd3ff');shake(1000,16);
+      burst('lightning',0,{size:160});burst('sparkle',100,{size:120});
+      burst('explosion',180,{size:150});burst('music',260,{size:110});
+      burst('shield',360,{size:130});burst('heal',480,{size:120});
+      burst('buff',560,{size:110});
+    }else{
+      burst('explosion',0,{size:140});burst('critical',120,{size:100});
     }
   },
 };
