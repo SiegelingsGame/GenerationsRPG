@@ -27,6 +27,8 @@ function unitFromChar(c, side, slot, boss) {
   // the class shapes how this person fights
   const m = GD.CLASSES[u.cls].mods;
   u.atk *= m.atk; u.def *= m.def; u.mag *= m.mag; u.heal *= m.heal; u.spd *= m.spd;
+  // warlocks begin battle with their full pact (4 focus)
+  if (u.cls === 'warlock') u.focus = Battle.maxFocus(u);
 
   if (boss) {
     u.maxHp = Math.round(u.maxHp * 1.8); u.hp = u.maxHp;
@@ -72,6 +74,7 @@ function unitPos(u) {
 Battle.start = function (opts) {
   PackArt.effects = [];
   this.active = true; this.over = false; this.round = 0; this.fx = []; this.log = [];
+  this.traps = [];
   this.kind = opts.kind || 'wild';
   this.title = opts.title || 'Battle';
   this.onEnd = opts.onEnd;
@@ -89,6 +92,10 @@ Battle.start = function (opts) {
   });
   this.units.filter((u) => u.side === 'enemy').forEach((u, i) => { u.slot = i; });
   this.units.forEach((u) => Object.assign(u, unitPos(u)));
+  // Noble banner: party starts with +1 focus (warlocks stay capped at 4)
+  if (this.units.some((u) => u.side === 'party' && u.alive && u.cls === 'noble')) {
+    this.units.filter((u) => u.side === 'party' && u.alive).forEach((u) => this.gainFocus(u, 1));
+  }
   this.queue = [];
   this.waiting = false;
   this.say(opts.intro || 'Enemies approach!');
@@ -106,6 +113,9 @@ Battle.next = function () {
   if (!this.queue.length) {
     this.round++;
     this.units.forEach((u) => { if (u.taunt) u.taunt--; });
+    if (this.round > 1 && this.triggerTraps) this.triggerTraps();
+    if (!this.alive('enemy').length) return setTimeout(() => this.finish('victory'), 500);
+    if (!this.alive('party').length) return setTimeout(() => this.finish('defeat'), 500);
     if (G.house.retinue > 0 && this.round > 0) {
       const t = R.pick(this.alive('enemy'));
       const dmg = Math.round(3 + G.house.retinue * 3 + partyLevel() * 1.2);
@@ -120,7 +130,12 @@ Battle.next = function () {
   this.cur = u;
   u.defending = false;
   this.tickStatus(u);
-  u.focus = Math.min(3, u.focus + 1);
+  if (!u.alive) {
+    if (!this.alive('enemy').length) return setTimeout(() => this.finish('victory'), 400);
+    if (!this.alive('party').length) return setTimeout(() => this.finish('defeat'), 400);
+    return setTimeout(() => this.next(), 400);
+  }
+  this.gainFocus(u, 1);
   if (u.side === 'party' && !this.auto) {
     this.waiting = true;
     UI.battleChanged();
@@ -138,6 +153,11 @@ Battle.ai = function (u) {
   const choice = this.choose(u);
   if (choice) return this.act('skill', choice.t ? choice.t.uid : null, choice.id);
   if (u.side === 'party' && G.house.potions > 0 && u.hp < u.maxHp * 0.3) return this.act('potion', u.uid);
+  // Nobles strategize: command the strongest ally rather than swinging
+  if (u.cls === 'noble') {
+    const allies = this.alive(u.side).filter((a) => a !== u).sort((a, b) => b.atk - a.atk);
+    if (allies.length) return this.act('attack', allies[0].uid);
+  }
   const taunter = foes.find((f) => f.taunt > 0);
   const target = taunter || (R.chance(0.5) ? foes.slice().sort((a, b) => a.hp - b.hp)[0] : R.pick(foes));
   this.act('attack', target.uid);
@@ -179,12 +199,20 @@ Battle.act = function (action, targetUid, skillKey) {
   let t = this.find(targetUid);
   const foes = this.alive(u.side === 'party' ? 'enemy' : 'party');
   if (action === 'attack') {
-    if (!t || !t.alive || t.side === u.side) t = foes.find((f) => f.taunt > 0) || foes[0];
-    u.anim = { type: u.cls === 'sorcerer' ? 'cast' : 'lunge', to: t.uid, t0: performance.now() };
-    this.basicAttack(u, t);
+    if (u.cls === 'noble') {
+      const allies = this.alive(u.side).filter((a) => a !== u).sort((a, b) => b.atk - a.atk);
+      if (!t || !t.alive || t.side !== u.side || t === u) t = allies[0];
+      u.anim = { type: 'cast', to: t ? t.uid : null, t0: performance.now() };
+      this.basicAttack(u, t);
+    } else {
+      if (!t || !t.alive || t.side === u.side) t = foes.find((f) => f.taunt > 0) || foes[0];
+      const cast = u.cls === 'sorcerer' || u.cls === 'warlock';
+      u.anim = { type: cast ? 'cast' : 'lunge', to: t.uid, t0: performance.now() };
+      this.basicAttack(u, t);
+    }
   } else if (action === 'defend') {
     PackArt.emit('shield', u);
-    u.defending = true; u.focus = Math.min(3, u.focus + 1);
+    u.defending = true; this.gainFocus(u, 1);
     this.fx.push({ uid: u.uid, text: 'Guard', color: '#8fd3ff', t0: performance.now() });
     this.say(`${u.name} braces.`);
   } else if (action === 'potion') {
@@ -198,7 +226,14 @@ Battle.act = function (action, targetUid, skillKey) {
     this.say(`${u.name} uses a potion on ${t.name}.`);
   } else if (action === 'skill') {
     const id = skillKey || (u.abilities || [])[0];
-    if (!id || !GD.ABILITIES[id] || GD.ABILITIES[id].cost > u.focus) { this.basicAttack(u, t && t.alive && t.side !== u.side ? t : foes[0]); }
+    if (!id || !GD.ABILITIES[id] || GD.ABILITIES[id].cost > u.focus) {
+      if (u.cls === 'noble') {
+        const allies = this.alive(u.side).filter((a) => a !== u).sort((a, b) => b.atk - a.atk);
+        this.basicAttack(u, (t && t.alive && t.side === u.side && t !== u) ? t : allies[0]);
+      } else {
+        this.basicAttack(u, t && t.alive && t.side !== u.side ? t : foes[0]);
+      }
+    }
     else this.useAbility(u, id, t);
   } else if (action === 'flee') {
     const pa = this.alive('party'), ea = this.alive('enemy');

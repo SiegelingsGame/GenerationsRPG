@@ -39,9 +39,9 @@ const PackArt = {
   },
   damage(src,target,crit) {
     const id=src?.vfxSkill;
-    const spell={firebolt:['explosion','fire_proj'],frostNova:['sparkle','ice_proj'],smite:['critical','holy_proj'],dissonance:['music','wind_proj']}[id];
+    const spell={firebolt:['explosion','fire_proj'],frostNova:['sparkle','ice_proj'],smite:['critical','holy_proj'],dissonance:['music','wind_proj'],hexbolt:['sparkle','dark_proj'],soulfire:['explosion','dark_proj'],obliterate:['critical','dark_proj']}[id];
     if(spell)this.emit(spell[0],target,src,spell[1]);
-    else if(src?.cls==='sorcerer'&&!id)this.emit('sparkle',target,src,'dark_proj');
+    else if((src?.cls==='sorcerer'||src?.cls==='warlock')&&!id)this.emit('sparkle',target,src,'dark_proj');
     else this.emit(crit?'critical':'hit',target);
   },
   frame(ctx,key,x,y,elapsed,size=90,loop=false,angle=0) {

@@ -1256,9 +1256,30 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
       c.strokeStyle = '#5a3a1a'; c.lineWidth = 1.6 * s; c.beginPath(); c.moveTo(hx0, hy0 - 6 * s); c.lineTo(hx0 + 8 * s, hy0 - 16 * s); c.stroke();
       c.fillStyle = '#2a1a0a'; c.beginPath(); c.arc(hx0 - 2 * s, hy0 - 4 * s, 1.2 * s, 0, Math.PI * 2); c.fill();
     } else {
+      if (w === 'banner') {
+        c.strokeStyle = '#7a5a3a'; c.lineWidth = 2 * s;
+        c.beginPath(); c.moveTo(hx0, hy0 + 4 * s); c.lineTo(hx0, by - 36 * s); c.stroke();
+        c.fillStyle = look.house ? G.house.color : '#c9a227';
+        c.beginPath();
+        c.moveTo(hx0, by - 36 * s);
+        c.lineTo(hx0 + 12 * s * wd, by - 32 * s);
+        c.lineTo(hx0 + 12 * s * wd, by - 24 * s);
+        c.lineTo(hx0, by - 28 * s);
+        c.closePath(); c.fill();
+        c.strokeStyle = '#e8e0c8'; c.lineWidth = 0.8 * s; c.stroke();
+      } else {
       const staff = w === 'staff' || w === 'orb';
-      c.strokeStyle = staff || w === 'lance' ? '#7a5a3a' : '#cfd6dc'; c.lineWidth = (w === 'axe' ? 2.6 : 2.2) * s;
-      c.beginPath(); c.moveTo(hx0, hy0); c.lineTo(x + 18 * s * wd, by - (staff ? 34 : 26) * s); c.stroke();
+      const dagger = w === 'dagger';
+      c.strokeStyle = staff || w === 'lance' ? '#7a5a3a' : '#cfd6dc'; c.lineWidth = (w === 'axe' ? 2.6 : dagger ? 1.8 : 2.2) * s;
+      c.beginPath(); c.moveTo(hx0, hy0); c.lineTo(x + (dagger ? 14 : 18) * s * wd, by - (staff ? 34 : dagger ? 18 : 26) * s); c.stroke();
+      if (dagger) {
+        c.fillStyle = '#d8dde2';
+        c.beginPath();
+        c.moveTo(x + 14 * s * wd, by - 18 * s);
+        c.lineTo(x + 16.5 * s * wd, by - 22 * s);
+        c.lineTo(x + 12.5 * s * wd, by - 19 * s);
+        c.closePath(); c.fill();
+      }
       if (w === 'staff') { c.fillStyle = '#fff3a0'; c.beginPath(); c.arc(x + 18 * s * wd, by - 35 * s, 3 * s, 0, Math.PI * 2); c.fill(); c.fillRect(x + 17 * s * wd, by - 41 * s, 2 * s, 5 * s); }
       if (w === 'orb') { const g = 0.6 + Math.sin(this.t / 200) * 0.3; c.fillStyle = `rgba(180,138,255,${g})`; c.beginPath(); c.arc(x + 18 * s * wd, by - 36 * s, 4.2 * s, 0, Math.PI * 2); c.fill(); }
       if (w === 'lance') {
@@ -1268,6 +1289,7 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
       }
       if (w === 'axe') { c.fillStyle = '#b8c0c8'; c.beginPath(); c.moveTo(x + 17 * s * wd, by - 24 * s); c.quadraticCurveTo(x + 26 * s * wd, by - 26 * s, x + 24 * s * wd, by - 17 * s); c.lineTo(x + 16 * s * wd, by - 20 * s); c.closePath(); c.fill(); }
       if (w === 'shield') { c.fillStyle = look.house ? G.house.color : '#6a6a6a'; c.beginPath(); c.ellipse(x - 12 * s * wd, by - 10 * s, 5 * s, 8 * s, 0, 0, Math.PI * 2); c.fill(); c.strokeStyle = '#cfd6dc'; c.lineWidth = 1 * s; c.stroke(); }
+      }
     }
   }
   // head
@@ -1469,8 +1491,14 @@ Render.drawBattle = function () {
       c.fillRect(bx, byy, bw * (u.hp / u.maxHp), 5);
       c.fillStyle = '#f2ead8'; c.font = u.giant ? 'bold 13px Georgia, serif' : '11px Georgia, serif'; c.textAlign = 'center';
       c.fillText(`${u.boss ? '☠ ' : ''}${u.name} · L${u.lvl}`, p.x, byy - 4);
-      // focus pips
-      for (let i = 0; i < 3; i++) { c.fillStyle = i < u.focus ? '#8fd3ff' : 'rgba(255,255,255,0.15)'; c.fillRect(bx + i * 8, byy + 7, 6, 3); }
+      // focus pips (warlocks hold 4)
+      const focusMax = typeof Battle.maxFocus === 'function' ? Battle.maxFocus(u) : 3;
+      const pipW = focusMax > 3 ? 5 : 6;
+      const pipGap = focusMax > 3 ? 6 : 8;
+      for (let i = 0; i < focusMax; i++) {
+        c.fillStyle = i < u.focus ? '#8fd3ff' : 'rgba(255,255,255,0.15)';
+        c.fillRect(bx + i * pipGap, byy + 7, pipW, 3);
+      }
       if (u.defending) { c.fillStyle = '#8fd3ff'; c.fillText('🛡', bx + bw + 8, byy + 6); }
       // status markers
       const tags = [];
@@ -1481,6 +1509,7 @@ Render.drawBattle = function () {
       if (u.st && u.st.shield) tags.push(['◎', '#b48aff']);
       if (S('defDown')) tags.push(['▼', '#e0904a']);
       if (S('slow')) tags.push(['❄', '#9fe0ff']);
+      if (S('poison')) tags.push(['☠', '#8fd36a']);
       if (S('mark')) tags.push(['✶', '#ff5c5c']);
       if (S('riposte')) tags.push(['⚔', '#cfd6dc']);
       c.font = 'bold 11px Georgia, serif'; c.textAlign = 'left';
