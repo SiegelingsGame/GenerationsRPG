@@ -6,9 +6,9 @@ const Battle = {
   kind: 'wild', waiting: false, auto: false, fx: [], onEnd: null, over: false, log: [],
 };
 
-function unitFromChar(c, side, slot, boss) {
+function unitFromChar(c, side, slot, boss, opts = {}) {
   const u = {
-    uid: 'u' + c.id, charId: c.id, side, slot, name: c.name, race: c.race,
+    uid: 'u' + c.id + (opts.squire ? 's' : ''), charId: c.id, side, slot, name: c.name, race: c.race,
     kind: 'char', shape: 'humanoid', boss: !!boss,
     lvl: c.level,
     atk: stat(c, 'str') * 1.4 + weaponAtk(c) + c.level,
@@ -23,10 +23,18 @@ function unitFromChar(c, side, slot, boss) {
     brave: c.trait === 'brave', alive: true,
     look: figLook(c),
     anim: null, flash: 0,
+    squire: !!opts.squire, masterUid: opts.masterUid || null, aiOnly: !!opts.aiOnly,
+    vulnerable: !!opts.squire,
   };
   // the class shapes how this person fights
   const m = GD.CLASSES[u.cls].mods;
   u.atk *= m.atk; u.def *= m.def; u.mag *= m.mag; u.heal *= m.heal; u.spd *= m.spd;
+  if (opts.squire) {
+    // Squires are capable but fragile — enemies prefer them when the master falls.
+    u.maxHp = Math.round(u.maxHp * 0.72); u.hp = Math.min(u.hp, u.maxHp);
+    u.atk *= 0.85; u.mag *= 0.85; u.def *= 0.8;
+    u.name = `${c.name} (squire)`;
+  }
 
   if (boss) {
     u.maxHp = Math.round(u.maxHp * 1.8); u.hp = u.maxHp;
@@ -69,7 +77,17 @@ Battle.start = function (opts) {
   this.title = opts.title || 'Battle';
   this.onEnd = opts.onEnd;
   this.units = [];
-  G.party.map(ch).filter((c) => c && c.alive).forEach((c, i) => this.units.push(unitFromChar(c, 'party', i)));
+  const partyChars = G.party.map(ch).filter((c) => c && c.alive);
+  partyChars.forEach((c, i) => this.units.push(unitFromChar(c, 'party', i)));
+  // Squires enter combat beside their masters (AI-controlled, not a party slot).
+  if (typeof Court !== 'undefined') {
+    let slot = partyChars.length;
+    for (const { squire, master } of Court.squiresForBattle()) {
+      const masterUnit = this.units.find((u) => u.charId === master.id);
+      const su = unitFromChar(squire, 'party', slot++, false, { squire: true, aiOnly: true, masterUid: masterUnit ? masterUnit.uid : null });
+      this.units.push(su);
+    }
+  }
   (opts.enemies || []).forEach((e, i) => this.units.push(e.charId ? e : makeEnemyUnit(e.type, e.lvl, i)));
   this.units.filter((u) => u.side === 'enemy').forEach((u, i) => { u.slot = i; });
   this.units.forEach((u) => Object.assign(u, unitPos(u)));
@@ -104,7 +122,8 @@ Battle.next = function () {
   u.defending = false;
   this.tickStatus(u);
   u.focus = Math.min(3, u.focus + 1);
-  if (u.side === 'party' && !this.auto) {
+  // Squires (and auto-battle) are AI-driven; player only waits on their own turns.
+  if (u.side === 'party' && !this.auto && !u.aiOnly) {
     this.waiting = true;
     UI.battleChanged();
     return;
@@ -118,6 +137,35 @@ Battle.ai = function (u) {
   if (this.over) return;
   const foes = this.alive(u.side === 'party' ? 'enemy' : 'party');
   if (!foes.length) return this.next();
+  // Enemies: prefer exposed squires, especially if their master has fallen.
+  if (u.side === 'enemy') {
+    const squires = foes.filter((f) => f.squire || f.vulnerable);
+    const exposed = squires.filter((s) => {
+      const m = s.masterUid ? this.find(s.masterUid) : null;
+      return !m || !m.alive;
+    });
+    const huntSquires = exposed.length ? exposed : (R.chance(0.35) ? squires : []);
+    if (huntSquires.length && R.chance(exposed.length ? 0.85 : 0.4)) {
+      const choice = this.choose(u);
+      if (choice && choice.t) return this.act('skill', choice.t.uid, choice.id);
+      if (choice && !choice.t && choice.id) return this.act('skill', null, choice.id);
+      return this.act('attack', R.pick(huntSquires).uid);
+    }
+  }
+  // Squire AI leans on class affinities: heal/support first, then attack.
+  if (u.squire || u.aiOnly) {
+    const choice = this.choose(u);
+    if (choice) return this.act('skill', choice.t ? choice.t.uid : null, choice.id);
+    if (G.house.potions > 0 && u.hp < u.maxHp * 0.4) return this.act('potion', u.uid);
+    const master = u.masterUid ? this.find(u.masterUid) : null;
+    if (master && master.alive && master.hp < master.maxHp * 0.45 && G.house.potions > 0 && R.chance(0.55)) {
+      return this.act('potion', master.uid);
+    }
+    if (R.chance(0.22)) return this.act('defend');
+    const taunter = foes.find((f) => f.taunt > 0);
+    const target = taunter || foes.slice().sort((a, b) => a.hp - b.hp)[0];
+    return this.act('attack', target.uid);
+  }
   const choice = this.choose(u);
   if (choice) return this.act('skill', choice.t ? choice.t.uid : null, choice.id);
   if (u.side === 'party' && G.house.potions > 0 && u.hp < u.maxHp * 0.3) return this.act('potion', u.uid);
@@ -205,7 +253,7 @@ function resolveBattle(outcome, b) {
   const res = { outcome, xp: 0, gold: 0, dead: [], survived: [], levels: [], formative: [], kind: b.kind, rivalDefeated: null };
   const partyUnits = b.units.filter((u) => u.side === 'party');
   const enemies = b.units.filter((u) => u.side === 'enemy');
-  // write HP back
+  // write HP back (including squires who are not in G.party)
   for (const u of partyUnits) { const c = ch(u.charId); if (c) c.hp = Math.max(1, Math.round(u.hp)); }
   if (outcome === 'victory') {
     res.xp = enemies.reduce((s, e) => s + (e.xp || Math.round(30 + e.lvl * 12)), 0);
@@ -213,11 +261,14 @@ function resolveBattle(outcome, b) {
     res.gold = Math.round(enemies.reduce((s, e) => s + (e.gold || 40 + e.lvl * 10), 0) * era().income);
     if (G.world.era.type === 'war') res.xp = Math.round(res.xp * 1.25);
     G.house.gold += res.gold;
-    const alive = partyUnits.filter((u) => u.alive).map((u) => ch(u.charId));
-    for (const c of alive) {
+    const aliveUnits = partyUnits.filter((u) => u.alive);
+    const alive = aliveUnits.map((u) => ch(u.charId)).filter(Boolean);
+    for (const u of aliveUnits) {
+      const c = ch(u.charId); if (!c) continue;
+      const share = u.squire ? 0.55 : 1.6;
       const before = c.level;
-      res.levels.push({ c, gained: gainXp(c, res.xp / Math.max(1, alive.length) * 1.6), up: c.level > before });
-      const f = addFormative(c, 1);
+      res.levels.push({ c, gained: gainXp(c, res.xp / Math.max(1, alive.length) * share), up: c.level > before });
+      const f = addFormative(c, u.squire ? 0.5 : 1);
       if (f > 0) res.formative.push(c.name);
       c.loyalty = clamp(c.loyalty + 1, -100, 100);
     }

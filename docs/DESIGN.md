@@ -294,5 +294,6 @@ Implemented in the playable concept (`index.html`):
 - [x] Save/load (browser storage)
 
 - [x] Equipment slots and inventory try-on: class kits choose armour or robes, helms or crowns, blades/staves/bows, boots or shoes; house stash; Kasaya UI frames
+- [x] Retainer court (overflow recruits), orphanage childhood, wards (camp assist) and squires (AI combat on the master's turn)
 
 Future work: authored quests and story events, more enemy and skill variety, rival houses with politics, sprite art, music, and a balance pass.

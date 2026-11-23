@@ -35,7 +35,7 @@ const Log = {
 
 // The House chronicle: a permanent ledger of everything that matters to the line.
 function relevant(c) {
-  return !!c && (c.house === G.house.name || c.status === 'party' || c.status === 'household' || c.status === 'rival' || c.servedHouse);
+  return !!c && (c.house === G.house.name || c.status === 'party' || c.status === 'household' || c.status === 'court' || c.status === 'orphanage' || c.status === 'rival' || c.servedHouse);
 }
 function chron(text, kind = 'good', ids = [], type = 'event') {
   Log.add(text, kind, ids);
@@ -314,9 +314,19 @@ function kill(c, cause) {
   const msg = `${c.name} (${GD.RACES[c.race].name}, ${ageStr(c)}) died: ${cause}.`;
   if (relevant(c) || wasStatus === 'rival') chron(msg, wasStatus === 'rival' ? 'good' : 'death', [c.id], 'death');
   else Log.add(msg, 'dim', [c.id]);
-  // children may become orphans
+  // children may become orphans — the House orphanage may take them in
   for (const kid of c.children.map(ch)) {
-    if (kid && kid.alive && !isAdult(kid) && kid.parents.every((p) => !ch(p) || !ch(p).alive)) kid.orphaned = true;
+    if (kid && kid.alive && !isAdult(kid) && kid.parents.every((p) => !ch(p) || !ch(p).alive)) {
+      kid.orphaned = true;
+      if (typeof Court !== 'undefined' && kid.house !== G.house.name && Court.canTakeOrphan() && R.chance(0.55)) {
+        Court.toOrphanage(kid);
+        chron(`${kid.name} was taken into the House orphanage after losing their parents.`, 'dim', [kid.id], 'orphan');
+      }
+    }
+  }
+  if (typeof Court !== 'undefined') {
+    G.house.court = (G.house.court || []).filter((id) => id !== c.id);
+    G.house.orphanage = (G.house.orphanage || []).filter((id) => id !== c.id);
   }
 }
 
@@ -465,6 +475,7 @@ function newGame() {
       name: 'Ashford', color: GD.HOUSE_COLORS[0], prestige: 0, gold: 150, tier: 0,
       up: { horses: 0, livestock: 0, yard: 0, library: 0, chapel: 0, armory: 0 },
       retinue: 0, potions: 3, generation: 1, heirloom: null, heroes: [], reigns: [], stash: [],
+      court: [], orphanage: [],
     },
     world: { map: null, towns: [], prosperity: 30, era: null, eras: [], victory: false },
     pos: { x: 0, y: 0 },
@@ -579,8 +590,8 @@ function yearTickInner() {
   const living = Object.values(G.chars).filter((c) => c.alive);
   const adults = living.filter((c) => isAdult(c) && !c.evil && stageKey(c) !== 'venerable');
 
-  // bonds grow between people who live and travel together
-  const together = living.filter((c) => c.status === 'party' || c.status === 'household');
+  // bonds grow between people who live and travel together (party, household, court)
+  const together = living.filter((c) => c.status === 'party' || c.status === 'household' || c.status === 'court');
   for (let i = 0; i < together.length; i++) for (let j = i + 1; j < together.length; j++) {
     const a = together[i], b = together[j];
     addBond(a, b, R.int(0, 6) + (a.status === 'party' && b.status === 'party' ? 3 : 0));
@@ -588,7 +599,7 @@ function yearTickInner() {
   }
   // childhood friends: companions' kids in town bond with House kids
   const houseKids = living.filter((c) => c.house === h.name && !isAdult(c));
-  const compKids = living.filter((c) => c.house !== h.name && !isAdult(c) && c.parents.some((p) => ch(p) && (ch(p).status === 'party' || ch(p).status === 'household')));
+  const compKids = living.filter((c) => c.house !== h.name && !isAdult(c) && c.parents.some((p) => ch(p) && (ch(p).status === 'party' || ch(p).status === 'household' || ch(p).status === 'court')));
   for (const a of houseKids) for (const b of compKids) addBond(a, b, R.int(3, 8));
 
   // marriages
@@ -599,7 +610,8 @@ function yearTickInner() {
     if (used.has(a.id)) continue;
     for (const b of single) {
       if (b.id === a.id || used.has(b.id)) continue;
-      const sameGroup = (a.status === 'npc' && b.status === 'npc' && a.town === b.town) || (a.status !== 'npc' && b.status !== 'npc');
+      const retainer = (s) => s === 'party' || s === 'household' || s === 'court';
+      const sameGroup = (a.status === 'npc' && b.status === 'npc' && a.town === b.town) || (retainer(a.status) && retainer(b.status));
       if (!sameGroup) continue;
       const bd = bond(a, b);
       const m = mutual(a, b);
@@ -663,7 +675,7 @@ function yearTickInner() {
     if (bk === 'orphan') d += 2;
     if (c.trait === 'ambitious') d += 3;
     if (c.trait === 'loyal') d *= 0.3;
-    if (c.status === 'party' || c.status === 'household') d -= 5;
+    if (c.status === 'party' || c.status === 'household' || c.status === 'court') d -= 5;
     d -= Math.max(c.loyalty, mc ? bond(c, mc) : 0) / 20;
     if (c.grudge) d += 4;
     // people with no tie to the House rarely come to hate it
@@ -701,6 +713,7 @@ function yearTickInner() {
   techTick();
   townTick();
   if (typeof Events !== 'undefined') Events.yearly();
+  if (typeof Court !== 'undefined') Court.yearly();
   doomTick();
   G.house.scandal = Math.max(0, (G.house.scandal || 0) - 0.05);
   if (y % 5 === 0) pruneDead();
@@ -831,7 +844,7 @@ function performTimeskip(heir) {
     G.house.heirloom.power += 1 + G.house.up.armory;
     G.house.heirloom.gens++;
   }
-  G.party = [heir.id, ...G.party.filter((id) => id !== heir.id && ch(id) && ch(id).alive && ch(id).status === 'party')].slice(0, 4);
+  G.party = [heir.id, ...G.party.filter((id) => id !== heir.id && ch(id) && ch(id).alive && ch(id).status === 'party')].slice(0, typeof PARTY_CAP !== 'undefined' ? PARTY_CAP : 4);
   heir.hp = maxHp(heir);
   G.heirId = null;
   const kids = heir.children.map(ch).filter((k) => k && k.alive);
@@ -883,7 +896,8 @@ function joinHouse(c, asSpouseOf) {
   c.corruption = 0;
   if (asSpouseOf) marry(asSpouseOf, c);
   c.status = 'household';
-  if (G.party.length < 4) { c.status = 'party'; G.party.push(c.id); }
+  if (G.party.length < PARTY_CAP) { c.status = 'party'; G.party.push(c.id); }
+  else if (typeof Court !== 'undefined' && Court.canTakeCourt()) Court.toCourt(c);
 }
 function hireCost(c) { return Math.round(30 + c.level * 18 + (c.birth === 'highborn' ? 40 : 0)); }
 function recruitPrestigeReq(c) { return Math.max(0, Math.round((c.level - partyLevel() - 1) * 6)); }
@@ -910,7 +924,10 @@ function loadGame() {
     }
     G.house.reigns = G.house.reigns || [];
     G.house.stash = G.house.stash || [];
+    G.house.court = G.house.court || [];
+    G.house.orphanage = G.house.orphanage || [];
     Equip.ensureHouse();
+    if (typeof Court !== 'undefined') Court.migrate();
     Heraldry.ensureAll();
     return true;
   } catch (e) { return false; }

@@ -183,7 +183,14 @@ Events.ev_needy = function (ev) {
           c.loyalty = 40; addBond(c, mc, 30); c.orientKnown = true;
           UI.closeAll();
           return this.frame('wanderer', ev.tile, 'A Life Saved', `The traveler, ${c.name} (${UI.charLine(c)}), recovers. "I owe you my life. Let me ride with you."`, [
-            act('Welcome them', () => { c.status = G.party.length < 4 ? 'party' : 'household'; if (c.status === 'party') G.party.push(c.id); c.servedHouse = true; chron(`${c.name} joined House ${G.house.name} after ${mc.name} saved their life.`, 'good', [c.id, mc.id], 'join'); this.done(); }),
+            act('Welcome them', () => {
+              c.servedHouse = true;
+              if (G.party.length < PARTY_CAP) { c.status = 'party'; G.party.push(c.id); }
+              else if (householdCount() < GD.ESTATE[G.house.tier].household) c.status = 'household';
+              else Court.toCourt(c, { force: true });
+              chron(`${c.name} joined House ${G.house.name} after ${mc.name} saved their life.`, 'good', [c.id, mc.id], 'join');
+              this.done();
+            }),
             act('Send them home', () => this.done(`${c.name} promises never to forget.`)),
           ]);
         }
@@ -203,6 +210,12 @@ Events.ev_child = function (ev) {
   const town = nearestTown(ev.tile.x, ev.tile.y);
   this.frame('child', ev.tile, 'A Lost Child', `A ${GD.RACES[race].name.toLowerCase()} child, ${k.name}, sits alone by the road. ${GD.GENDERS[k.gender].sym} ${ageStr(k)} years old. They will not say where their family is.`, [
     act('Adopt them into the House', () => { G.house.gold += 40; UI.closeAll(); Game.adopt(k); }, { sub: 'free · they take your name' }),
+    act('Take them to the orphanage', () => {
+      if (!Court.toOrphanage(k)) { k.town = randomTownIdx(); return this.done('The orphanage is full; you leave them in the next town.', 'dim'); }
+      addBond(k, mc, 20); recordChoice('charity', 0.5, mc.id);
+      chron(`${k.name} was taken into the House orphanage.`, 'dim', [k.id], 'orphan');
+      this.done(`${k.name} will grow under your roof — traits and all.`);
+    }, { sub: 'raise them · adopt later', disabled: !Court.canTakeOrphan() }),
     town ? act(`Take them to ${town.name}`, () => { advanceDays(6); k.town = G.world.towns.indexOf(town); addBond(k, mc, 25); G.house.prestige += 1; recordChoice('charity', 0.5, mc.id); this.done(`${k.name} was left in the care of ${town.name}. They will remember you.`); }, { sub: '6 days · they may seek you out one day' }) : null,
     act('Leave them', () => { k.town = randomTownIdx(); k.grudge = true; recordChoice('charity', -0.6, mc.id); this.done('You ride on. The child watches you go.', 'dim'); }),
   ]);
@@ -212,9 +225,16 @@ Events.ev_wanderer = function (ev) {
   const mc = ch(G.mcId);
   const c = spawnWanderer(randomTownIdx());
   c.orientKnown = R.chance(0.5);
-  const full = householdCount() >= GD.ESTATE[G.house.tier].household;
+  const full = householdCount() >= GD.ESTATE[G.house.tier].household && G.party.length >= PARTY_CAP && !Court.canTakeCourt();
   this.frame('wanderer', ev.tile, 'A Wanderer', `${c.name} (${UI.charLine(c)}, ${GD.BIRTH[birthKey(c)].name.toLowerCase()}${c.trait ? ', ' + GD.TRAITS[c.trait].name.toLowerCase() : ''}) shares the road for a while and asks to join House ${G.house.name}.`, [
-    act('Take them in', () => { c.status = G.party.length < 4 ? 'party' : 'household'; if (c.status === 'party') G.party.push(c.id); c.servedHouse = true; c.loyalty += 15; recordChoice('open', 0.6, mc.id); chron(`${c.name}, a wanderer met on the road, joined House ${G.house.name}.`, 'good', [c.id], 'join'); this.done(); }, { disabled: full, sub: full ? 'household full' : 'free' }),
+    act('Take them in', () => {
+      c.servedHouse = true; c.loyalty += 15; recordChoice('open', 0.6, mc.id);
+      if (G.party.length < PARTY_CAP) { c.status = 'party'; G.party.push(c.id); }
+      else if (householdCount() < GD.ESTATE[G.house.tier].household) c.status = 'household';
+      else Court.toCourt(c, { force: true });
+      chron(`${c.name}, a wanderer met on the road, joined House ${G.house.name}${c.status === 'court' ? ' (court)' : ''}.`, 'good', [c.id], 'join');
+      this.done();
+    }, { disabled: full, sub: full ? 'no room' : 'free' }),
     act('Share a meal and part as friends', () => { addBond(c, mc, 15); this.done(`${c.name} heads for ${G.world.towns[c.town].name}.`, 'dim'); }),
     act('Send them away', () => { recordChoice('open', -0.4, mc.id); this.done(); }),
   ]);
@@ -501,16 +521,19 @@ Campfire.start = function () {
   requestAnimationFrame(loop);
 };
 Campfire.companions = function () { return G.party.map(ch).filter((c) => c && c.alive && c.id !== G.mcId); };
+Campfire.wards = function () { return typeof Court !== 'undefined' ? Court.travelingWards() : []; };
 Campfire.setSay = function (text, who) {
   this.box.replaceChildren(...[who ? portrait(who, 44) : null, h('div', {}, who ? h('b', {}, who.name) : null, h('p', {}, text))].filter(Boolean));
 };
 Campfire.renderButtons = function () {
   const comps = this.companions();
+  const wards = this.wards();
   this.btns.replaceChildren(
     ...comps.map((c) => h('button', { class: 'camp-btn' + (this.talked.has(c.id) ? ' done' : ''), onclick: () => this.talk(c) }, `Talk to ${c.name}`)),
+    ...wards.map((w) => h('button', { class: 'camp-btn' + (this.talked.has(w.id) ? ' done' : ''), onclick: () => this.talk(w) }, `Talk to ward ${w.name}`)),
     h('button', { class: 'camp-btn', disabled: this.stories || !comps.length, onclick: () => this.shareStories() }, 'Share stories'),
     h('button', { class: 'camp-btn', onclick: () => this.rest(false) }, 'Sleep'),
-    h('button', { class: 'camp-btn', onclick: () => this.rest(true) }, 'Rest with a watch'),
+    h('button', { class: 'camp-btn', onclick: () => this.rest(true) }, wards.length ? 'Rest with a watch (wards help)' : 'Rest with a watch'),
     h('button', { class: 'camp-btn', onclick: () => this.toggleSound() }, this.sound ? 'Sound: on' : 'Sound: off'),
     h('button', { class: 'camp-btn leave', onclick: () => this.close() }, 'Break camp'),
   );
@@ -701,17 +724,24 @@ Campfire.shareStories = function () {
 Campfire.rest = function (watch) {
   advanceDays(1);
   const comps = this.companions();
-  const heal = watch ? 0.45 : 0.6;
+  const wards = this.wards();
+  // Wards tend the fire and bind wounds — better rest, safer nights — but never enter combat.
+  const wardBonus = Math.min(0.2, wards.length * 0.08);
+  const heal = (watch ? 0.45 : 0.6) + wardBonus;
   for (const c of G.party.map(ch)) if (c) c.hp = Math.min(maxHp(c), c.hp + maxHp(c) * heal);
-  const p = (watch ? 0.03 : 0.1) * era().enc;
-  if (R.chance(p)) {
+  for (const w of wards) w.hp = Math.min(maxHp(w), w.hp + maxHp(w) * 0.5);
+  const p = ((watch ? 0.03 : 0.1) - wards.length * 0.015) * era().enc;
+  if (R.chance(Math.max(0.01, p))) {
     this.close(() => {
-      UI.toast(watch ? 'The watch raises the alarm!' : 'You wake to steel in the dark!');
-      Game.battle(buildEncounter(this.tile, { count: R.int(2, 3) }), { kind: 'wild', title: 'Attack in the Night', intro: watch ? 'The watch spots them just in time!' : 'Attackers fall on the sleeping camp!' });
+      UI.toast(watch || wards.length ? 'The watch raises the alarm!' : 'You wake to steel in the dark!');
+      Game.battle(buildEncounter(this.tile, { count: R.int(2, 3) }), { kind: 'wild', title: 'Attack in the Night', intro: watch || wards.length ? 'The watch spots them just in time!' : 'Attackers fall on the sleeping camp!' });
     });
     return;
   }
-  this.setSay(watch ? `${comps.length ? R.pick(comps).name : ch(G.mcId).name} keeps watch through the night. Nothing stirs. Dawn comes grey and cold.` : 'You sleep deeply by the embers. At dawn the fire is ash, and everyone is rested.');
+  const watcher = wards.length ? R.pick(wards).name : (comps.length ? R.pick(comps).name : ch(G.mcId).name);
+  this.setSay(watch || wards.length
+    ? `${watcher} keeps watch${wards.length ? ' with the wards fetching water and binding scrapes' : ''} through the night. Nothing stirs. Dawn comes grey and cold.`
+    : 'You sleep deeply by the embers. At dawn the fire is ash, and everyone is rested.');
   this.btns.replaceChildren(h('button', { class: 'camp-btn leave', onclick: () => this.close() }, 'Break camp at dawn'));
 };
 // a soft crackle made from filtered noise (only after the player turns it on)
