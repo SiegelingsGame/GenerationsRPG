@@ -291,7 +291,7 @@ Game.enterWorld = function (fresh) {
   Render.camInit = false;
   if (fresh) {
     chron(`${ch(G.mcId).name} founds House ${G.house.name} in the ${era().name}. The ${G.house.heirloom.name} is its first heirloom.`, 'head', [G.mcId], 'head');
-    Log.add('Tip: travel to towns to recruit and court, clear ruins for prestige, and invest at your estate.', 'dim');
+    Log.add('Tip: click land or roads to travel — a gold path previews the route. Esc stops. Towns for recruits, ruins for prestige, estate for investment.', 'dim');
   }
   // Founding / load chronicle lines should not linger as the next news popup.
   G.newsQueue = [];

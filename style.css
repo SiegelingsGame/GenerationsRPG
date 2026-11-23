@@ -269,6 +269,8 @@ table.stats td:first-child { color: var(--gold); }
 .mapctl button { width: 34px; height: 34px; border-radius: 6px; background: rgba(33, 30, 43, 0.9); color: var(--text); border: 1px solid var(--line); font-size: 18px; cursor: pointer; }
 .mapctl button:hover { border-color: var(--gold); }
 .mapctl button:focus-visible, button.act:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+.mapctl button.stop-travel { color: #ffd76a; border-color: #c9a24a; background: rgba(60, 40, 18, 0.95); }
+.mapctl button.stop-travel[hidden] { display: none; }
 
 /* chronicle */
 select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font-family: var(--font); }

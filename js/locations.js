@@ -2,15 +2,18 @@
 'use strict';
 const LocationPrompt = {
   pending: null,
-  nearby() {
+  nearby(maxDist = 1.85) {
     if (!G || !G.mcId || G.mode !== 'world') return null;
     const p = G.ppos || G.pos;
-    let best = null, distance = 1.4;
-    for (let y = Math.max(0, Math.floor(p.y)-2); y <= Math.min(G.world.map.H-1, Math.ceil(p.y)+2); y++) {
-      for (let x = Math.max(0, Math.floor(p.x)-2); x <= Math.min(G.world.map.W-1, Math.ceil(p.x)+2); x++) {
-        const t = tileAt(x, y), d = Math.hypot(x-p.x, y-p.y);
+    let best = null, distance = maxDist;
+    const reach = Math.ceil(maxDist) + 1;
+    for (let y = Math.max(0, Math.floor(p.y) - reach); y <= Math.min(G.world.map.H - 1, Math.ceil(p.y) + reach); y++) {
+      for (let x = Math.max(0, Math.floor(p.x) - reach); x <= Math.min(G.world.map.W - 1, Math.ceil(p.x) + reach); x++) {
+        const t = tileAt(x, y), d = Math.hypot(x - p.x, y - p.y);
         if (!t.feature || (t.feature === 'town' && G.world.towns[t.townIdx]?.fallen)) continue;
-        if (d < distance) { best = t; distance = d; }
+        // estate / towns forgive standing a step beside the building
+        const allow = (t.feature === 'estate' || t.feature === 'town') ? Math.max(maxDist, 1.85) : maxDist;
+        if (d < Math.min(distance, allow + 0.001)) { best = t; distance = d; }
       }
     }
     return best;
@@ -23,11 +26,12 @@ const LocationPrompt = {
     if (this.nearby() !== t || Battle.active || UI.modalStack.length) return;
     Living.stop();
     const p = G.ppos || G.pos;
-    if (Math.hypot(p.x-t.x,p.y-t.y) > 0.15) {
+    if (Math.hypot(p.x - t.x, p.y - t.y) > 0.35) {
       Living.go(t);
       if (Living.moving) this.pending = { x: t.x, y: t.y, mode };
       return;
     }
+    G.ppos = { x: t.x, y: t.y };
     G.pos = { x: t.x, y: t.y };
     this.open(t, mode);
   },

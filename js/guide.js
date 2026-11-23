@@ -25,13 +25,13 @@ const Guide = {
       Math.hypot(a.x-G.pos.x,a.y-G.pos.y)-Math.hypot(b.x-G.pos.x,b.y-G.pos.y));
     const t = towns[0];
     return [
-      ['travel', 'Take your first journey', 'Tap or click the landscape to walk. Scroll or use + / − to zoom, and Q / E to rotate. Roads help you explore; travel advances time.'],
-      ['town', 'Visit a town', `Look for town buildings on the map.${t ? ` A nearby town is ${t.name}, at map tile ${t.x}, ${t.y}.` : ''} Walk there, then use the location actions to enter its streets. Visit buildings and speak to residents to recruit, court, shop and hear rumors.`],
+      ['travel', 'Take your first journey', 'Click or tap land and roads — a gold path shows your route before you go. Water, cliffs and far islands block travel until you find bridges or boats. Escape (or Stop) cancels a march. Roads are the surest way; travel advances time.'],
+      ['town', 'Visit a town', `Look for labelled towns on the map.${t ? ` A nearby town is ${t.name}.` : ''} Follow roads toward its banner, then Enter when the prompt appears. Visit buildings to recruit, court, shop and hear rumors.`],
       ['renown', 'Earn renown for your House', 'Renown is called Prestige in the HUD. Earn more than you started with by doing good deeds in towns, helping travelers or winning battles. Better reputation opens stronger matches. Prepare equipment and potions before risking ruins.'],
       ['family', 'Grow your family', 'At your estate, open Household & Heir to meet your family. A compatible couple may have children as years pass; births are not guaranteed. Adopt a Child is another path to an heir. Rest advances time and ages everyone, so plan before skipping years.', () => UI.showHousehold(), 'Open household'],
       ['tree', 'Explore your family tree', 'Open the family tree and select a person to see their relationships. It records the line you will carry into future generations.', () => UI.showTree(), 'Open family tree'],
       ['heir', 'Name your successor', 'In Household & Heir, select an eligible descendant and choose Name as Heir. Protect and train them: when your head of House dies, succession lets the family continue.', () => UI.showHousehold(), 'Choose an heir'],
-      ['estate', 'Plan your legacy', 'Return to your estate and inspect its improvements. Invest gold when you can afford it. Deeds improve prosperity; aim for a Golden Age at 95 prosperity while preparing for the thousand-year threat.', () => UI.showEstate(), 'Inspect estate'],
+      ['estate', 'Plan your legacy', 'Return home along the roads. Stopping beside the estate is enough — Home actions appear when you are near the hall. Invest gold, rest, and prepare for the thousand-year threat.', () => UI.showEstate(), 'Inspect estate'],
     ];
   },
   show() {
