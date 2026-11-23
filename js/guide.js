@@ -14,6 +14,9 @@ const Guide = {
     const g = this.init(), d = g.done;
     if (G.pos.x !== g.origin.x || G.pos.y !== g.origin.y) d.travel = true;
     if (tileAt(G.pos.x, G.pos.y).feature === 'town') d.town = true;
+    const dq = G.world && G.world.densQuests;
+    if (dq && dq.main && dq.main.status === 'done') d.dens = true;
+    else if (typeof densList === 'function' && dq && dq.main && !densList().some((x) => x.main && !x.cleared)) d.dens = true;
     if (G.house.prestige > g.prestige) d.renown = true;
     if (Object.values(G.chars).some(c => c.house === G.house.name &&
       ((c.parents || []).length || (c.adoptedBy || []).length) && isDescendantOf(c, G.founderId))) d.family = true;
@@ -24,9 +27,13 @@ const Guide = {
     const towns = G.world.towns.filter(t => !t.fallen).sort((a, b) =>
       Math.hypot(a.x-G.pos.x,a.y-G.pos.y)-Math.hypot(b.x-G.pos.x,b.y-G.pos.y));
     const t = towns[0];
+    const dens = (typeof densList === 'function' ? densList() : (G.world.dens || [])).find((d) => d.main && !d.cleared);
     return [
       ['travel', 'Take your first journey', 'Tap or click the landscape to walk. Scroll or use + / − to zoom, and Q / E to rotate. Roads help you explore; travel advances time.'],
-      ['town', 'Visit a town', `Look for town buildings on the map.${t ? ` A nearby town is ${t.name}, at map tile ${t.x}, ${t.y}.` : ''} Walk there, then use the location actions to enter its streets. Visit buildings and speak to residents to recruit, court, shop and hear rumors.`],
+      ['dens', 'Seal the starter dens', dens
+        ? `A dens nest is marked on the map near ${dens.x}, ${dens.y}. Enter it in first person, delve to the nest, and clear the brood. Side quests (hunt a pack, rescue a traveler, gather trophies) unlock from dens travel and tavern news.`
+        : 'The starter dens is already sealed — watch for new dens spawning over the years, and dens side quests from road events and tavern rumors.'],
+      ['town', 'Visit a town', `Look for town buildings on the map.${t ? ` A nearby town is ${t.name}, at map tile ${t.x}, ${t.y}.` : ''} Walk there, then use the location actions to enter its streets. Inns, taverns and markets open as first-person interiors — talk and trade from that view.`],
       ['renown', 'Earn renown for your House', 'Renown is called Prestige in the HUD. Earn more than you started with by doing good deeds in towns, helping travelers or winning battles. Better reputation opens stronger matches. Prepare equipment and potions before risking ruins.'],
       ['family', 'Grow your family', 'At your estate, open Household & Heir to meet your family. A compatible couple may have children as years pass; births are not guaranteed. Adopt a Child is another path to an heir. Rest advances time and ages everyone, so plan before skipping years.', () => UI.showHousehold(), 'Open household'],
       ['tree', 'Explore your family tree', 'Open the family tree and select a person to see their relationships. It records the line you will carry into future generations.', () => UI.showTree(), 'Open family tree'],

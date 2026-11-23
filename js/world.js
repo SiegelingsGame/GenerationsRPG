@@ -172,9 +172,12 @@ function initWorld() {
     return { key: t.key, year: R.chance(0.07) && t.key !== 'boats' ? null : START_YEAR + yr, got: false };
   });
   G.world.doom = { year: START_YEAR + GD.DOOM_YEARS, wards: 0, quest: null, done: [] };
+  G.world.dens = [];
+  G.world.densQuests = null;
   G.house.influence = {};
   G.house.culture = { formed: false, name: null };
   G.house.scandal = 0;
+  if (typeof Dens !== 'undefined') Dens.placeStarter();
 }
 
 function liveTowns() { return G.world.towns.filter((t) => !t.fallen); }

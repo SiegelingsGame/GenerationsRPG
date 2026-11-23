@@ -17,7 +17,7 @@ const LocationPrompt = {
   },
   name(t) {
     return t.feature === 'town' ? G.world.towns[t.townIdx].name : t.feature === 'estate' ? `House ${G.house.name}` :
-      Events.label(t) || ({ ruins: 'Ruins', spire: 'The Black Spire', shrine: 'Beacon Shrine' }[t.feature]) || t.feature;
+      Events.label(t) || ({ ruins: 'Ruins', spire: 'The Black Spire', shrine: 'Beacon Shrine', dens: 'Dens' }[t.feature]) || t.feature;
   },
   choose(t, mode) {
     if (this.nearby() !== t || Battle.active || UI.modalStack.length) return;
@@ -40,6 +40,10 @@ const LocationPrompt = {
   open(t, mode) {
     Living.stop(); UI.closeDrawer();
     if (mode === 'enter' && t.feature === 'town') return TownView.start(t);
+    if (mode === 'enter' && t.feature === 'dens') {
+      const den = Dens.atTile(t);
+      if (den && !den.cleared) return DensView.start(den);
+    }
     const rows = t.feature === 'town' ? UI.townPanel(t).filter((e, i) => i !== 2) :
       t.feature === 'estate' ? UI.estatePanel() : t.feature === 'ruins' ? UI.ruinsPanel(t) :
       t.feature === 'spire' ? UI.spirePanel() : Events.panel(t) || [h('p', {}, t.lit ? 'The beacon burns again.' : 'Reach a beacon marked by your current quest to rekindle it.')];
@@ -60,10 +64,11 @@ const LocationPrompt = {
       $('#stage').append(this.el);
     }
     const t = this.nearby();
-    this.el.hidden = !t || Battle.active || TownView.open || Campfire.open || UI.modalStack.length > 0 || Game.busy;
+    const blocked = Battle.active || TownView.open || TownInterior.open || DensView.open || Campfire.open || UI.modalStack.length > 0 || Game.busy;
+    this.el.hidden = !t || blocked;
     if (this.el.hidden) return;
     this.tile = t; this.title.textContent = this.name(t);
-    this.enter.textContent = t.feature === 'town' ? 'Enter' : 'Explore';
+    this.enter.textContent = t.feature === 'town' || t.feature === 'dens' ? 'Enter' : 'Explore';
     const p = Render.iso(t.x, t.y, Render.flat ? 0 : t.h);
     const x = Render.w/2 + (p.x-Render.w/2)*Render.zoom;
     const y = Render.h/2 + (p.y-Render.h/2)*Render.zoom - 55*Render.zoom;

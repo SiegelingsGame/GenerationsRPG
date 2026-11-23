@@ -245,9 +245,7 @@ TownView.click = function (e) {
   this.use(hs.kind);
 };
 TownView.use = function (kind) {
-  if (kind === 'tavern') UI.showTavern(this.idx);
-  if (kind === 'market') UI.showMarket();
-  if (kind === 'inn') { if (G.house.gold >= 10) Game.inn(); else UI.toast('The inn costs 10g.'); }
+  if (kind === 'tavern' || kind === 'market' || kind === 'inn') return TownInterior.start(kind, this.idx);
   if (kind === 'hall') this.noticeBoard();
 };
 TownView.noticeBoard = function () {
@@ -363,6 +361,27 @@ TownView.rumor = function (apply) {
     opts.push({ w: cp.str < 2 ? 3 : 1.5, text: cp.str < 2 ? `Traders whisper of ${cp.name} gathering in the ${GD.BIOMES[tileAt(cp.x, cp.y).type].name.toLowerCase()} to the ${dir(cp)}. It is marked on your map now.` : `${cp.name[0].toUpperCase() + cp.name.slice(1)} to the ${dir(cp)} are about ${Math.round(cp.str * 4)} strong, and growing.`,
       fx: () => { const t = tileAt(cp.x, cp.y); if (t && !t.feature) { t.feature = 'camp'; t.campId = cp.id; } } });
   }
+  // dens sites and side hooks
+  for (const den of densList().filter((d) => !d.cleared)) {
+    if (dist(den) > 16) continue;
+    opts.push({
+      w: den.main ? 2.5 : 1.6,
+      text: den.known
+        ? `Hunters warn of ${den.name} to the ${dir(den)}. Beasts spill from it when the moon is thin.`
+        : `Something nests to the ${dir(den)}. Folk call it ${den.name}, though few have seen the mouth.`,
+      fx: () => { den.known = true; const t = tileAt(den.x, den.y); if (t && !t.feature) { t.feature = 'dens'; t.densId = den.id; } Dens.unlockSide('rescue'); },
+    });
+  }
+  const tq = Dens.ensure().side.trophies;
+  if (tq.status !== 'done') {
+    opts.push({
+      w: 1.4,
+      text: tq.status === 'active'
+        ? `A hunter in the tavern still wants dens trophies (${tq.have || 0}/${tq.need}).`
+        : 'A hunter nails a notice: dens trophies pay well, if you dare the nests.',
+      fx: () => Dens.unlockSide('trophies'),
+    });
+  }
   // caves and mines nearby
   opts.push({ w: 1.5, text: 'A shepherd swears there is a cave in the hills nearby, full of old bones and older gold. You mark it.', fx: () => Events.revealNearby(tileAt(here.x, here.y)) });
   // the prophecy
@@ -397,4 +416,315 @@ TownView.rumor = function (apply) {
   if (apply && o.fx) o.fx();
   Log.add(`Rumor in ${here.name}: ${o.text}`, 'dim');
   return o.text;
+};
+
+// ---------------------------------------------------------------- first-person interiors (inn, tavern, market)
+const TownInterior = { open: false };
+
+TownInterior.start = function (kind, townIdx) {
+  if (this.open) this.close(true);
+  const idx = townIdx != null ? townIdx : (TownView.open ? TownView.idx : tileAt(G.pos.x, G.pos.y).townIdx);
+  const town = G.world.towns[idx];
+  if (!town || town.fallen) return;
+  this.open = true;
+  this.kind = kind;
+  this.idx = idx;
+  this.town = town;
+  this.selected = null;
+  this.hover = null;
+  this.seed = (town.x * 92821 + town.y * 68917 + ({ tavern: 1, inn: 2, market: 3 }[kind] || 0) * 9973) % 100000;
+  this.cv = h('canvas', { class: 'town-canvas' });
+  this.say = h('div', { class: 'camp-say' });
+  this.btns = h('div', { class: 'camp-btns' });
+  this.el = h('div', { class: 'townview interior-view', 'data-kind': kind }, this.cv, h('div', { class: 'camp-ui town-ui' }, this.say, this.btns));
+  document.body.append(this.el);
+  this.cv.addEventListener('click', (e) => this.click(e));
+  this.cv.addEventListener('mousemove', (e) => { this.hover = this.hit(e); this.cv.style.cursor = this.hover ? 'pointer' : 'default'; });
+  this.placePeople();
+  this.greet();
+  this.renderButtons();
+  const loop = (ts) => { if (!this.open) return; this.t = ts; try { this.draw(); } catch (err) { console.error(err); } requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+};
+TownInterior.close = function (silent) {
+  if (!this.open) return;
+  this.open = false;
+  if (this.el) this.el.remove();
+  this.el = null;
+  if (!silent) {
+    if (TownView.open) TownView.sync();
+    else UI.refresh();
+  }
+};
+TownInterior.sync = function () {
+  if (!this.open) return;
+  if (Battle.active || G.pendingSuccession || this.town.fallen) return this.close();
+  this.placePeople();
+  if (this.selected && this.selected !== this.host && (!this.selected.alive || this.selected.status !== 'npc')) this.selected = null;
+  this.renderButtons();
+};
+TownInterior.titles = { tavern: 'Tavern', inn: 'Inn', market: 'Market stall' };
+TownInterior.placePeople = function () {
+  const folk = Object.values(G.chars).filter((c) => c.alive && c.status === 'npc' && c.town === this.idx && !c.evil && isAdult(c))
+    .sort((a, b) => b.level - a.level);
+  const spots = this.kind === 'market'
+    ? [[-1.2, 3.4], [1.3, 3.6], [-0.4, 5.0], [0.8, 6.2]]
+    : this.kind === 'inn'
+      ? [[-1.0, 3.8], [1.1, 4.2], [-0.3, 5.6], [0.7, 7.0]]
+      : [[-1.4, 3.2], [1.4, 3.5], [-0.5, 4.8], [0.9, 5.8], [-1.2, 7.0], [1.2, 8.0]];
+  const take = this.kind === 'inn' ? 3 : this.kind === 'market' ? 4 : 6;
+  this.people = folk.slice(0, take).map((c, i) => ({ c, x: spots[i % spots.length][0], z: spots[i % spots.length][1], face: i % 2 ? 1 : -1, role: 'patron' }));
+  // host / trader stands near the counter
+  this.host = {
+    name: this.kind === 'market' ? 'Stall trader' : this.kind === 'inn' ? 'Innkeep' : 'Tapster',
+    role: this.kind === 'market' ? 'trader' : this.kind === 'inn' ? 'innkeep' : 'tapster',
+    x: this.kind === 'market' ? 0.2 : -0.2,
+    z: 2.6,
+    face: 1,
+    look: { skin: '#d9a77e', hair: '#3a2a1a', tunic: this.kind === 'market' ? '#6a4c93' : this.kind === 'inn' ? '#4a5a3a' : '#7a4a2a', race: 'human', stage: 'prime', gender: 'man', hairStyle: 'short', beard: true },
+  };
+};
+TownInterior.greet = function () {
+  const mood = {
+    tavern: `Firelight, spilled ale and loud talk fill the common room of ${this.town.name}.`,
+    inn: `The inn smells of stew and clean straw. Beds wait upstairs if you can spare the coin.`,
+    market: `Awnings shade the stalls. The trader watches your purse as much as your eyes.`,
+  }[this.kind];
+  this.setSay(`${mood} Tap a person to talk${this.kind === 'market' ? ' or trade' : this.kind === 'inn' ? ', or rest for the night' : ' or recruit'}.`);
+};
+TownInterior.setSay = function (text, who) {
+  const isChar = who && who.id && who.race;
+  const name = isChar ? who.name : (who === this.host || (who && who.role) ? this.host.name : null);
+  this.say.replaceChildren(...[
+    isChar ? portrait(who, 44) : null,
+    h('div', {},
+      name ? h('b', {}, name, isChar ? h('small', { class: 'dim' }, ` · ${UI.charLine(who)}`) : h('small', { class: 'dim' }, ` · ${this.host.role}`)) : null,
+      h('p', {}, text)),
+  ].filter(Boolean));
+};
+TownInterior.focal = function () { return Math.min(this.H * 0.95, this.W * 0.8); };
+TownInterior.proj = function (x, y, z) {
+  const f = this.focal();
+  return { x: this.W / 2 + (x * f) / z, y: this.hz + ((1.7 - y) * f) / z };
+};
+TownInterior.draw = function () {
+  const cv = this.cv;
+  const dpr = window.devicePixelRatio || 1;
+  const W = this.W = cv.clientWidth, H = this.H = cv.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  this.hz = H * 0.36;
+  const E = G.world.era.type;
+  // room shell
+  const wall = c.createLinearGradient(0, 0, 0, H);
+  wall.addColorStop(0, eraTint(this.kind === 'inn' ? '#5a4a38' : this.kind === 'market' ? '#6a5a40' : '#4a3224'));
+  wall.addColorStop(0.4, eraTint('#3a2a1c'));
+  wall.addColorStop(1, eraTint('#2a1e14'));
+  c.fillStyle = wall; c.fillRect(0, 0, W, H);
+  // ceiling beams
+  c.strokeStyle = 'rgba(20,12,8,0.55)'; c.lineWidth = 6;
+  for (let i = 0; i < 5; i++) {
+    const z = 1.4 + i * 1.5;
+    const a = this.proj(-3.2, 3.2, z), b = this.proj(3.2, 3.2, z);
+    c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+  }
+  // floor boards
+  const floor = c.createLinearGradient(0, this.hz, 0, H);
+  floor.addColorStop(0, eraTint('#6b5340')); floor.addColorStop(1, eraTint('#3e2e22'));
+  c.fillStyle = floor; c.fillRect(0, this.hz, W, H - this.hz);
+  c.strokeStyle = 'rgba(0,0,0,0.18)'; c.lineWidth = 1;
+  for (let z = 1.3; z < 14; z *= 1.2) {
+    const a = this.proj(-4, 0, z), b = this.proj(4, 0, z);
+    c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+  }
+  // back counter / stall
+  const q = (pts, fill) => { c.fillStyle = fill; c.beginPath(); c.moveTo(pts[0].x, pts[0].y); for (const p of pts.slice(1)) c.lineTo(p.x, p.y); c.closePath(); c.fill(); };
+  const z0 = 2.1, z1 = 2.9;
+  q([this.proj(-2.2, 0, z0), this.proj(2.2, 0, z0), this.proj(2.2, 1.1, z0), this.proj(-2.2, 1.1, z0)], eraTint('#5a4030'));
+  q([this.proj(-2.2, 1.1, z0), this.proj(2.2, 1.1, z0), this.proj(2.0, 1.1, z1), this.proj(-2.0, 1.1, z1)], eraTint('#6b4a32'));
+  if (this.kind === 'market') {
+    q([this.proj(-2.0, 1.1, z0), this.proj(2.0, 1.1, z0), this.proj(1.6, 2.0, z0 + 0.2), this.proj(-1.6, 2.0, z0 + 0.2)], eraTint('#b03a2e'));
+  }
+  if (this.kind === 'tavern' || this.kind === 'inn') {
+    // hearth glow
+    const g = c.createRadialGradient(W * 0.78, this.hz + 40, 4, W * 0.78, this.hz + 40, 90);
+    g.addColorStop(0, 'rgba(255,160,60,0.45)'); g.addColorStop(1, 'rgba(255,120,40,0)');
+    c.fillStyle = g; c.fillRect(W * 0.55, this.hz - 20, W * 0.45, H * 0.5);
+  }
+  // people + host
+  this.hot = [];
+  const items = [
+    { host: true, z: this.host.z },
+    ...this.people.map((p) => ({ p, z: p.z })),
+  ].sort((a, b) => b.z - a.z);
+  for (const it of items) {
+    if (it.host) this.drawHost(c);
+    else this.drawPerson(c, it.p);
+  }
+  // label
+  c.font = `600 ${Math.max(13, Math.min(17, W / 48))}px Georgia, serif`;
+  const title = `${this.titles[this.kind]} · ${this.town.name}`;
+  const tw = c.measureText(title).width + 16;
+  c.fillStyle = 'rgba(20,16,12,0.82)'; c.fillRect(W / 2 - tw / 2, 14, tw, 24);
+  c.strokeStyle = '#e6c06a'; c.strokeRect(W / 2 - tw / 2 + 0.5, 14.5, tw - 1, 23);
+  c.fillStyle = '#f2ead8'; c.textAlign = 'center'; c.fillText(title, W / 2, 31);
+  if (E === 'war') { c.fillStyle = 'rgba(120,20,10,0.08)'; c.fillRect(0, 0, W, H); }
+  if (E === 'famine') { c.fillStyle = 'rgba(60,50,30,0.1)'; c.fillRect(0, 0, W, H); }
+};
+TownInterior.drawHost = function (c) {
+  const s = this.proj(this.host.x, 0, this.host.z);
+  const sc = this.focal() / this.host.z / 52;
+  const saved = Render.ctx; Render.ctx = c;
+  try { Render.drawFigure(s.x, s.y, this.host.look, sc, { bob: 0 }); }
+  finally { Render.ctx = saved; }
+  const top = s.y - 58 * sc;
+  const sel = this.selected === this.host, hov = this.hover && this.hover.host;
+  if (sel || hov) {
+    c.strokeStyle = sel ? '#e6c06a' : 'rgba(230,192,106,0.6)'; c.lineWidth = 2;
+    c.beginPath(); c.ellipse(s.x, s.y, 16 * sc, 5 * sc, 0, 0, Math.PI * 2); c.stroke();
+  }
+  c.font = '12px Georgia, serif'; c.textAlign = 'center';
+  const lab = this.host.name;
+  const tw = c.measureText(lab).width + 10;
+  c.fillStyle = 'rgba(20,16,12,0.85)'; c.fillRect(s.x - tw / 2, top - 18, tw, 16);
+  c.fillStyle = '#f2ead8'; c.fillText(lab, s.x, top - 6);
+  this.hot.push({ host: true, x0: s.x - 14 * sc, x1: s.x + 14 * sc, y0: top, y1: s.y + 4, z: this.host.z });
+};
+TownInterior.drawPerson = function (c, p) {
+  const s = this.proj(p.x, 0, p.z);
+  const sc = this.focal() / p.z / 52;
+  const saved = Render.ctx; Render.ctx = c;
+  try {
+    c.save();
+    if (p.face < 0) { c.translate(s.x, 0); c.scale(-1, 1); c.translate(-s.x, 0); }
+    Render.drawFigure(s.x, s.y, figLook(p.c), sc, { bob: 0 });
+    c.restore();
+  } finally { Render.ctx = saved; }
+  const top = s.y - 60 * sc;
+  const sel = this.selected === p.c, hov = this.hover && this.hover.person === p.c;
+  if (sel || hov) {
+    c.strokeStyle = sel ? '#e6c06a' : 'rgba(230,192,106,0.6)'; c.lineWidth = 2;
+    c.beginPath(); c.ellipse(s.x, s.y, 16 * sc, 5 * sc, 0, 0, Math.PI * 2); c.stroke();
+    c.font = '13px Georgia, serif'; c.textAlign = 'center';
+    const lab = `${p.c.name} · L${p.c.level}`;
+    const tw = c.measureText(lab).width + 10;
+    c.fillStyle = 'rgba(20,16,12,0.85)'; c.fillRect(s.x - tw / 2, top - 22, tw, 18);
+    c.fillStyle = '#f2ead8'; c.fillText(lab, s.x, top - 9);
+  }
+  this.hot.push({ person: p.c, x0: s.x - 14 * sc, x1: s.x + 14 * sc, y0: top, y1: s.y + 4, z: p.z });
+};
+TownInterior.hit = function (e) {
+  if (!this.hot) return null;
+  const r = this.cv.getBoundingClientRect();
+  const pt = { x: e.clientX - r.left, y: e.clientY - r.top };
+  const hits = this.hot.filter((x) => pt.x >= x.x0 && pt.x <= x.x1 && pt.y >= x.y0 && pt.y <= x.y1).sort((a, b) => a.z - b.z);
+  return hits[0] || null;
+};
+TownInterior.click = function (e) {
+  const hs = this.hit(e);
+  if (!hs) return;
+  if (hs.host) return this.selectHost();
+  if (hs.person) return this.select(hs.person);
+};
+TownInterior.selectHost = function () {
+  this.selected = this.host;
+  const lines = {
+    tavern: 'Ale first, questions later. What will it be?',
+    inn: 'Beds are clean and the stew is honest. Ten gold for a week of rest.',
+    market: 'Blades, cloth, pots — name it. Or a potion if you look fragile.',
+  };
+  this.setSay(lines[this.kind], this.host);
+  this.renderButtons();
+};
+TownInterior.select = function (c) {
+  this.selected = c;
+  this.setSay(TownView.line.call({ town: this.town }, c), c);
+  this.renderButtons();
+};
+TownInterior.renderButtons = function () {
+  const b = (label, fn, opts = {}) => h('button', { class: 'camp-btn' + (opts.cls ? ' ' + opts.cls : ''), disabled: opts.disabled, title: opts.title, onclick: fn }, label);
+  const leave = b(TownView.open ? 'Back to street' : 'Leave', () => this.close(), { cls: 'leave' });
+  if (this.selected === this.host) {
+    const hostBtns = [];
+    if (this.kind === 'inn') {
+      hostBtns.push(b('Rest here (10g)', () => {
+        if (G.house.gold < 10) return UI.toast('The inn costs 10g.');
+        Game.inn();
+        this.setSay('You sleep under a thick quilt. The party wakes mended.', this.host);
+        this.sync();
+      }, { disabled: G.house.gold < 10 }));
+    }
+    if (this.kind === 'market') {
+      hostBtns.push(b('Buy potion (25g)', () => {
+        if (G.house.gold < 25) return UI.toast('Not enough gold.');
+        Game.buyPotion();
+        this.setSay('A glass vial changes hands.', this.host);
+        this.sync();
+      }, { disabled: G.house.gold < 25 }));
+      hostBtns.push(b('Browse gear', () => { this.openMarketSheet(); }));
+    }
+    if (this.kind === 'tavern') {
+      hostBtns.push(b('Buy rumors (15g)', () => {
+        if (G.house.gold < 15) return UI.toast('Not enough gold.');
+        G.house.gold -= 15; advanceDays(2);
+        // reuse street rumor logic with a temporary TownView-like context
+        const r = TownView.rumor.call({ town: this.town, idx: this.idx }, true);
+        const r2 = TownView.rumor.call({ town: this.town, idx: this.idx }, true);
+        this.setSay(`You stand a round. ${r}${r2 !== r ? ' ' + r2 : ''}`, this.host);
+        UI.refresh();
+      }, { disabled: G.house.gold < 15 }));
+    }
+    hostBtns.push(b('Back', () => { this.selected = null; this.greet(); this.renderButtons(); }), leave);
+    this.btns.replaceChildren(...hostBtns);
+    return;
+  }
+  if (this.selected && this.selected.name) {
+    const c = this.selected;
+    const mc = ch(G.mcId);
+    const cost = hireCost(c), req = recruitPrestigeReq(c);
+    const canRomance = isAdult(c) && mc && !spouseOf(mc) && !spouseOf(c);
+    this.btns.replaceChildren(...[
+      b(`Recruit (${cost}g)`, () => { Game.recruit(c); this.selected = null; this.setSay(`${c.name} joins you.`); this.sync(); }, { disabled: G.house.gold < cost || G.house.prestige < req, title: req ? `needs ${req} prestige` : '' }),
+      canRomance ? b('Court (20g)', () => { Game.court(c); this.setSay(bond(c, mc) >= 70 ? `${c.name} would say yes, if you asked.` : `${c.name} enjoys your company.`, c); this.sync(); }, { disabled: G.house.gold < 20 }) : null,
+      canRomance && bond(c, mc) >= 70 ? b('Propose', () => { Game.propose(c); this.selected = null; this.sync(); }, { cls: 'leave' }) : null,
+      b('Ask for news', () => {
+        const fake = { town: this.town, idx: this.idx, setSay: (t, who) => this.setSay(t, who), rumor: TownView.rumor };
+        TownView.askNews.call(fake, c);
+      }),
+      b('Details', () => UI.showChar(c)),
+      b('Back', () => { this.selected = null; this.greet(); this.renderButtons(); }),
+      leave,
+    ].filter(Boolean));
+    return;
+  }
+  // default room actions
+  this.btns.replaceChildren(...[
+    b(`Talk to ${this.host.name}`, () => this.selectHost()),
+    this.kind === 'inn' ? b('Rest (10g)', () => { if (G.house.gold < 10) return UI.toast('The inn costs 10g.'); Game.inn(); this.setSay('A quiet night. The party wakes healed.'); this.sync(); }, { disabled: G.house.gold < 10 }) : null,
+    this.kind === 'market' ? b('Browse gear', () => this.openMarketSheet()) : null,
+    leave,
+  ].filter(Boolean));
+};
+TownInterior.openMarketSheet = function () {
+  // Gear sheet stays modal (inventory-heavy) but opens from the FP trader.
+  Equip.loadUi();
+  Equip.ensureHouse();
+  const maxTier = Math.min(GD.GEAR.length, 2 + G.house.up.armory + Math.floor(G.house.tier / 2));
+  const party = G.party.map(ch);
+  const rows = [
+    h('p', { class: 'dim' }, 'The trader lays out class kits: armour or robes, helms, blades or staves.'),
+    h('div', { class: 'row' }, act('Buy Potion', () => { Game.buyPotion(); UI.closeModal(); this.openMarketSheet(); }, { sub: `25g · you have ${G.house.potions}`, disabled: G.house.gold < 25 })),
+  ];
+  for (const c of party) {
+    rows.push(h('div', { class: 'market-char' },
+      h('div', { class: 'row' }, portrait(c, 44), h('div', {}, h('b', {}, c.name), h('small', { class: 'dim' }, ` · ${classOf(c).icon} ${classOf(c).name}`))),
+      h('div', { class: 'eq-offers' }, Equip.marketOffers(c, maxTier).map((offer) =>
+        act(offer.item.name, () => { Game.buyEquipOffer(c, offer); UI.closeModal(); this.openMarketSheet(); }, {
+          sub: `${offer.cost}g · ${Equip.itemDesc(offer.item)} · ${Equip.slotLabel(c, offer.slot)}`,
+          disabled: G.house.gold < offer.cost,
+        }))),
+    ));
+  }
+  UI.modal(rows, { title: 'Market stalls', wide: true });
 };

@@ -280,6 +280,12 @@ Game.enterWorld = function (fresh) {
   }
   Heraldry.ensureAll();
   WorldArt.ensure();
+  if (typeof Dens !== 'undefined') {
+    Dens.ensure();
+    if (!densList().some((d) => d.main && !d.cleared) && !(G.world.densQuests && G.world.densQuests.main && G.world.densQuests.main.status === 'done')) {
+      Dens.placeStarter();
+    }
+  }
   Equip.loadUi();
   Equip.ensureHouse();
   Guide.init();
@@ -379,6 +385,8 @@ Game.battle = function (enemies, opts) {
   LocationPrompt.pending = null;
   UI.targeting = null;
   Living.stop();
+  if (TownInterior.open) TownInterior.close(true);
+  if (DensView.open) DensView.close();
   if (TownView.open) TownView.close();
   Battle.start({
     enemies, kind: opts.kind, title: opts.title,
@@ -745,6 +753,7 @@ Game.after = function (quiet) {
     return;
   }
   TownView.sync();
+  if (typeof TownInterior !== 'undefined') TownInterior.sync();
   if (G.pendingSuccession) return this.succession();
   const q = G.world.doom && G.world.doom.quest;
   if (q && q.type === 'champion' && G.party.map(ch).some((c) => c && c.level >= q.count)) completeQuest();
