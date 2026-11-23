@@ -68,14 +68,19 @@ Battle.start = function (opts) {
   this.kind = opts.kind || 'wild';
   this.title = opts.title || 'Battle';
   this.onEnd = opts.onEnd;
+  this.cinematic = !!opts.cinematic;
+  this.noResolve = !!opts.noResolve;
+  this.auto = opts.auto != null ? !!opts.auto : this.auto;
   this.units = [];
-  G.party.map(ch).filter((c) => c && c.alive).forEach((c, i) => this.units.push(unitFromChar(c, 'party', i)));
+  if (opts.partyUnits) opts.partyUnits.forEach((u, i) => { u.side = 'party'; u.slot = i; this.units.push(u); });
+  else G.party.map(ch).filter((c) => c && c.alive).forEach((c, i) => this.units.push(unitFromChar(c, 'party', i)));
   (opts.enemies || []).forEach((e, i) => this.units.push(e.charId ? e : makeEnemyUnit(e.type, e.lvl, i)));
   this.units.filter((u) => u.side === 'enemy').forEach((u, i) => { u.slot = i; });
   this.units.forEach((u) => Object.assign(u, unitPos(u)));
   this.queue = [];
   this.waiting = false;
   this.say(opts.intro || 'Enemies approach!');
+  if (opts.hold) return; // cinematic scripts drive turns themselves
   setTimeout(() => this.next(), 500);
 };
 
@@ -194,9 +199,16 @@ Battle.finish = function (outcome) {
   if (this.over) return;
   this.over = true;
   this.waiting = false;
-  const res = resolveBattle(outcome, this);
+  const res = this.noResolve
+    ? { outcome, xp: 0, gold: 0, dead: [], survived: [], levels: [], formative: [], kind: this.kind, rivalDefeated: null }
+    : resolveBattle(outcome, this);
   UI.battleChanged();
-  setTimeout(() => { this.active = false; if (this.onEnd) this.onEnd(res); }, 600);
+  setTimeout(() => {
+    this.active = false;
+    this.cinematic = false;
+    this.noResolve = false;
+    if (this.onEnd) this.onEnd(res);
+  }, this.cinematic ? 200 : 600);
 };
 
 // Apply results of a battle to the model.

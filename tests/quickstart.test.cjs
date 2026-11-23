@@ -10,6 +10,8 @@ test('QuickStart generates founder and partner, validates rename, and saves chos
   await p.getByRole('button',{name:/^Random Lineage/}).waitFor();
   await p.getByRole('button',{name:/^Prepare Carefully/}).waitFor();
   await p.getByRole('button',{name:/^Random Lineage/}).click();
+  await p.getByRole('button',{name:/^Skip$/}).waitFor();
+  await p.getByRole('button',{name:/^Skip$/}).click();
   await p.getByText('Random Lineage · Ready to play',{exact:true}).waitFor();
   assert.equal(await p.evaluate(()=>!!spouseOf(ch(G.mcId))),true);
   await p.getByLabel('House name',{exact:true}).fill('   ');
@@ -24,7 +26,7 @@ test('QuickStart generates founder and partner, validates rename, and saves chos
   await p.getByRole('button',{name:'Continue your House',exact:true}).click();
   assert.equal(await p.evaluate(()=>G.house.name),'Silveroak');
   // Exercise random races, classes and preferences without playing through seven sections.
-  await p.evaluate(()=>{UI.closeAll();for(let i=0;i<12;i++){Game.randomLineage();if(!ch(G.mcId)||!spouseOf(ch(G.mcId)))throw Error('Missing family');UI.closeAll();}});
+  await p.evaluate(()=>{UI.closeAll();for(let i=0;i<12;i++){Game.randomLineage({skipCutscene:true});if(!ch(G.mcId)||!spouseOf(ch(G.mcId)))throw Error('Missing family');UI.closeAll();}});
   assert.deepEqual(errors,[]);
  }finally{await b.close();}
 });

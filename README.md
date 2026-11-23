@@ -15,6 +15,7 @@ A 2.5D roguelike, turn-based RPG about a family line. You play the head of a Hou
 | System | Where |
 |---|---|
 | Founding: house name and colour, race, birth status, choosing 1 of 3 partners | `js/main.js` (`Game.create`, `Game.choosePartner`) |
+| Random Lineage opening cutscene (Hollow King last stand → bloodline) | `js/opening-cutscene.js` (`Game.playOpeningCutscene`) |
 | Aging, life stages, XP modifiers, formative points, lifespans per race | `js/model.js` (`stageKey`, `ageMod`, `xpMod`) |
 | Genetics, birth status (highborn / lowborn / bastard / orphan), hidden lineages | `js/model.js` (`childBase`, `haveChild`, `birthKey`) |
 | Yearly world simulation: births, marriages, affairs, deaths, corruption, rivals, eras | `js/model.js` (`yearTick`) |

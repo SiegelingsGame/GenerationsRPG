@@ -135,6 +135,11 @@ Render.unrotXY = function (rx, ry) {
   }
 };
 
+Render.shake = function (ms = 400, power = 8) {
+  this.shakeUntil = performance.now() + ms;
+  this.shakePower = power;
+};
+
 Render.frame = function () {
   const c = this.ctx;
   const box = this.canvas.getBoundingClientRect();
@@ -142,10 +147,17 @@ Render.frame = function () {
   if (this.ctl) this.ctl.hidden = !(G && G.mode === 'world' && !Battle.active);
   c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
   c.clearRect(0, 0, this.w, this.h);
-  if (!G || !G.world || !G.world.map) { this.drawTitleBg(); return; }
+  const shaking = this.shakeUntil && performance.now() < this.shakeUntil;
+  if (shaking) {
+    const p = this.shakePower || 8;
+    c.save();
+    c.translate((Math.random() - 0.5) * p * 2, (Math.random() - 0.5) * p * 2);
+  }
+  if (!G || !G.world || !G.world.map) { this.drawTitleBg(); if (shaking) c.restore(); return; }
   if (Battle.active) this.drawBattle();
   else this.drawWorld();
   LocationPrompt.render();
+  if (shaking) c.restore();
 };
 
 Render.drawTitleBg = function () {
