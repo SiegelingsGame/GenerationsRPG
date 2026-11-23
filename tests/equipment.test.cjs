@@ -11,6 +11,7 @@ test('class kits drive equipment; try-on and equip update figure and combat bonu
     p.on('pageerror', (e) => errors.push(e.message));
     await p.goto(process.env.GAME_TEST_URL || 'http://127.0.0.1:8770');
     await p.getByRole('button', { name: /^Random Lineage/ }).click();
+    await p.getByRole('button', { name: /^Skip$/ }).click();
     await p.getByRole('button', { name: 'Start the game', exact: true }).click();
     await p.getByRole('button', { name: 'Continue playing', exact: true }).click();
 

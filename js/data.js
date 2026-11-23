@@ -2,7 +2,9 @@
 'use strict';
 
 const DAYS_PER_YEAR = 360;
-const START_YEAR = 812;
+const DEFAULT_START_YEAR = 812;
+// Mutable so Careful Start can set the founding year; restored from saves via G.startYear.
+let START_YEAR = DEFAULT_START_YEAR;
 const STATS = ['str', 'agi', 'int', 'wil', 'vit'];
 const STAT_NAMES = { str: 'STR', agi: 'AGI', int: 'INT', wil: 'WIL', vit: 'VIT' };
 const PHYS = { str: true, agi: true, vit: true };

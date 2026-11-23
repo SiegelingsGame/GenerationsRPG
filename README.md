@@ -10,11 +10,14 @@ A 2.5D roguelike, turn-based RPG about a family line. You play the head of a Hou
 
 **Design:** see [`docs/DESIGN.md`](docs/DESIGN.md) for the full concept (pillars, systems, numbers and roadmap).
 
+**Careful Start seeds:** after Prepare Carefully → Finish up → Careful Start, options encode as `GR1.` + base64url(JSON) (`v`, `seed`, `startYear`, prosperity/wards/doomYears, estate, resources, era, worldSize, houseName, optional heraldry). Paste a seed to reload the same config; Begin rebuilds the world from the RNG seed.
+
 ## What's in the playable concept
 
 | System | Where |
 |---|---|
 | Founding: house name and colour, race, birth status, choosing 1 of 3 partners | `js/main.js` (`Game.create`, `Game.choosePartner`) |
+| Prepare Carefully → Story Start or Careful Start (shareable `GR1.` seed, seeded world rebuild) | `js/careful-start.js`, `js/main.js` (`Game.startPathChoice`, `Game.carefulStartScreen`) |
 | Random Lineage opening cutscene (Hollow King last stand → spirit seeks bloodline) | `js/opening-cutscene.js` (`Game.playOpeningCutscene`) |
 | Aging, life stages, XP modifiers, formative points, lifespans per race | `js/model.js` (`stageKey`, `ageMod`, `xpMod`) |
 | Genetics, birth status (highborn / lowborn / bastard / orphan), hidden lineages | `js/model.js` (`childBase`, `haveChild`, `birthKey`) |
