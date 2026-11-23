@@ -6,14 +6,35 @@ const PackArt = {
   ready(key) { const im=this.images[key];return im?.complete && im.naturalWidth>0; },
   aimLift(u) {
     if (!u) return 30;
-    if (typeof Render !== 'undefined' && Render.unitAimLift) return Render.unitAimLift(u);
-    return Math.round(24 * (1.25 * (u.scale || 1)));
+    const live=this.liveUnit(u)||u;
+    if (typeof Render !== 'undefined' && Render.unitAimLift) return Render.unitAimLift(live);
+    return Math.round(24 * (1.25 * (live.scale || 1)));
+  },
+  // Resolve the Battle unit that actually has gx/gy (cinematics may hold a stale ref).
+  liveUnit(u) {
+    if (!u) return null;
+    if (typeof Battle !== 'undefined' && Battle.find && u.uid) {
+      const found=Battle.find(u.uid);
+      if (found && found.gx != null && found.gy != null) return found;
+    }
+    if (u.gx != null && u.gy != null) return u;
+    if (typeof Battle !== 'undefined' && Battle.units && u.type) {
+      const byType=Battle.units.find((x)=>x.type===u.type && x.gx!=null);
+      if (byType) return byType;
+    }
+    return u;
+  },
+  gridPos(u) {
+    const live=this.liveUnit(u);
+    if (!live || live.gx == null || live.gy == null) return null;
+    return { x: +live.gx, y: +live.gy };
   },
   emit(key,target,source=null,projectile=null) {
     if (!target || !PACK_EFFECTS[key]) return;
+    const to=this.gridPos(target); if (!to || !Number.isFinite(to.x) || !Number.isFinite(to.y)) return;
+    const from=source?this.gridPos(source):null;
     const t0=performance.now();
-    const pos=u=>({x:u.gx,y:u.gy});
-    this.effects.push({key,to:pos(target),from:source?pos(source):null,projectile,t0,delay:projectile?240:0,toAim:this.aimLift(target),fromAim:source?this.aimLift(source):35});
+    this.effects.push({key,to,from:(from&&Number.isFinite(from.x))?from:null,projectile,t0,delay:projectile?240:0,toAim:this.aimLift(target),fromAim:source?this.aimLift(source):35});
     if(this.effects.length>40)this.effects.splice(0,this.effects.length-40);
   },
   damage(src,target,crit) {
@@ -35,10 +56,14 @@ const PackArt = {
     const now=render.t,ctx=render.ctx;
     this.effects=this.effects.filter(f=>now-f.t0<f.delay+PACK_EFFECTS[f.key].frames/PACK_EFFECTS[f.key].fps*1000+80);
     for(const f of this.effects) {
+      if (!f.to || !Number.isFinite(f.to.x) || !Number.isFinite(f.to.y)) continue;
       const elapsed=now-f.t0,to=render.biso(f.to.x,f.to.y);to.y-=(f.toAim||30);
-      if(f.projectile&&elapsed>=0&&elapsed<f.delay&&!this.reduced.matches) {
+      if (!Number.isFinite(to.x) || !Number.isFinite(to.y)) continue;
+      if(f.projectile&&f.from&&elapsed>=0&&elapsed<f.delay&&!this.reduced.matches) {
         const from=render.biso(f.from.x,f.from.y);from.y-=(f.fromAim||35);
-        const k=elapsed/f.delay;this.frame(ctx,f.projectile,from.x+(to.x-from.x)*k,from.y+(to.y-from.y)*k,elapsed,65,true,Math.atan2(to.y-from.y,to.x-from.x));
+        if (Number.isFinite(from.x) && Number.isFinite(from.y)) {
+          const k=elapsed/f.delay;this.frame(ctx,f.projectile,from.x+(to.x-from.x)*k,from.y+(to.y-from.y)*k,elapsed,65,true,Math.atan2(to.y-from.y,to.x-from.x));
+        }
       }
       const size=f.size||(f.key==='explosion'?140:f.key==='lightning'?130:95);
       this.frame(ctx,f.key,to.x+(f.ox||0),to.y+(f.oy||0),elapsed-f.delay, size, !!f.loop);
@@ -46,15 +71,19 @@ const PackArt = {
   },
   // Chained PackArt bursts for cinematic "god spells" — reuses the existing sprite sheet aggressively.
   godSpell(name, target, source=null) {
-    const t=target,s=source;
+    const t=this.liveUnit(target)||target,s=source?this.liveUnit(source)||source:null;
     const toAim=this.aimLift(t),fromAim=s?this.aimLift(s):35;
     const giantBoost=(t&&(t.giant||(t.scale||1)>1.4))?1.35:1;
     const burst=(key,delay,extra={})=>{
       setTimeout(()=>{
-        if(!t)return;
+        const liveT=this.liveUnit(t)||t;
+        if(!liveT)return;
         const info=PACK_EFFECTS[key];if(!info)return;
+        const base=this.gridPos(liveT); if(!base)return;
+        const liveS=s?(this.liveUnit(s)||s):null;
+        const from=liveS?this.gridPos(liveS):null;
         const t0=performance.now();
-        this.effects.push({key,to:{x:t.gx+(extra.dx||0),y:t.gy+(extra.dy||0)},from:s?{x:s.gx,y:s.gy}:null,projectile:extra.projectile||null,t0,delay:extra.projectile?220:0,size:(extra.size||95)*giantBoost,ox:extra.ox,oy:extra.oy,loop:!!extra.loop,toAim,fromAim});
+        this.effects.push({key,to:{x:base.x+(extra.dx||0),y:base.y+(extra.dy||0)},from,projectile:extra.projectile||null,t0,delay:extra.projectile?220:0,size:(extra.size||95)*giantBoost,ox:extra.ox,oy:extra.oy,loop:!!extra.loop,toAim,fromAim});
         if(this.effects.length>48)this.effects.splice(0,this.effects.length-48);
       },delay);
     };

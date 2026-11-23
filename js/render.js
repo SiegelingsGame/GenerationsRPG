@@ -153,6 +153,9 @@ Render.frame = function () {
     c.save();
     c.translate((Math.random() - 0.5) * p * 2, (Math.random() - 0.5) * p * 2);
   }
+  if (typeof OpeningCutscene !== 'undefined' && OpeningCutscene.active && OpeningCutscene.spirit && OpeningCutscene.spirit.active) {
+    OpeningCutscene.tickSpiritFlight(performance.now());
+  }
   if (!G || !G.world || !G.world.map) { this.drawTitleBg(); if (shaking) c.restore(); return; }
   if (Battle.active) this.drawBattle();
   else this.drawWorld();
@@ -211,13 +214,16 @@ Render.drawLandscape = function () {
   const sky = c.createLinearGradient(0, 0, 0, this.h);
   sky.addColorStop(0, eraTint('#1d3550')); sky.addColorStop(1, eraTint('#0d1824'));
   c.fillStyle = sky; c.fillRect(0, 0, this.w, this.h);
+  const spiritCam = typeof OpeningCutscene !== 'undefined' && OpeningCutscene.spirit && OpeningCutscene.spirit.active;
   const pp = this.partyWorldPos();
-  const [prx, pry] = this.rotXY(pp.x, pp.y);
+  const camSrc = spiritCam ? OpeningCutscene.spirit : pp;
+  const [prx, pry] = this.rotXY(camSrc.x, camSrc.y);
   const tx = this.w / 2 - (prx - pry) * TW / 2;
   const ty = this.h / 2 - (prx + pry) * TH / 2;
   if (!this.camInit) { this.cam.x = tx; this.cam.y = ty; this.camInit = true; }
-  this.cam.x += (tx - this.cam.x) * 0.15;
-  this.cam.y += (ty - this.cam.y) * 0.15;
+  const camLerp = spiritCam ? 0.28 : 0.15;
+  this.cam.x += (tx - this.cam.x) * camLerp;
+  this.cam.y += (ty - this.cam.y) * camLerp;
   this.zoom += (this.zoomTarget - this.zoom) * 0.18;
   c.save();
   const sk = this.spin ? clamp((this.t - this.spin) / 220, 0, 1) : 1;
@@ -256,8 +262,10 @@ Render.drawLandscape = function () {
     items.push({ y: Math.min(e1.y, e2.y) - 4, bridge: b });
   }
   for (const a of G.world.parties || []) if (!Living.visible(a)) a._sx = null;
-  const ps = this.iso(pp.x, pp.y, 0);
-  items.push({ y: ps.y + 0.1 + (LS.bridgeLift(pp.x, pp.y) ? 30 : 0), party: true });
+  if (!spiritCam) {
+    const ps = this.iso(pp.x, pp.y, 0);
+    items.push({ y: ps.y + 0.1 + (LS.bridgeLift(pp.x, pp.y) ? 30 : 0), party: true });
+  }
   items.sort((p, q) => p.y - q.y);
   for (const it of items) {
     if (it.t) this.drawFeature(it.t);
@@ -289,6 +297,7 @@ Render.drawLandscape = function () {
     c.fillStyle = '#ffd76a'; c.strokeStyle = '#5a4210'; c.lineWidth = 2;
     c.beginPath(); c.moveTo(p.x, p.y - 88 + bob); c.lineTo(p.x + 9, p.y - 76 + bob); c.lineTo(p.x, p.y - 64 + bob); c.lineTo(p.x - 9, p.y - 76 + bob); c.closePath(); c.fill(); c.stroke();
   }
+  if (spiritCam && OpeningCutscene.spirit.stage !== 'mother') this.drawSpiritFlight(OpeningCutscene.spirit);
   c.restore();
   this.drawCompass();
   this.drawMinimap();
@@ -296,6 +305,36 @@ Render.drawLandscape = function () {
   v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.4)');
   c.fillStyle = v; c.fillRect(0, 0, this.w, this.h);
   if (G.world.era.type === 'war') this.drawEmbers();
+};
+
+// White pixel spirit + short trail for the opening cutscene tracking shot.
+Render.drawSpiritFlight = function (spirit) {
+  if (!spirit) return;
+  const c = this.ctx;
+  const lift = (pt) => {
+    const p = this.iso(pt.x, pt.y, 0);
+    return { x: p.x, y: p.y - (pt.alt || 0) };
+  };
+  const now = performance.now();
+  const trail = spirit.trail || [];
+  for (let i = 0; i < trail.length; i++) {
+    const pt = trail[i];
+    const age = (now - pt.t) / 700;
+    if (age > 1) continue;
+    const p = lift(pt);
+    const a = (1 - age) * 0.55;
+    c.fillStyle = `rgba(255,252,240,${a})`;
+    const sz = 2 + (1 - age) * 2;
+    c.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
+  }
+  const p = lift(spirit);
+  const pulse = 0.75 + Math.sin(now / 90) * 0.25;
+  c.fillStyle = `rgba(255,255,255,${0.35 * pulse})`;
+  c.beginPath(); c.arc(p.x, p.y, 7 * pulse, 0, Math.PI * 2); c.fill();
+  c.fillStyle = '#fffef6';
+  c.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+  c.fillStyle = 'rgba(200,230,255,0.85)';
+  c.fillRect(p.x - 1, p.y - 1, 2, 2);
 };
 Render.drawWorldTiles = function () {
   const c = this.ctx;
@@ -305,13 +344,15 @@ Render.drawWorldTiles = function () {
   sky.addColorStop(0, eraTint('#253a55')); sky.addColorStop(1, eraTint('#0f1a26'));
   c.fillStyle = sky; c.fillRect(0, 0, this.w, this.h);
 
-  // camera follows party smoothly
+  // camera follows party (or opening-cutscene spirit)
+  const spiritCam = typeof OpeningCutscene !== 'undefined' && OpeningCutscene.spirit && OpeningCutscene.spirit.active;
   const pp = this.partyWorldPos();
-  const [prx, pry] = this.rotXY(pp.x, pp.y);
+  const camSrc = spiritCam ? OpeningCutscene.spirit : pp;
+  const [prx, pry] = this.rotXY(camSrc.x, camSrc.y);
   const tx = this.w / 2 - (prx - pry) * TW / 2;
-  const ty = this.h / 2 - (prx + pry) * TH / 2 + pp.h * HSTEP;
-  this.cam.x += (tx - this.cam.x) * 0.12;
-  this.cam.y += (ty - this.cam.y) * 0.12;
+  const ty = this.h / 2 - (prx + pry) * TH / 2 + (spiritCam ? 0 : pp.h * HSTEP);
+  this.cam.x += (tx - this.cam.x) * (spiritCam ? 0.28 : 0.12);
+  this.cam.y += (ty - this.cam.y) * (spiritCam ? 0.28 : 0.12);
   if (!this.camInit) { this.cam.x = tx; this.cam.y = ty; this.camInit = true; }
   this.zoom += (this.zoomTarget - this.zoom) * 0.18;
 
@@ -353,7 +394,7 @@ Render.drawWorldTiles = function () {
       this.drawFeature(t);
     }
     for (const a of agentsAt.get(s) || []) Living.drawAgent(this, a);
-    if (s === partyTileOrder || (s === map.W + map.H - 2 && !partyDrawn)) {
+    if (!spiritCam && (s === partyTileOrder || (s === map.W + map.H - 2 && !partyDrawn))) {
       if (!partyDrawn) { Living.drawDest(this); this.drawParty(pp); partyDrawn = true; }
     }
   }
@@ -384,6 +425,7 @@ Render.drawWorldTiles = function () {
     c.fillStyle = '#ffd76a'; c.strokeStyle = '#5a4210'; c.lineWidth = 2;
     c.beginPath(); c.moveTo(p.x, p.y - 96 + bob); c.lineTo(p.x + 9, p.y - 84 + bob); c.lineTo(p.x, p.y - 72 + bob); c.lineTo(p.x - 9, p.y - 84 + bob); c.closePath(); c.fill(); c.stroke();
   }
+  if (spiritCam && OpeningCutscene.spirit.stage !== 'mother') this.drawSpiritFlight(OpeningCutscene.spirit);
   c.restore();
   // compass: which way is north on the rotated map
   this.drawCompass();

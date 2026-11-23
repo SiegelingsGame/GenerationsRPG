@@ -103,7 +103,11 @@ OpeningCutscene.setupBattle = function () {
     onEnd: null,
   });
   UI.battleChanged();
-  return { heroes, king, herald };
+  // Prefer the positioned Battle units (same refs when Battle.start keeps pre-built enemies).
+  const liveKing = Battle.units.find((u) => u.type === 'hollow') || king;
+  const liveHerald = Battle.units.find((u) => u.type === 'herald') || herald;
+  const liveHeroes = Battle.units.filter((u) => u.side === 'party');
+  return { heroes: liveHeroes.length ? liveHeroes : heroes, king: liveKing, herald: liveHerald };
 };
 
 OpeningCutscene.hit = function (src, t, dmg, label, crit) {
@@ -225,7 +229,7 @@ OpeningCutscene.phaseEpilogue = function (king) {
 
   const vig = this.el && this.el.querySelector('#oc-vignette');
   if (vig) { vig.hidden = false; vig.className = 'oc-vignette oc-void'; }
-  const target = king || { gx: 5.4, gy: 2 };
+  const target = king || Battle.units.find((u) => u.type === 'hollow') || { gx: 5.4, gy: 2 };
 
   this.setText('Chronicle', 'The champions fall. The Hollow King turns upon the timeline itself.');
   PackArt.godSpell('voidCascade', target, null);
@@ -238,31 +242,148 @@ OpeningCutscene.phaseEpilogue = function (king) {
     if (typeof Render !== 'undefined') Render.shake(900, 12);
   });
 
-  this.after(4800, () => {
-    if (vig) vig.className = 'oc-vignette oc-womb';
-    // King "flies" toward the lower center — mother’s belly vignette.
-    if (king) {
-      king.gx = 3.5; king.gy = 4.2;
-      PackArt.emit('dark_proj', { gx: 3.5, gy: 3.2 }, { gx: 5.4, gy: 2 }, 'dark_proj');
-      PackArt.emit('sparkle', { gx: 3.5, gy: 4.0 });
-      PackArt.emit('flame', { gx: 3.5, gy: 4.2 });
-      PackArt.emit('explosion', { gx: 3.5, gy: 4.1 });
+  this.after(4800, () => this.phaseSpiritFlight(king || target));
+};
+
+// Continuous follow-cam: a white spirit flees the Hollow King across the world into a mother’s belly.
+OpeningCutscene.phaseSpiritFlight = function (king) {
+  this.phase = 'spiritFlight';
+  const vig = this.el && this.el.querySelector('#oc-vignette');
+  if (vig) { vig.hidden = true; vig.className = 'oc-vignette'; }
+
+  // Leave the battle canvas so the world map can host the tracking shot.
+  PackArt.effects = [];
+  Battle.fx = [];
+  Battle.active = false;
+  Battle.cinematic = false;
+  Battle.waiting = false;
+  Battle.over = true;
+  document.body.classList.remove('in-battle');
+  const panel = $('#panel');
+  if (panel) panel.replaceChildren(h('p', { class: 'dim' }, '…'));
+
+  if (!G || !G.world || !G.world.map) newGame();
+  if (typeof LS !== 'undefined' && LS.ensure) LS.ensure();
+  const spire = G.world.spire || { x: G.world.map.W - 2, y: 2 };
+  const estate = G.world.estate || { x: Math.floor(G.world.map.W / 2), y: Math.floor(G.world.map.H / 2) };
+  const towns = (G.world.towns || []).filter((t) => !t.fallen);
+  towns.sort((a, b) => (Math.abs(a.x - estate.x) + Math.abs(a.y - estate.y)) - (Math.abs(b.x - estate.x) + Math.abs(b.y - estate.y)));
+  const town = towns[0] || { x: estate.x + 4, y: estate.y + 2 };
+
+  // Seed party/camera near the spire so the first frame is not at the estate.
+  G.pos = { x: spire.x, y: spire.y };
+  G.ppos = { x: spire.x, y: spire.y };
+  if (typeof Render !== 'undefined') {
+    Render.camInit = false;
+    Render.zoomTarget = 1.35;
+    Render.zoom = 1.35;
+  }
+
+  const ease = (t) => t * t * (3 - 2 * t);
+  const legs = [
+    { x: spire.x, y: spire.y, alt: 56, dur: 900, chapter: 'The Hollow King', line: 'Denied its ending, the King dwindles to a white spark.', speaker: '' },
+    { x: spire.x - (spire.x - estate.x) * 0.35, y: spire.y - (spire.y - estate.y) * 0.25, alt: 72, dur: 2200, chapter: 'Chronicle', line: 'A spirit of unmaking casts itself across the seas.', speaker: '' },
+    { x: estate.x + (town.x - estate.x) * 0.15, y: estate.y + (town.y - estate.y) * 0.1, alt: 48, dur: 2400, chapter: 'The Starting Isle', line: 'It finds the island where a House will one day rise.', speaker: '' },
+    { x: town.x, y: town.y, alt: 28, dur: 2000, chapter: 'A Living Town', line: 'Down through streets and hearths, seeking the right bloodline.', speaker: '' },
+    { x: town.x + 0.15, y: town.y + 0.1, alt: 10, dur: 1600, chapter: 'The Hollow King', line: 'This time, I will prevail.', speaker: 'The Hollow King' },
+  ];
+
+  this.spirit = {
+    active: true,
+    stage: 'flight',
+    t0: performance.now(),
+    leg: 0,
+    legT0: performance.now(),
+    x: legs[0].x,
+    y: legs[0].y,
+    alt: legs[0].alt,
+    trail: [],
+    legs,
+    ease,
+    kingUid: king && king.uid,
+    mother: false,
+    doneAt: null,
+  };
+
+  this.setText(legs[0].chapter, legs[0].line, legs[0].speaker);
+  if (typeof Render !== 'undefined' && Render.shake) Render.shake(400, 6);
+};
+
+OpeningCutscene.tickSpiritFlight = function (now) {
+  const s = this.spirit;
+  if (!s || !s.active || this.skipped) return;
+  if (s.stage === 'mother') {
+    const k = Math.min(1, (now - (s.motherT0 || now)) / 2800);
+    s.motherK = k;
+    s.alt = 8 * (1 - k);
+    const ember = this.el && this.el.querySelector('#oc-spirit-ember');
+    if (ember) {
+      ember.style.opacity = String(0.35 + 0.65 * (1 - k));
+      ember.style.transform = `translate(-50%, ${(-18 + k * 36)}px) scale(${1.2 - k * 0.7})`;
     }
-    this.setText('Chronicle', 'Denied its ending, the Hollow King dwindles — and flies into the belly of a living mother.');
-  });
+    if (k >= 1 && !s.finishing) {
+      s.finishing = true;
+      this.setText('Chronicle', 'And so a House is founded — the bloodline the King still hunts.');
+      this.after(2200, () => this.complete());
+    }
+    return;
+  }
 
-  this.after(7200, () => {
-    if (king) { king.gx = 3.5; king.gy = 4.8; king.alive = false; }
-    PackArt.emit('dark_proj', { gx: 3.5, gy: 4.6 }, { gx: 3.5, gy: 3.0 }, 'dark_proj');
-    PackArt.emit('sparkle', { gx: 3.5, gy: 4.7 });
-    this.setText('The Hollow King', 'I will seek the right bloodline. This time, I will prevail.', 'The Hollow King');
-  });
+  const legs = s.legs;
+  let i = s.leg;
+  // Interpolate from legs[i] → legs[i+1]; duration lives on the destination leg.
+  while (i < legs.length - 1) {
+    const from = legs[i];
+    const to = legs[i + 1];
+    const dur = Math.max(1, to.dur || 1000);
+    const raw = (now - s.legT0) / dur;
+    if (raw < 1) {
+      const u = s.ease(Math.min(1, Math.max(0, raw)));
+      s.x = from.x + (to.x - from.x) * u;
+      s.y = from.y + (to.y - from.y) * u;
+      s.alt = from.alt + (to.alt - from.alt) * u;
+      break;
+    }
+    // Snap to destination and advance.
+    s.x = to.x; s.y = to.y; s.alt = to.alt;
+    s.leg = i + 1;
+    s.legT0 = now;
+    i = s.leg;
+    this.setText(to.chapter, to.line, to.speaker || '');
+    if (i >= legs.length - 1) {
+      this.enterMotherBelly(now);
+      return;
+    }
+  }
 
-  this.after(9800, () => {
-    this.setText('Chronicle', 'And so a House is founded — the bloodline the King still hunts.');
-  });
+  s.trail.push({ x: s.x, y: s.y, alt: s.alt, t: now });
+  if (s.trail.length > 28) s.trail.splice(0, s.trail.length - 28);
 
-  this.after(11800, () => this.complete());
+  if (typeof Render !== 'undefined') {
+    const zGoal = i >= 3 ? 1.85 : i >= 2 ? 1.55 : 1.25;
+    Render.zoomTarget = zGoal;
+  }
+};
+
+OpeningCutscene.enterMotherBelly = function (now) {
+  const s = this.spirit;
+  if (!s) return;
+  s.stage = 'mother';
+  s.mother = true;
+  s.motherT0 = now || performance.now();
+  s.motherK = 0;
+  const vig = this.el && this.el.querySelector('#oc-vignette');
+  if (vig) {
+    vig.hidden = false;
+    vig.className = 'oc-vignette oc-womb oc-mother';
+    vig.replaceChildren(
+      h('div', { class: 'oc-mother-scene', 'aria-hidden': 'true' },
+        h('div', { class: 'oc-mother-doll' },
+          h('div', { class: 'oc-mother-head' }),
+          h('div', { class: 'oc-mother-body' }, h('div', { class: 'oc-mother-belly' }, h('div', { class: 'oc-spirit-ember', id: 'oc-spirit-ember' }))),
+          h('div', { class: 'oc-mother-skirt' }))));
+  }
+  this.setText('The Hollow King', 'I will seek the right bloodline. This time, I will prevail.', 'The Hollow King');
 };
 
 OpeningCutscene.skip = function () {
@@ -278,7 +399,12 @@ OpeningCutscene.teardown = function () {
     document.removeEventListener('keydown', this.keyHandler);
     this.keyHandler = null;
   }
-  if (Battle.active || Battle.cinematic) {
+  if (this.spirit) { this.spirit.active = false; this.spirit = null; }
+  if (typeof Render !== 'undefined') {
+    Render.zoomTarget = 1;
+    Render.followOverride = null;
+  }
+  if (Battle.active || Battle.cinematic || Battle.units.length) {
     Battle.over = true;
     Battle.waiting = false;
     Battle.active = false;
