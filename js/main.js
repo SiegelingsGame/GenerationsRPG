@@ -278,6 +278,9 @@ Game.enterWorld = function (fresh) {
     chron(`${ch(G.mcId).name} founds House ${G.house.name} in the ${era().name}. The ${G.house.heirloom.name} is its first heirloom.`, 'head', [G.mcId], 'head');
     Log.add('Tip: travel to towns to recruit and court, clear ruins for prestige, and invest at your estate.', 'dim');
   }
+  // Founding / load chronicle lines should not linger as the next news popup.
+  G.newsQueue = [];
+  G.expectNews = false;
   Heraldry.ensureAll();
   WorldArt.ensure();
   Equip.loadUi();
@@ -451,12 +454,14 @@ Game.finalBattle = function (forced) {
 
 // ---------------------------------------------------------------- estate & town actions
 Game.rest = function (days) {
+  G.expectNews = true;
   advanceDays(days);
   for (const id of G.party) { const c = ch(id); if (c) c.hp = maxHp(c); }
   Log.add(days >= 360 ? 'A quiet year passes at the estate.' : 'The party rests for a season.', 'dim');
   this.after();
 };
 Game.train = function () {
+  G.expectNews = true;
   advanceDays(90);
   recordChoice('martial', 0.4, G.mcId);
   for (const id of G.party) {
@@ -469,6 +474,7 @@ Game.train = function () {
   this.after();
 };
 Game.inn = function () {
+  G.expectNews = true;
   G.house.gold -= 10;
   advanceDays(7);
   for (const id of G.party) { const c = ch(id); if (c) c.hp = maxHp(c); }
@@ -558,6 +564,7 @@ Game.propose = function (c) {
   recordChoice('love', 1, mc.id);
   if (mc.gender === c.gender) recordChoice('accept', 1, mc.id);
   if (c.birth === 'highborn') G.house.prestige += 5;
+  UI.toast(`${mc.name} and ${c.name} are married.`);
   this.after();
 };
 // ---- relationships: mend or deepen bonds with your kin and companions

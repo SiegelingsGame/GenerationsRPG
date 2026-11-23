@@ -244,6 +244,7 @@ table.stats td:first-child { color: var(--gold); }
   #location-prompt { padding: 10px 12px; }
   #location-prompt .row { gap: 8px; }
   #location-prompt button.act { min-height: 44px; padding: 10px 12px; font-size: 14px; margin: 0; }
+  .toast { top: calc(56px + env(safe-area-inset-top, 0px)); z-index: 22; max-width: calc(100% - 24px); text-align: center; }
 
   html, body { background: #0f1a26; }
   .modal-wrap { align-items: center; z-index: 12;

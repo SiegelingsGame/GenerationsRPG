@@ -42,9 +42,11 @@ test('mobile Here sheet is clear; year ticks popup income and births', async () 
     await p.locator('#hudchip').click();
     await p.locator('.here-sheet').waitFor();
     await p.getByRole('button', { name: /Rest a season/ }).waitFor();
-    await p.getByRole('button', { name: /House menu/ }).waitFor();
+    await p.getByRole('button', { name: /Open House menu/ }).waitFor();
     await p.screenshot({ path: '/opt/cursor/artifacts/mobile-here-sheet.png' });
-    await p.evaluate(() => UI.closeAll());
+    await p.locator('.modal .close').click();
+    assert.equal(await p.evaluate(() => document.body.classList.contains('drawer-open')), false);
+    assert.equal(await p.evaluate(() => UI.modalStack.length), 0);
 
     await p.locator('#menuBtn').click();
     await p.locator('#drawer-here').waitFor();
@@ -56,6 +58,7 @@ test('mobile Here sheet is clear; year ticks popup income and births', async () 
 
     const news = await p.evaluate(() => {
       G.newsQueue = [];
+      G.expectNews = true;
       // Force a year boundary and a House birth so the digest has income + family news.
       const mc = ch(G.mcId);
       const spouse = spouseOf(mc);
@@ -72,11 +75,13 @@ test('mobile Here sheet is clear; year ticks popup income and births', async () 
         rows: document.querySelectorAll('.news-row').length,
         hasIncome: [...document.querySelectorAll('.news-row')].some((r) => r.classList.contains('k-year')),
         hasBirth: [...document.querySelectorAll('.news-row')].some((r) => r.classList.contains('k-birth')),
+        drawerOpen: document.body.classList.contains('drawer-open'),
       };
     });
     assert.ok(news.queued.includes('birth'), 'birth queued for popup');
     assert.ok(news.queued.includes('year'), 'income queued for popup');
     assert.equal(news.modal, 1);
+    assert.equal(news.drawerOpen, false);
     assert.ok(news.rows >= 2);
     assert.ok(news.hasIncome);
     assert.ok(news.hasBirth);
@@ -84,6 +89,19 @@ test('mobile Here sheet is clear; year ticks popup income and births', async () 
     await p.screenshot({ path: '/opt/cursor/artifacts/mobile-news-popup.png' });
     await p.getByRole('button', { name: /Continue/ }).click();
     assert.equal(await p.evaluate(() => UI.modalStack.length), 0);
+
+    // Travel year-crossing with only income should toast, not modal.
+    const travel = await p.evaluate(() => {
+      G.newsQueue = [];
+      G.expectNews = false;
+      const before = G.day;
+      G.day = (Math.floor(before / DAYS_PER_YEAR) + 1) * DAYS_PER_YEAR;
+      yearTick();
+      Game.after();
+      return { modal: UI.modalStack.length, toast: !!document.querySelector('.toast') };
+    });
+    assert.equal(travel.modal, 0);
+    assert.equal(travel.toast, true);
     assert.deepEqual(errors, []);
   } finally {
     await b.close();

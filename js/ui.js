@@ -174,13 +174,16 @@ UI.openHere = function () {
   const body = h('div', { class: 'here-sheet' },
     h('p', { class: 'dim' }, 'Choose an action for this place.'),
     ...acts,
-    act('House menu', () => { this.closeModal(); this.openDrawer(); }, { sub: 'party, chronicle, save, settings' }),
+    act('Open House menu', () => { this.closeModalQuiet(); this.openDrawer(); }, { sub: 'party, chronicle, save, settings' }),
   );
   for (const button of body.querySelectorAll('button.act')) {
-    if (button.textContent.startsWith('House menu')) continue;
+    if (/Open House menu/.test(button.getAttribute('aria-label') || button.textContent)) continue;
     button.addEventListener('click', () => this.closeModalQuiet(), { capture: true, once: true });
   }
-  this.modal(body, { title: place || 'Here' });
+  this.modal(body, {
+    title: place || 'Here',
+    onclose: () => { this.closeDrawer(); },
+  });
 };
 
 // ---------------------------------------------------------------- modal
@@ -218,7 +221,18 @@ UI.showNews = function (done) {
   this.closeDrawer();
   this.closeModalQuiet();
   const items = (G.newsQueue || []).splice(0);
+  const expect = !!G.expectNews;
+  G.expectNews = false;
   if (!items.length) { if (done) done(); return; }
+  const important = items.filter((e) => e.kind !== 'year');
+  // Travel year-crossings: toast income only; Rest/Train still get a full popup.
+  if (!important.length && !expect) {
+    const last = items[items.length - 1];
+    const gained = items.reduce((s, e) => s + (e.income || 0), 0);
+    this.toast(gained ? `Year ${last.year}: estate income +${gained}g.` : last.text);
+    if (done) done();
+    return;
+  }
   // Prefer family moments over routine income when the list is long.
   const rank = (e) => ({ birth: 0, death: 1, marriage: 2, era: 3, rival: 4, renounce: 4, head: 5, age: 6, injury: 7, year: 8 }[e.kind] ?? 9);
   const sorted = items.slice().sort((a, b) => rank(a) - rank(b) || a.year - b.year);
@@ -231,7 +245,7 @@ UI.showNews = function (done) {
     : items.some((e) => e.kind === 'era') ? 'A new era'
     : incomes.length ? 'The year turns' : 'House news';
   const body = h('div', { class: 'news-popup' },
-    incomes.length > 1 || (incomes.length && items.length > 1)
+    incomes.length
       ? h('p', { class: 'news-summary' }, `Estate gathered ${incomeTotal}g across ${incomes.length} year${incomes.length === 1 ? '' : 's'}.`)
       : h('p', { class: 'dim' }, 'While time passed at the House…'),
     h('div', { class: 'news-list' }, shown.map((e) => {
