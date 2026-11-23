@@ -69,15 +69,13 @@ test('court overflow, orphanage growth, ward camp and squire combat', async () =
         onEnd: () => {},
       });
       const squireUnit = Battle.units.find((u) => u.squire && u.charId === squire.id);
-      const masterUnit = Battle.units.find((u) => u.charId === mc.id);
+      const masterUnit = Battle.units.find((u) => u.charId === mc.id && !u.squire);
       // Force a squire AI turn
       if (squireUnit) {
         Battle.cur = squireUnit;
         Battle.waiting = false;
         Battle.ai(squireUnit);
       }
-      Battle.active = false;
-      Battle.over = true;
 
       return {
         partySize,
@@ -91,6 +89,12 @@ test('court overflow, orphanage growth, ward camp and squire combat', async () =
         squireInBattle: !!squireUnit,
         squireAiOnly: !!(squireUnit && squireUnit.aiOnly),
         masterLinked: !!(squireUnit && masterUnit && squireUnit.masterUid === masterUnit.uid),
+        squireGx: squireUnit ? squireUnit.gx : null,
+        masterGx: masterUnit ? masterUnit.gx : null,
+        squireGy: squireUnit ? squireUnit.gy : null,
+        masterGy: masterUnit ? masterUnit.gy : null,
+        squireBehind: !!(squireUnit && masterUnit && squireUnit.gx < masterUnit.gx - 0.4),
+        squireAligned: !!(squireUnit && masterUnit && Math.abs(squireUnit.gy - masterUnit.gy) < 0.4),
         caps: { court: Court.courtCap(), orphan: Court.orphanCap(), party: PARTY_CAP },
       };
     });
@@ -104,9 +108,21 @@ test('court overflow, orphanage growth, ward camp and squire combat', async () =
     assert.equal(state.squireInBattle, true);
     assert.equal(state.squireAiOnly, true);
     assert.equal(state.masterLinked, true);
+    assert.ok(state.squireBehind, `squire gx ${state.squireGx} should be behind master gx ${state.masterGx}`);
+    assert.ok(state.squireAligned, `squire gy ${state.squireGy} should align with master gy ${state.masterGy}`);
     assert.equal(state.caps.party, 4);
     assert.ok(state.caps.court >= 2);
     assert.deepEqual(errors, []);
+
+    // Battle: squire stands behind master; sidebar nests under master card
+    await p.evaluate(() => {
+      UI.closeAll();
+      UI.renderParty();
+      UI.battleChanged();
+    });
+    await p.waitForTimeout(200);
+    await p.screenshot({ path: '/opt/cursor/artifacts/squire-battle-backrow.png' });
+    await p.evaluate(() => { Battle.active = false; Battle.over = true; UI.closeAll(); });
 
     // UI screens open
     await p.evaluate(() => { UI.closeAll(); UI.showCourt(); });

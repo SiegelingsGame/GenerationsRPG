@@ -204,11 +204,13 @@ UI.renderParty = function () {
   $('#party').replaceChildren(
     h('div', { class: 'ptitle' }, 'Party'),
     ...party.map((c) => {
-      const u = bu && bu.find((x) => x.charId === c.id);
+      const u = bu && bu.find((x) => x.charId === c.id && !x.squire);
       const hp = u ? u.hp : c.hp, mhp = u ? u.maxHp : maxHp(c);
       const stage = stageKey(c);
       const life = age(c) / c.lifespan;
-      return h('div', { class: 'pcard' + (c.id === G.mcId ? ' mc' : '') + (u && !u.alive ? ' fallen' : '') + (Battle.cur && u === Battle.cur ? ' active' : ''), onclick: () => this.showChar(c) },
+      const squire = typeof Court !== 'undefined' ? Court.squireOf(c.id) : null;
+      const su = squire && bu ? bu.find((x) => x.squire && x.charId === squire.id) : null;
+      const card = h('div', { class: 'pcard' + (c.id === G.mcId ? ' mc' : '') + (u && !u.alive ? ' fallen' : '') + (Battle.cur && u === Battle.cur ? ' active' : ''), onclick: () => this.showChar(c) },
         portrait(c, 52),
         h('div', { class: 'pinfo' },
           h('div', { class: 'pname' }, c.id === G.mcId ? '♛ ' : '', c.name, h('span', { class: 'lvl' }, `L${c.level}`)),
@@ -217,6 +219,19 @@ UI.renderParty = function () {
           h('div', { class: 'psub' }, `HP ${Math.round(hp)}/${mhp} · XP ×${xpMod(c).toFixed(2)}`),
           h('div', { class: 'lifebar', title: 'Lifespan used (estimate)' }, h('div', { style: `width:${clamp(life * 100, 0, 100)}%`, class: 'st-' + stage })),
         ));
+      if (!squire || !squire.alive) return card;
+      const shp = su ? su.hp : squire.hp, smhp = su ? su.maxHp : maxHp(squire);
+      const nest = h('div', {
+        class: 'psquire' + (su && !su.alive ? ' fallen' : '') + (Battle.cur && su === Battle.cur ? ' active' : ''),
+        onclick: (e) => { e.stopPropagation(); this.showChar(squire); },
+      },
+        portrait(squire, 28),
+        h('div', { class: 'pinfo' },
+          h('div', { class: 'pname' }, squire.name, h('span', { class: 'lvl' }, `L${squire.level}`)),
+          h('div', { class: 'psub' }, `Squire of ${c.name}`),
+          bar(shp, smhp, 'hp'),
+        ));
+      return h('div', { class: 'pcard-wrap' }, card, nest);
     }),
     this.heirBox(),
   );

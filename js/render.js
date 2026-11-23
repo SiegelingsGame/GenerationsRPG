@@ -1006,7 +1006,7 @@ Render.drawBattle = function () {
     c.save();
     if (facing) { c.translate(p.x, 0); c.scale(-1, 1); c.translate(-p.x, 0); }
     if (u.shape === 'beast') this.drawBeast(p.x, p.y, u.look, 1.1, o);
-    else if (u.kind === 'char') this.drawFigure(p.x, p.y, u.look, 1.25, { ...o, weapon: (GD.CLASSES[u.cls] || {}).weapon || 'sword' });
+    else if (u.kind === 'char') this.drawFigure(p.x, p.y, u.look, u.squire ? 1.05 : 1.25, { ...o, weapon: (GD.CLASSES[u.cls] || {}).weapon || 'sword' });
     else {
       const look = { skin: u.look.skin || (u.shape === 'brute' ? '#7d8f72' : '#d8b08c'), hair: '#2a2a2a', tunic: u.look.color, race: u.shape === 'brute' ? 'orc' : 'human', stage: 'prime' };
       if (u.shape === 'wraith') { c.globalAlpha = 0.75; look.skin = '#c8d8f0'; look.tunic = u.look.color; }

@@ -64,8 +64,22 @@ function makeEnemyUnit(type, lvl, slot) {
 }
 
 function unitPos(u) {
+  // Squires stand in a distinct back row behind their assigned master (party side: lower gx).
+  if (u.squire) {
+    const master = u.masterUid ? Battle.units.find((x) => x.uid === u.masterUid) : null;
+    if (master && master.gx != null) {
+      return { gx: master.gx - 1.25, gy: master.gy + 0.08 };
+    }
+    // Fallback: shared back row behind the main party column
+    const mains = Battle.units.filter((x) => x.side === 'party' && !x.squire);
+    const n = mains.length || 1;
+    const off = (4 - n) * 0.6;
+    const i = Math.max(0, Battle.units.filter((x) => x.squire).indexOf(u));
+    return { gx: 0.55, gy: 0.6 + off + i * 1.2 };
+  }
   const col = u.side === 'party' ? 1.5 : 5.4;
-  const n = Battle.units.filter((x) => x.side === u.side).length;
+  // Front-line spacing ignores squires so they do not shove the main party.
+  const n = Battle.units.filter((x) => x.side === u.side && !x.squire).length;
   const off = (4 - n) * 0.6;
   return { gx: col + (u.side === 'party' ? (u.slot % 2) * -0.5 : (u.slot % 2) * 0.5), gy: 0.6 + off + u.slot * 1.2 };
 }
@@ -79,18 +93,21 @@ Battle.start = function (opts) {
   this.units = [];
   const partyChars = G.party.map(ch).filter((c) => c && c.alive);
   partyChars.forEach((c, i) => this.units.push(unitFromChar(c, 'party', i)));
-  // Squires enter combat beside their masters (AI-controlled, not a party slot).
+  // Squires enter combat behind their masters (AI-controlled, not a party slot).
   if (typeof Court !== 'undefined') {
-    let slot = partyChars.length;
     for (const { squire, master } of Court.squiresForBattle()) {
       const masterUnit = this.units.find((u) => u.charId === master.id);
-      const su = unitFromChar(squire, 'party', slot++, false, { squire: true, aiOnly: true, masterUid: masterUnit ? masterUnit.uid : null });
+      const su = unitFromChar(squire, 'party', masterUnit ? masterUnit.slot : 0, false, {
+        squire: true, aiOnly: true, masterUid: masterUnit ? masterUnit.uid : null,
+      });
       this.units.push(su);
     }
   }
   (opts.enemies || []).forEach((e, i) => this.units.push(e.charId ? e : makeEnemyUnit(e.type, e.lvl, i)));
   this.units.filter((u) => u.side === 'enemy').forEach((u, i) => { u.slot = i; });
-  this.units.forEach((u) => Object.assign(u, unitPos(u)));
+  // Place front line first so squires can anchor to master gx/gy.
+  this.units.filter((u) => !u.squire).forEach((u) => Object.assign(u, unitPos(u)));
+  this.units.filter((u) => u.squire).forEach((u) => Object.assign(u, unitPos(u)));
   this.queue = [];
   this.waiting = false;
   this.say(opts.intro || 'Enemies approach!');
