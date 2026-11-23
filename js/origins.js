@@ -221,7 +221,7 @@ const Origins = {
   },
 
   // Painted "photo" of the beginning: scene + founder vignette.
-  photo(mc, originId, w = 520, h = 280) {
+  photo(mc, originId, w = 520, h = 200) {
     const o = this.get(originId);
     const cv = document.createElement('canvas');
     const d = 2;
