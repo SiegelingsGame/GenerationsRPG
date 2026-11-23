@@ -67,6 +67,23 @@ GD.CLASSES = {
     growth: { agi: 0.5, str: 0.15 },
     skills: ['laySnare', 'venomBlade', 'caltrops'],
   },
+  noble: {
+    name: 'Noble', icon: '♔', weapon: 'banner', top: ['wil', 'vit'],
+    desc: 'A commander who rarely swings. Strategizes to send allies in, synchronizes strikes, and musters the line\'s focus.',
+    passive: 'Banner: allies begin every battle with +1 focus.',
+    mods: { atk: 0.85, def: 1.05, hp: 1.0, mag: 0.85, heal: 1.05, spd: 1.0 },
+    growth: { wil: 0.35, vit: 0.25 },
+    skills: ['synchronize', 'muster', 'coordinatedStrike'],
+  },
+  warlock: {
+    name: 'Warlock', icon: '⛧', weapon: 'orb', top: ['int'],
+    desc: 'Bound by a dark pact. Holds five focus from the first breath of battle, and spends it on ruinous spells.',
+    passive: 'Dark pact: always holds up to 5 focus, and begins every battle with it full.',
+    mods: { atk: 0.65, def: 0.75, hp: 0.85, mag: 1.55, heal: 0.7, spd: 1.05 },
+    growth: { int: 0.55, wil: 0.1 },
+    skills: ['hexbolt', 'soulfire', 'obliterate'],
+    maxFocus: 5,
+  },
 };
 
 // role tells the battle AI when to use it; target: enemy | enemies | ally | allies | self
@@ -97,6 +114,12 @@ GD.ABILITIES = {
   laySnare:       { name: 'Lay Snare',       cost: 2, target: 'enemies', role: 'trap',  anim: 'cast',  desc: 'Set a snare. Next round it springs: every enemy takes damage and is slowed for 2 rounds.' },
   venomBlade:     { name: 'Venom Blade',     cost: 2, target: 'enemy',   role: 'nuke',  anim: 'lunge', desc: 'A poisoned strike for 160% damage; the venom ticks for 3 rounds.' },
   caltrops:       { name: 'Caltrops',        cost: 3, target: 'enemies', role: 'aoe',   anim: 'cast',  desc: 'Scatter caltrops: hit every enemy for 75% damage and strip half their armour for 3 rounds.' },
+  synchronize:    { name: 'Synchronize Attack', cost: 2, target: 'ally', role: 'command', anim: 'cast', desc: 'An ally strikes a foe, then you follow up with a blow of your own.' },
+  muster:         { name: 'Muster',          cost: 2, target: 'allies',  role: 'rally', anim: 'cast',  desc: 'Every ally gains 2 focus (up to their limit).' },
+  coordinatedStrike: { name: 'Coordinated Strike', cost: 3, target: 'enemy', role: 'aoe', anim: 'cast', desc: 'Every other ally strikes the chosen foe in turn.' },
+  hexbolt:        { name: 'Hexbolt',         cost: 3, target: 'enemy',   role: 'nuke',  anim: 'cast',  desc: 'A heavy curse-bolt for 280% magic damage that marks the foe.' },
+  soulfire:       { name: 'Soulfire',        cost: 4, target: 'enemies', role: 'aoe',   anim: 'cast',  desc: 'Black fire on every enemy for 150% magic damage; strips half their armour.' },
+  obliterate:     { name: 'Obliterate',      cost: 5, target: 'enemy',   role: 'nuke',  anim: 'cast',  desc: 'Spend your full pact: 420% magic damage that ignores most armour.' },
 };
 // skills learned the old way (by stat) map onto abilities
 GD.LEGACY_SKILL = { str: 'cleave', agi: 'flurry', int: 'firebolt', wil: 'mend', vit: 'bulwark' };
@@ -112,9 +135,9 @@ function classFor(c) {
   const top = order[0];
   const pick = {
     str: R.chance(0.6) ? 'warrior' : 'berserker',
-    vit: R.chance(0.5) ? 'knight' : 'warrior',
-    int: 'sorcerer',
-    wil: R.chance(0.6) ? 'priest' : 'bard',
+    vit: R.chance(0.45) ? 'knight' : (R.chance(0.5) ? 'warrior' : 'noble'),
+    int: R.chance(0.55) ? 'sorcerer' : 'warlock',
+    wil: R.chance(0.4) ? 'priest' : (R.chance(0.5) ? 'bard' : 'noble'),
     agi: R.chance(0.45) ? 'ranger' : (R.chance(0.55) ? 'thief' : 'bard'),
   }[top];
   return (c.cls = pick);
@@ -132,6 +155,17 @@ function abilitiesOf(c) {
 // ---------------------------------------------------------------- abilities in battle
 Battle.st = function (u, k) { return (u.st && u.st[k] && u.st[k].t > 0) ? u.st[k] : null; };
 Battle.give = function (u, k, turns, v = 0) { u.st = u.st || {}; u.st[k] = { t: turns, v }; if (['shield','guard','riposte'].includes(k)) PackArt.emit('shield',u); else if (['atkUp','bloodlust'].includes(k)) PackArt.emit('buff',u); };
+Battle.maxFocus = function (u) {
+  if (!u) return 3;
+  const cl = u.cls && GD.CLASSES[u.cls];
+  return (cl && cl.maxFocus) || 3;
+};
+Battle.gainFocus = function (u, n = 1) {
+  if (!u) return 0;
+  const before = u.focus || 0;
+  u.focus = Math.min(this.maxFocus(u), before + n);
+  return u.focus - before;
+};
 Battle.tickStatus = function (u) {
   if (!u.st) return;
   // venom ticks at the start of the turn, then statuses count down
@@ -264,7 +298,7 @@ Battle.useAbility = function (u, id, t) {
     case 'prayer': { allies.forEach((a) => { this.healUnit(u, a, u.heal * 0.55); fx(a, '#fff3a0'); }); msg = `${u.name} prays, and the party is restored.`; break; }
     case 'smite': { const f = pickFoe(); const r = this.magic(u, f, 1.5 * (UNDEAD[f.type] ? 2 : 1)); this.damage(u, f, r.dmg, false); fx(f, '#fff3a0'); msg = `${u.name} smites ${f.name} for ${r.dmg}${UNDEAD[f.type] ? ', burning the unholy' : ''}.`; break; }
     case 'inspire': { allies.forEach((a) => { this.give(a, 'atkUp', 3, 0.25); label(a, 'Inspired', '#ffd76a'); }); msg = `${u.name} strikes up a war song. The party fights harder!`; break; }
-    case 'rally': { allies.forEach((a) => { a.focus = Math.min(3, a.focus + 1); this.healUnit(u, a, u.heal * 0.15); }); msg = `${u.name} rallies the party!`; break; }
+    case 'rally': { allies.forEach((a) => { this.gainFocus(a, 1); this.healUnit(u, a, u.heal * 0.15); }); msg = `${u.name} rallies the party!`; break; }
     case 'dissonance': { foes.forEach((f) => { const r = this.magic(u, f, 0.6); this.damage(u, f, r.dmg, false); this.give(f, 'defDown', 3); }); msg = `${u.name} plays a jarring chord; the enemy's guard falters.`; break; }
     case 'aimedShot': { const f = pickFoe(); const r = this.physical(u, f, 2.0, 0.25); this.damage(u, f, r.dmg, r.crit); msg = `${u.name} looses an Aimed Shot at ${f.name} for ${r.dmg}${r.crit ? ' (critical!)' : ''}.`; break; }
     case 'volley': { foes.forEach((f) => { const r = this.physical(u, f, 0.7); this.damage(u, f, r.dmg, r.crit); }); msg = `${u.name} looses a volley of arrows!`; break; }
@@ -303,25 +337,123 @@ Battle.useAbility = function (u, id, t) {
       msg = `${u.name} scatters caltrops; the enemy stumbles, exposed.`;
       break;
     }
+    case 'synchronize': {
+      const others = allies.filter((a) => a !== u);
+      const ally = (t && t.alive && t.side === u.side && t !== u) ? t : others.slice().sort((a, b) => b.atk - a.atk)[0];
+      const f = foes.find((x) => x.taunt > 0) || foes[0];
+      if (!ally || !f) { msg = `${u.name} finds no one to synchronize with.`; break; }
+      label(ally, 'Sync', '#ffd76a');
+      this.basicAttack(ally, f, { direct: true, quiet: true });
+      let follow = 0;
+      if (f.alive) {
+        const r = this.physical(u, f, 1.15);
+        this.damage(u, f, r.dmg, r.crit);
+        follow = r.dmg;
+      }
+      msg = follow
+        ? `${u.name} synchronizes with ${ally.name} — then strikes ${f.name} for ${follow}.`
+        : `${u.name} and ${ally.name} fell ${f.name} in one motion.`;
+      break;
+    }
+    case 'muster': {
+      allies.forEach((a) => {
+        const gained = this.gainFocus(a, 2);
+        if (gained) label(a, `+${gained} AP`, '#8fd3ff');
+        fx(a, '#8fd3ff');
+      });
+      msg = `${u.name} musters the line — focus surges through the party!`;
+      break;
+    }
+    case 'coordinatedStrike': {
+      const f = pickFoe();
+      if (!f) { msg = `${u.name} has no foe to coordinate against.`; break; }
+      const others = allies.filter((a) => a !== u);
+      others.forEach((a) => { if (f.alive) this.basicAttack(a, f, { direct: true, quiet: true }); });
+      label(f, 'Coordinated', '#ffd76a');
+      msg = others.length
+        ? `${u.name} orders a coordinated strike on ${f.name}!`
+        : `${u.name} calls for a coordinated strike, but stands alone.`;
+      break;
+    }
+    case 'hexbolt': {
+      const f = pickFoe();
+      const r = this.magic(u, f, 2.8);
+      this.damage(u, f, r.dmg, false);
+      this.give(f, 'mark', 3);
+      fx(f, '#7a3dff');
+      label(f, 'Hexed', '#b48aff');
+      msg = `${u.name} hurls a Hexbolt at ${f.name} for ${r.dmg}.`;
+      break;
+    }
+    case 'soulfire': {
+      foes.forEach((f) => {
+        const r = this.magic(u, f, 1.5);
+        this.damage(u, f, r.dmg, false);
+        this.give(f, 'defDown', 3);
+        fx(f, '#5a1a8a');
+      });
+      msg = `${u.name} unleashes Soulfire across the enemy line!`;
+      break;
+    }
+    case 'obliterate': {
+      const f = pickFoe();
+      const r = this.magic(u, f, 4.2);
+      // ignore most armour already via magic(); push a little more raw power
+      const bonus = Math.round(u.mag * 0.35);
+      const dmg = r.dmg + bonus;
+      this.damage(u, f, dmg, false);
+      fx(f, '#2a0840');
+      label(f, 'Obliterated', '#b48aff');
+      msg = `${u.name} spends the full pact — Obliterate hits ${f.name} for ${dmg}!`;
+      break;
+    }
     default: msg = `${u.name} hesitates.`;
   }
   u.vfxSkill = null;
   this.say(msg);
 };
-// how a unit's plain attack works (sorcerers throw arcane bolts)
-Battle.basicAttack = function (u, t) {
+// how a unit's plain attack works (nobles strategize; casters throw bolts)
+Battle.basicAttack = function (u, t, opts = {}) {
+  // Noble "Strategize": pick an ally to make a direct strike
+  if (u.cls === 'noble' && !opts.direct) {
+    const allies = this.alive(u.side).filter((a) => a !== u);
+    const ally = (t && t.alive && t.side === u.side && t !== u)
+      ? t
+      : allies.slice().sort((a, b) => b.atk - a.atk)[0];
+    const foes = this.alive(u.side === 'party' ? 'enemy' : 'party');
+    const foe = foes.find((f) => f.taunt > 0) || foes[0];
+    if (!ally || !foe) {
+      if (foe) {
+        const r = this.physical(u, foe, 0.7);
+        this.damage(u, foe, r.dmg, r.crit);
+        this.say(`${u.name} has no one to command, and cuts at ${foe.name} for ${r.dmg}.`);
+      }
+      return;
+    }
+    this.fx.push({ uid: ally.uid, text: 'Orders', color: '#ffd76a', t0: performance.now() });
+    this.say(`${u.name} strategizes — ${ally.name} advances on ${foe.name}!`);
+    this.basicAttack(ally, foe, { direct: true });
+    return;
+  }
+  if (u.cls === 'warlock') {
+    const r = this.magic(u, t, 1.35);
+    this.damage(u, t, r.dmg, false);
+    this.fx.push({ uid: t.uid, burst: '#7a3dff', t0: performance.now() });
+    if (!opts.quiet) this.say(`${u.name} looses a pact-bolt at ${t.name} for ${r.dmg}.`);
+    return;
+  }
   if (u.cls === 'sorcerer') {
     const r = this.magic(u, t, 0.95);
     this.damage(u, t, r.dmg, false);
     this.fx.push({ uid: t.uid, burst: '#b48aff', t0: performance.now() });
-    this.say(`${u.name} flings an arcane bolt at ${t.name} for ${r.dmg}.`);
+    if (!opts.quiet) this.say(`${u.name} flings an arcane bolt at ${t.name} for ${r.dmg}.`);
     return;
   }
   const r = this.physical(u, t, 1);
   this.damage(u, t, r.dmg, r.crit);
   this.leech(u, r.dmg);
   this.markAmbush(u);
-  this.say(`${u.name} strikes ${t.name} for ${r.dmg}${r.crit ? ' (critical!)' : ''}.`);
+  if (!opts.quiet) this.say(`${u.name} strikes ${t.name} for ${r.dmg}${r.crit ? ' (critical!)' : ''}.`);
 };
 // what an AI-controlled unit (enemy, or a party member on auto) chooses
 Battle.choose = function (u) {
@@ -343,7 +475,12 @@ Battle.choose = function (u) {
   const gd = has('guard'); if (gd.length && hurt.length && !friends.some((f) => this.st(f, 'guard'))) return { id: gd[0] };
   const bf = has('buff');
   if (bf.length && foes.length >= 2 && !friends.some((f) => this.st(f, 'atkUp') || this.st(f, 'bloodlust')) && R.chance(0.75)) return { id: bf[0] };
-  const ra = has('rally'); if (ra.length && friends.filter((f) => f.focus < 2).length >= 2 && R.chance(0.5)) return { id: ra[0] };
+  const ra = has('rally');
+  if (ra.length && friends.filter((f) => f.focus < this.maxFocus(f)).length >= 2 && R.chance(0.55)) return { id: pick(ra) };
+  const cmd = has('command');
+  if (cmd.length && friends.filter((f) => f !== u).length >= 1 && R.chance(0.65)) {
+    return { id: pick(cmd), t: friends.filter((f) => f !== u).slice().sort((a, b) => b.atk - a.atk)[0] };
+  }
   const mk = has('mark'); if (mk.length && !foes.some((f) => this.st(f, 'mark')) && R.chance(0.6)) return { id: mk[0], t: taunter || foes.slice().sort((a, b) => b.hp - a.hp)[0] };
   const tr = has('trap');
   if (tr.length && foes.length >= 2 && !(this.traps || []).some((t) => t.side === u.side) && R.chance(0.7)) return { id: pick(tr) };

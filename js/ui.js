@@ -500,14 +500,22 @@ UI.battleChanged = function () {
   if (Battle.waiting && u && u.side === 'party') {
     const cl = GD.CLASSES[u.cls];
     const st = Object.keys(u.st || {}).filter((k) => Battle.st(u, k)).map((k) => ({ atkUp: 'inspired', bloodlust: 'bloodlust', guard: 'guarded', defDown: 'exposed', slow: 'slowed', poison: 'venom', mark: 'marked', shield: `shield ${u.st.shield && u.st.shield.v}`, riposte: 'riposte' }[k])).filter(Boolean);
-    kids.push(h('p', {}, h('b', {}, `${u.name}'s turn`), h('br'), h('small', { class: 'dim' }, `${cl ? cl.icon + ' ' + cl.name + ' · ' : ''}Focus ${u.focus}/3${st.length ? ' · ' + st.join(', ') : ''}`)));
+    const focusMax = Battle.maxFocus(u);
+    kids.push(h('p', {}, h('b', {}, `${u.name}'s turn`), h('br'), h('small', { class: 'dim' }, `${cl ? cl.icon + ' ' + cl.name + ' · ' : ''}Focus ${u.focus}/${focusMax}${st.length ? ' · ' + st.join(', ') : ''}`)));
     if (this.targeting) {
-      kids.push(h('p', { class: 'dim' }, `Choose a target for ${this.targeting === 'skill' ? GD.ABILITIES[this.targetSkill].name : this.targeting}: tap the field or below.`));
+      const targetingLabel = this.targeting === 'skill'
+        ? GD.ABILITIES[this.targetSkill].name
+        : (this.targeting === 'attack' && u.cls === 'noble' ? 'Strategize' : this.targeting);
+      kids.push(h('p', { class: 'dim' }, `Choose a target for ${targetingLabel}: tap the field or below.`));
       const targets = Battle.units.filter((x) => this.validTarget(x));
       kids.push(...targets.map((x) => act(`${x.name} (${x.hp}/${x.maxHp})`, () => this.chooseTarget(x))));
       kids.push(act('Back', () => { this.targeting = null; this.battleChanged(); }));
     } else {
-      kids.push(act(u.cls === 'sorcerer' ? 'Arcane Bolt' : 'Attack', () => this.beginTarget('attack'), { sub: u.cls === 'sorcerer' ? 'magic that slips past armour' : null }));
+      const attackLabel = u.cls === 'sorcerer' ? 'Arcane Bolt' : u.cls === 'warlock' ? 'Pact Bolt' : u.cls === 'noble' ? 'Strategize' : 'Attack';
+      const attackSub = u.cls === 'sorcerer' ? 'magic that slips past armour'
+        : u.cls === 'warlock' ? 'a strong pact-bolt'
+        : u.cls === 'noble' ? 'command an ally to strike' : null;
+      kids.push(act(attackLabel, () => this.beginTarget('attack'), { sub: attackSub }));
       for (const id of u.abilities || []) {
         const A = GD.ABILITIES[id];
         if (!A) continue;
@@ -541,8 +549,11 @@ UI.beginTarget = function (kind) {
 UI.validTarget = function (x) {
   const u = Battle.cur;
   if (!u || !x.alive || !this.targeting) return false;
+  // Noble Strategize commands another living ally
+  if (this.targeting === 'attack' && u.cls === 'noble') return x.side === u.side && x !== u;
   const friendly = this.targeting === 'potion' || (this.targeting === 'skill' && GD.ABILITIES[this.targetSkill] && GD.ABILITIES[this.targetSkill].target === 'ally');
-  return friendly ? x.side === u.side : x.side !== u.side;
+  if (friendly) return x.side === u.side && !(this.targeting === 'skill' && this.targetSkill === 'synchronize' && x === u);
+  return x.side !== u.side;
 };
 UI.chooseTarget = function (x) {
   const kind = this.targeting;
@@ -694,7 +705,7 @@ UI.battleCharActions = function (c) {
       atkUp: 'inspired', bloodlust: 'bloodlust', guard: 'guarded', defDown: 'exposed',
       slow: 'slowed', poison: 'venom', mark: 'marked', shield: 'shielded', riposte: 'riposte',
     }[k] || k));
-    out.push(h('p', { class: 'dim' }, `In battle · ATK ${Math.round(u.atk)} · DEF ${Math.round(u.def)} · MAG ${Math.round(u.mag)} · Focus ${u.focus}/3`));
+    out.push(h('p', { class: 'dim' }, `In battle · ATK ${Math.round(u.atk)} · DEF ${Math.round(u.def)} · MAG ${Math.round(u.mag)} · Focus ${u.focus}/${Battle.maxFocus(u)}`));
     out.push(h('p', { class: 'dim' }, `HP ${Math.round(u.hp)}/${u.maxHp}${u.defending ? ' · guarding' : ''}${st.length ? ' · ' + st.join(', ') : ''}`));
     out.push(h('p', { class: 'dim' }, `Bonuses · +${Equip.bonus(c, 'atk')} atk · +${Equip.bonus(c, 'def')} def · +${Equip.bonus(c, 'mag')} mag`));
     if (u.alive && Battle.waiting && Battle.cur === u) {

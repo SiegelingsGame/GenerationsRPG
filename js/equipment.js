@@ -23,6 +23,8 @@ GD.CLASS_KIT = {
   knight:    { head: 'helm',  body: 'armor',   hand: 'lance', offhand: 'shield', feet: 'boots', neck: 'amulet', ring: 'ring' },
   ranger:    { head: 'hood',  body: 'leather', hand: 'bow',   offhand: null,     feet: 'boots', neck: 'amulet', ring: 'ring' },
   thief:     { head: 'hood',  body: 'leather', hand: 'dagger', offhand: null,    feet: 'boots', neck: 'amulet', ring: 'ring' },
+  noble:     { head: 'crown', body: 'armor',   hand: 'banner', offhand: null,    feet: 'boots', neck: 'amulet', ring: 'ring' },
+  warlock:   { head: 'crown', body: 'robe',    hand: 'orb',   offhand: null,     feet: 'shoes', neck: 'amulet', ring: 'ring' },
 };
 
 // Item kinds: slot, icon glyph, combat bonuses by tier (1–5), and display names.
@@ -49,6 +51,8 @@ GD.ITEM_KINDS = {
              atk: [2, 4, 7, 11, 16], def: [0, 0, 0, 0, 0], mag: [0, 0, 0, 0, 0] },
   dagger:  { slot: 'hand', icon: 'sword', weapon: 'dagger', names: ['Iron Dagger', 'Steel Dagger', 'Fine Dagger', 'Masterwork Dagger', 'Mythril Dagger'],
              atk: [2, 4, 7, 11, 16], def: [0, 0, 0, 0, 0], mag: [0, 0, 0, 0, 0] },
+  banner:  { slot: 'hand', icon: 'sword', weapon: 'banner', names: ['House Pennant', 'War Banner', 'Fine Standard', 'Masterwork Banner', 'Heirloom Banner'],
+             atk: [1, 2, 3, 5, 7], def: [0, 1, 1, 2, 3], mag: [0, 0, 1, 1, 2] },
   staff:   { slot: 'hand', icon: 'staff', weapon: 'staff', names: ['Oak Staff', 'Ash Staff', 'Runed Staff', 'Archstaff', 'Star Staff'],
              atk: [1, 2, 3, 4, 6], def: [0, 0, 0, 0, 0], mag: [2, 4, 7, 11, 16] },
   orb:     { slot: 'hand', icon: 'staff', weapon: 'orb', names: ['Glass Orb', 'Crystal Orb', 'Arcane Orb', 'Master Orb', 'Void Orb'],
@@ -213,7 +217,7 @@ Equip.slotLabel = function (c, slot) {
   const names = {
     helm: 'Helm', crown: 'Crown', hood: 'Hood',
     armor: 'Armour', robe: 'Robes', leather: 'Leather',
-    blade: 'Blade', axe: 'Axe', lance: 'Lance', bow: 'Bow', dagger: 'Dagger', staff: 'Staff', orb: 'Orb', lute: 'Lute',
+    blade: 'Blade', axe: 'Axe', lance: 'Lance', bow: 'Bow', dagger: 'Dagger', banner: 'Banner', staff: 'Staff', orb: 'Orb', lute: 'Lute',
     shield: 'Shield', boots: 'Boots', shoes: 'Shoes', amulet: 'Amulet', ring: 'Ring',
   };
   return names[kind] || GD.EQ_SLOTS[slot].name;
