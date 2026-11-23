@@ -51,11 +51,11 @@ const WorldArt = {
     if(world.seed==null)world.seed=R.int(1,2e9);
     if(!world.assetSites)world.assetSites={};
     for(const t of world.map.tiles) {
-      if(!['town','estate','ruins','camp'].includes(t.feature))continue;
+      if(!['town','estate','ruins','camp','dens'].includes(t.feature))continue;
       const key=`${t.x},${t.y}`,seed=this.hash(world.seed||812,t.x*8191+t.y*131);
       if(!world.assetSites[key]) {
         const theme=['market','garden','scholars','homestead'][seed%4];
-        const pool=t.feature==='ruins'?[5,6,7]:t.feature==='camp'?[0,1,7]:theme==='garden'?[4,7,4]:theme==='scholars'?[2,0,6]:[0,1,7,4];
+        const pool=t.feature==='ruins'?[5,6,7]:t.feature==='camp'||t.feature==='dens'?[0,1,7]:theme==='garden'?[4,7,4]:theme==='scholars'?[2,0,6]:[0,1,7,4];
         world.assetSites[key]={seed,theme,props:Array.from({length:3+seed%3},(_,i)=>({id:pool[this.hash(seed,i+1)%pool.length],dx:(i%2?1:-1)*(.48+(i%3)*.19),dy:-.3+Math.floor(i/2)*.35}))};
       }
     }

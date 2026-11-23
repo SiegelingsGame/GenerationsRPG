@@ -11,9 +11,10 @@ test('nearby town prompt enters streets or opens working quick tasks on mobile',
   const prompt=p.locator('#location-prompt');await prompt.waitFor({state:'visible'});
   await prompt.getByRole('button',{name:'Pass through',exact:true}).click();
   await p.getByRole('button',{name:/^Market/}).click();
-  await p.getByRole('button',{name:/^Buy Potion/}).waitFor();
-  assert.equal(await p.evaluate(()=>UI.modalStack.length),1);
-  await p.evaluate(()=>UI.closeAll());
+  await p.locator('.interior-view').waitFor();
+  assert.equal(await p.evaluate(()=>TownInterior.open&&TownInterior.kind==='market'),true);
+  await p.getByRole('button',{name:/Browse gear|Talk to Stall/}).first().waitFor();
+  await p.evaluate(()=>{TownInterior.close(true);UI.closeAll();});
   await prompt.getByRole('button',{name:'Enter',exact:true}).click();
   await p.locator('.townview').waitFor();
   assert.equal(await p.evaluate(()=>TownView.open),true);

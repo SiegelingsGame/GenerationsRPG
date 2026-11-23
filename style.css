@@ -312,10 +312,16 @@ p.small { font-size: 12px; }
 .ax-era { background: #8fd3ff; border: 2px solid #1d4566; }
 .legend { display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--dim); }
 .legend span { position: relative; transform: none; top: 0; }
-.quest { margin-top: 14px; border: 1px solid #5a4210; background: rgba(230, 192, 106, 0.06); border-radius: 6px; padding: 8px 10px; }
+.quest-stack { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+.quest { border: 1px solid #5a4210; background: rgba(230, 192, 106, 0.06); border-radius: 6px; padding: 8px 10px; }
 .quest h4 { margin-top: 0; }
 .quest p { margin: 4px 0; }
 .quest small { display: block; }
+.quest.dens-quest { border-color: #5a3020; background: rgba(180, 90, 50, 0.08); margin-top: 6px; }
+.quest.dens-quest.side { border-color: #4a4030; background: rgba(140, 120, 70, 0.07); }
+.dens-block > h4 { margin-bottom: 4px; }
+.interior-view, .densview { z-index: 11; }
+.interior-view .camp-ui, .densview .camp-ui { z-index: 2; }
 .k-quest .ltext, .k-ward .ltext { color: var(--gold); }
 #topbar { overflow-x: auto; }
 

@@ -525,7 +525,7 @@ Render.drawFeature = function (t) {
   if (t.feature === 'ruins') this.drawRuins(p, t.cleared);
   if (t.feature === 'spire') this.drawSpire(p);
   if (t.feature === 'shrine') this.drawShrine(p, t.lit);
-  if (t.feature === 'camp' || t.feature === 'cave' || t.feature === 'mine') Events.drawFeature(this, t, p);
+  if (t.feature === 'camp' || t.feature === 'cave' || t.feature === 'mine' || t.feature === 'dens') Events.drawFeature(this, t, p);
 };
 
 Render.drawPalm = function (x, y, s) {

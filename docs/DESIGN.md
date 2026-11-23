@@ -211,16 +211,23 @@ The land goes through **eras**, each 6–15 years long:
 - **Sound:** an optional fire crackle.
 
 **Entering a town (first person):** *Enter Town* walks you into a street drawn in perspective. Its size, mood and light follow the town and the era: banners and smoke in war, thin stalls in famine, a distant keep in cities.
-- Tap the **Tavern**, **Market**, **Inn** or **Notice Board** (deeds for the realm and the current prophecy task) to use them.
-- **Residents:** the town's actual residents stand in the street. Tap one to hear them speak in their own voice (lineage, grudges, traits, the era, how the people of this era see your House), then recruit, court, propose, research their lineage, or **ask for news**.
+- Tap the **Tavern**, **Market**, **Inn** or **Notice Board** (deeds for the realm and the current prophecy task). Named buildings open **first-person interiors** (room scene, clickable host/patrons) matching the street view controls — talk, recruit, trade or rest from that view rather than a sheet-only flow.
+- **Residents:** the town's actual residents stand in the street and inside interiors. Tap one to hear them speak in their own voice (lineage, grudges, traits, the era, how the people of this era see your House), then recruit, court, propose, research their lineage, or **ask for news**.
 - **Rumors:** *Buy rumors* (a round of drinks) gives intel that changes what you know. It can:
-  - reveal hidden bandit camps and caves
+  - reveal hidden bandit camps, caves and dens
   - tell you which way the current task lies
   - report where rivals are
   - expose someone's secret lineage
   - tip you off to who fancies you
   - hint at inventions to come, or how other towns are faring
-- The quick town options stay in the side panel for speed.
+- The quick town options stay in the side panel for speed and also open the FP interiors.
+
+### Dens (nests over the timeline)
+
+- At world spawn, **one dens** is placed near the estate as a **main quest** (*Seal the Nest*): enter in first person, delve chambers, clear the brood in combat for prestige, gold and prosperity.
+- **Yearly / era progression:** additional dens can spawn (capped by estate tier and era hardness). Growing dens spill monsters onto nearby roads (ambushes and map threats).
+- **Side quests** (unlock via dens travel, spill events, or tavern news): hunt a dens pack on the road; rescue a traveler near a dens; gather dens trophies for a town contact.
+- Quest list / goals surface the dens main quest and any discovered side hooks.
 
 ## 7d. The living map
 
@@ -294,5 +301,16 @@ Implemented in the playable concept (`index.html`):
 - [x] Save/load (browser storage)
 
 - [x] Equipment slots and inventory try-on: class kits choose armour or robes, helms or crowns, blades/staves/bows, boots or shoes; house stash; Kasaya UI frames
+- [x] Dens vertical slice: starter main dens quest on map, yearly dens spawn (capped), FP dens delve + combat clear, ≥2 side hooks (hunt / rescue / trophies), quest list surfacing
+- [x] First-person interiors for inn, tavern and market with host/NPC talk and trade from FP
+
+### Follow-ons (dens / interiors)
+
+- [ ] More enterable FP spaces (shrine, barracks/estate rooms, notice-hall chamber)
+- [ ] Dens multi-room crawl with traps/treasure parity to caves; dens-specific enemy art
+- [ ] Living dens war-bands on the map (like bandit parties) that hunt caravans
+- [ ] Authored dens story beats per era; dens tied into doom wards
+- [ ] Deeper trader inventory UI fully inside FP (no gear modal fallback)
+- [ ] Mobile polish pass for interior hotspots and dens chamber transitions
 
 Future work: authored quests and story events, more enemy and skill variety, rival houses with politics, sprite art, music, and a balance pass.

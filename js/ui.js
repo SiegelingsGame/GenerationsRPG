@@ -302,9 +302,9 @@ UI.townPanel = function (t) {
     h('h3', {}, town.name), h('p', { class: 'dim' }, `${GD.TOWN_SIZES[town.size]} · founded ${town.founded}`),
     act('Enter Town', () => TownView.start(t), { cls: 'hl', sub: 'walk the streets, talk to people, hear rumors' }),
     h('p', { class: 'dim' }, `${this.townPeople(t.townIdx).length} people of note live here. Quick options:`),
-    act('Tavern', () => this.showTavern(t.townIdx), { sub: 'recruit, court, lineage' }),
-    act('Market', () => this.showMarket(), { sub: 'gear & potions' }),
-    act('Rest at the Inn', () => Game.inn(), { sub: '10g · 7 days · heal', disabled: G.house.gold < 10 }),
+    act('Tavern', () => TownInterior.start('tavern', t.townIdx), { sub: 'first-person · recruit, court' }),
+    act('Market', () => TownInterior.start('market', t.townIdx), { sub: 'first-person · gear & potions' }),
+    act('Rest at the Inn', () => TownInterior.start('inn', t.townIdx), { sub: 'first-person · 10g · heal' }),
     h('h4', {}, 'Deeds for the Realm', deedDone ? h('small', {}, ' (done this year)') : null),
     ...deeds,
   ];
@@ -316,13 +316,16 @@ UI.townPeople = function (idx) {
 UI.questBox = function () {
   const d = G.world.doom;
   const q = d.quest;
-  return h('div', { class: 'quest' },
-    h('h4', {}, `The Prophecy · ${Math.max(0, doomYearsLeft())} years left`),
-    q ? [h('b', {}, q.title), h('p', { class: 'small' }, q.desc),
-      q.type === 'rally' ? h('small', { class: 'dim' }, `${q.progress.length}/${q.count} towns: ${q.progress.join(', ') || 'none yet'}`) : null,
-      q.x != null ? h('small', { class: 'dim' }, `Marked on the map with a gold ◆.${!reachable(tileAt(q.x, q.y)) ? ' You need boats to reach it.' : ''}`) : null]
-      : h('p', { class: 'dim small' }, 'No task yet.'),
-    h('small', { class: 'dim' }, `Wards ${d.wards}/${GD.WARDS_NEEDED} · the Black Spire waits`));
+  const densRows = (typeof Dens !== 'undefined') ? Dens.questRows() : [];
+  return h('div', { class: 'quest-stack' },
+    h('div', { class: 'quest' },
+      h('h4', {}, `The Prophecy · ${Math.max(0, doomYearsLeft())} years left`),
+      q ? [h('b', {}, q.title), h('p', { class: 'small' }, q.desc),
+        q.type === 'rally' ? h('small', { class: 'dim' }, `${q.progress.length}/${q.count} towns: ${q.progress.join(', ') || 'none yet'}`) : null,
+        q.x != null ? h('small', { class: 'dim' }, `Marked on the map with a gold ◆.${!reachable(tileAt(q.x, q.y)) ? ' You need boats to reach it.' : ''}`) : null]
+        : h('p', { class: 'dim small' }, 'No task yet.'),
+      h('small', { class: 'dim' }, `Wards ${d.wards}/${GD.WARDS_NEEDED} · the Black Spire waits`)),
+    densRows.length ? h('div', { class: 'quest dens-block' }, h('h4', {}, 'Dens & Wild Quests'), ...densRows) : null);
 };
 UI.spirePanel = function () {
   const d = G.world.doom;
@@ -559,20 +562,7 @@ UI.charActions = function (c) {
 
 // ---------------------------------------------------------------- town screens
 UI.showTavern = function (idx) {
-  const people = this.townPeople(idx).filter(isAdult).sort((a, b) => b.level - a.level);
-  const kids = this.townPeople(idx).filter((c) => !isAdult(c));
-  const mc = ch(G.mcId);
-  const body = h('div', {},
-    WorldArt.room('tavern', WorldArt.seedHere()),
-    h('p', { class: 'dim' }, 'Adventurers, wanderers and locals. Click someone to see their lineage, court them or recruit them.'),
-    h('div', { class: 'grid' }, people.map((c) => this.miniCard(c, () => this.replaceModalChar(c), [
-      h('small', {}, `${hireCost(c)}g`),
-      c.parents.some((p) => ch(p) && (ch(p).status === 'party' || ch(p).status === 'household' || ch(p).house === G.house.name)) ? h('small', { class: 'good' }, 'Child of a companion') : null,
-      mc && bond(c, mc) > 20 ? h('small', { class: 'good' }, `Bond ${Math.round(bond(c, mc))}`) : null,
-    ]))),
-    kids.length ? h('p', { class: 'dim' }, `Children in town: ${kids.map((k) => `${k.name} (${ageStr(k)}, ${GD.RACES[k.race].name})`).join(', ')}`) : null,
-  );
-  this.modal(body, { title: `Tavern of ${G.world.towns[idx].name}`, wide: true });
+  TownInterior.start('tavern', idx);
 };
 UI.replaceModalChar = function (c) { this.modal(this.charBody(c), { title: c.name, wide: true, onclose: () => { } }); };
 
@@ -587,28 +577,8 @@ UI.miniCard = function (c, onclick, extra = []) {
 };
 
 UI.showMarket = function () {
-  Equip.loadUi();
-  Equip.ensureHouse();
-  const maxTier = Math.min(GD.GEAR.length, 2 + G.house.up.armory + Math.floor(G.house.tier / 2));
-  const party = G.party.map(ch);
-  const rows = [];
-  rows.push(WorldArt.room('market', WorldArt.seedHere()));
-  rows.push(h('div', { class: 'row' }, act('Buy Potion', () => { Game.buyPotion(); this.closeModal(); this.showMarket(); }, { sub: `25g · you have ${G.house.potions}`, disabled: G.house.gold < 25 })));
-  rows.push(h('p', { class: 'dim' }, 'Smiths stock armour or robes, helms or crowns, blades or staves — whatever your class can wear.'));
-  for (const c of party) {
-    const kit = Equip.kitFor(c);
-    rows.push(h('div', { class: 'market-char' },
-      h('div', { class: 'row' }, portrait(c, 44), h('div', {}, h('b', {}, c.name), h('small', { class: 'dim' }, ` · ${classOf(c).icon} ${classOf(c).name}`))),
-      h('div', { class: 'eq-offers' }, Equip.marketOffers(c, maxTier).map((offer) =>
-        act(offer.item.name, () => { Game.buyEquipOffer(c, offer); this.closeModal(); this.showMarket(); }, {
-          sub: `${offer.cost}g · ${Equip.itemDesc(offer.item)} · ${Equip.slotLabel(c, offer.slot)}`,
-          disabled: G.house.gold < offer.cost,
-        }))),
-      act('Try on / equip', () => { this.closeModal(); this.showInventory(c); }, { sub: 'open inventory with this character' }),
-    ));
-  }
-  rows.push(h('p', { class: 'dim' }, `Gear up to tier ${maxTier}. An armory and a bigger estate unlock better smiths. House stash: ${G.house.stash.length} item${G.house.stash.length === 1 ? '' : 's'}.`));
-  this.modal(rows, { title: 'Market', wide: true });
+  const idx = tileAt(G.pos.x, G.pos.y).townIdx;
+  TownInterior.start('market', idx != null ? idx : 0);
 };
 
 // ---------------------------------------------------------------- inventory try-on & equipment screens

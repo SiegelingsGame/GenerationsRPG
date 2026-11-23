@@ -56,7 +56,7 @@ function regionLevel(x, y, bonus = 0) {
 Living.go = function (tile, agent) { return this.goPoint({ x: tile.x, y: tile.y }, agent); };
 Living.goPoint = function (pt, agent) {
   LocationPrompt.pending = null;
-  if (!this.ensure() || Battle.active || UI.modalStack.length || TownView.open || Campfire.open) return;
+  if (!this.ensure() || Battle.active || UI.modalStack.length || TownView.open || TownInterior.open || DensView.open || Campfire.open) return;
   if (!LS.ensure()) return;
   // snap onto places of note
   const t = tileAt(clamp(Math.round(pt.x), 0, G.world.map.W - 1), clamp(Math.round(pt.y), 0, G.world.map.H - 1));
@@ -92,7 +92,7 @@ Living.daysPerUnit = function (x, y) {
 Living.frame = function (ts) {
   const dt = Math.min(0.05, Math.max(0, (ts - (this.lastTs || ts)) / 1000));
   this.lastTs = ts;
-  if (!this.moving || !G || G.mode !== 'world' || Battle.active || UI.modalStack.length || TownView.open || Campfire.open || Game.busy) return;
+  if (!this.moving || !G || G.mode !== 'world' || Battle.active || UI.modalStack.length || TownView.open || TownInterior.open || DensView.open || Campfire.open || Game.busy) return;
   if (!this.ensure() || !LS.ensure()) return;
   if (this.targetId) {
     const ag = G.world.parties.find((x) => x.id === this.targetId);
