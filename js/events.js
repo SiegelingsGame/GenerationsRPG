@@ -1,8 +1,11 @@
 // Things that happen on the road: traders, ambushes, people in need, mines, caves and bandit camps,
-// plus the campfire, seen through the eyes of the head of House.
+// roadside first-person scenes, plus the campfire, seen through the eyes of the head of House.
 'use strict';
 
 const Events = {};
+
+/** Encounter kinds that open RoadView (first-person roadside) instead of a modal frame. */
+Events.FP_KINDS = new Set(['stranded', 'shrine', 'omen', 'wedding']);
 
 // ---------------------------------------------------------------- helpers
 function bestStat(k) {
@@ -44,10 +47,19 @@ Events.vignette = function (kind, tile) {
       Render.drawBox(420, 128, 1.4, 0.8, 22, '#8a6a45', '#c8b08c', 14);
       c.fillStyle = '#3a2a1a'; c.beginPath(); c.arc(395, 130, 8, 0, Math.PI * 2); c.arc(450, 132, 8, 0, Math.PI * 2); c.fill();
       npc(360, '#6a4c93', { beard: true });
-    } else if (kind === 'needy' || kind === 'child') {
-      npc(380, '#7b6a52'); if (kind === 'child') npc(420, '#5a7a8a', { stage: 'child', gender: R.chance(0.5) ? 'man' : 'woman' }); else { npc(415, '#6b5a4a', { gender: 'woman', hs: 'long' }); npc(450, '#4a5a6a', { stage: 'child' }); }
-    } else if (kind === 'wanderer' || kind === 'prospect') {
-      npc(400, kind === 'prospect' ? '#6a4c93' : '#3f6b3a', { weapon: kind === 'prospect' ? undefined : 'staff', gender: R.chance(0.5) ? 'woman' : 'man', hs: 'long' });
+    } else if (kind === 'needy' || kind === 'child' || kind === 'stranded') {
+      npc(380, '#7b6a52'); if (kind === 'child') npc(420, '#5a7a8a', { stage: 'child', gender: R.chance(0.5) ? 'man' : 'woman' }); else { npc(415, '#6b5a4a', { gender: 'woman', hs: 'long' }); if (kind === 'needy') npc(450, '#4a5a6a', { stage: 'child' }); }
+    } else if (kind === 'wanderer' || kind === 'prospect' || kind === 'scout') {
+      npc(400, kind === 'prospect' ? '#6a4c93' : kind === 'scout' ? '#4a2a3a' : '#3f6b3a', { weapon: kind === 'prospect' ? undefined : 'sword', gender: R.chance(0.5) ? 'woman' : 'man', hs: 'long' });
+    } else if (kind === 'shrine' || kind === 'omen') {
+      c.fillStyle = '#8a867a'; c.fillRect(400, 70, 18, 70); c.fillRect(385, 70, 48, 10);
+      if (kind === 'omen') { c.fillStyle = 'rgba(200,220,255,0.55)'; c.beginPath(); c.arc(409, 55, 22, 0, Math.PI * 2); c.fill(); }
+      npc(360, '#5a6a7a', { gender: 'woman', hs: 'long' });
+    } else if (kind === 'wedding') {
+      npc(360, '#c8b070', { gender: 'man', hs: 'short' }); npc(400, '#d8c8e0', { gender: 'woman', hs: 'long' }); npc(450, '#6a8a5a');
+    } else if (kind === 'ruin' || kind === 'dens_spill') {
+      if (kind === 'ruin') { c.fillStyle = '#6a655e'; c.fillRect(380, 70, 40, 70); c.fillRect(430, 90, 50, 50); c.fillStyle = '#3a3834'; c.fillRect(392, 95, 14, 22); }
+      else { npc(380, '#3a4a2a', { weapon: 'sword' }); npc(440, '#4a2a2a', { weapon: 'sword' }); }
     } else if (kind === 'mine' || kind === 'cave') {
       c.fillStyle = '#5a5550'; c.beginPath(); c.moveTo(330, 140); c.lineTo(380, 60); c.lineTo(470, 52); c.lineTo(540, 140); c.closePath(); c.fill();
       c.fillStyle = '#0c0a0e'; c.beginPath(); c.ellipse(440, 125, 28, 32, 0, Math.PI, 0); c.fill(); c.fillRect(412, 125, 56, 15);
@@ -65,26 +77,41 @@ Events.vignette = function (kind, tile) {
 };
 
 // ---------------------------------------------------------------- rolling events on the road
-Events.roll = function (tile) {
+/** Weight table for road encounters. Exported for tests / balance tooling. */
+Events.weights = function (tile) {
   const E = G.world.era.type;
   const hard = E === 'war' || E === 'famine';
   const good = E === 'peace' || E === 'abundance' || E === 'golden';
   const t = tile.type;
   const nearCamp = campsList().find((cp) => Math.abs(cp.x - tile.x) + Math.abs(cp.y - tile.y) <= 4);
+  const nearRuin = G.world.map.tiles.some((x) => x.feature === 'ruins' && Math.abs(x.x - tile.x) + Math.abs(x.y - tile.y) <= 5);
   const mc = ch(G.mcId);
-  const w = {
-    ambush: 3 * era().enc * (nearCamp ? 1.8 : 1),
-    trader: (good ? 2.4 : hard ? 0.8 : 1.6) * (['swamp', 'snow'].includes(t) ? 0.5 : 1),
-    needy: hard ? 2.4 : 1.2,
-    child: 0.35,
-    wanderer: 0.7,
-    mine: ['hills', 'mountain', 'desert'].includes(t) ? 1.4 : 0,
-    cave: ['hills', 'mountain', 'forest', 'jungle', 'snow'].includes(t) ? 1.2 : 0.3,
-    camp: ['forest', 'hills', 'grass', 'swamp', 'jungle'].includes(t) && !nearCamp ? (hard ? 1.4 : 0.5) : 0,
+  // Traders used to dominate peaceful grassland rolls (trader ~2.4 vs ambush ~1.8). Cut traders hard;
+  // raise ambushes, charity beats, dens-adjacent spills, and the new roadside variety.
+  return {
+    ambush: 4.2 * era().enc * (nearCamp ? 1.9 : 1),
+    trader: (good ? 0.55 : hard ? 0.28 : 0.4) * (['swamp', 'snow'].includes(t) ? 0.5 : 1),
+    needy: hard ? 2.8 : 1.75,
+    child: 0.7,
+    wanderer: 1.05,
+    mine: ['hills', 'mountain', 'desert'].includes(t) ? 1.5 : 0,
+    cave: ['hills', 'mountain', 'forest', 'jungle', 'snow'].includes(t) ? 1.25 : 0.35,
+    camp: ['forest', 'hills', 'grass', 'swamp', 'jungle'].includes(t) && !nearCamp ? (hard ? 1.7 : 0.95) : 0,
+    stranded: 1.35,
+    shrine: 1.05,
+    ruin: nearRuin ? 1.6 : 0.85,
+    wedding: good ? 1.15 : hard ? 0.25 : 0.65,
+    omen: hard ? 1.15 : 0.85,
+    scout: 1.05,
+    dens_spill: ['forest', 'hills', 'jungle', 'swamp', 'mountain'].includes(t) ? 1.35 : 0.45,
     // Remarriage prospect: only when the head is widowed (monogamy: no living spouse).
     prospect: (mc && isWidowed(mc)) ? (good ? 1.6 : 1.1) : 0,
   };
-  const kind = R.weighted(w);
+};
+
+Events.roll = function (tile) {
+  const nearCamp = campsList().find((cp) => Math.abs(cp.x - tile.x) + Math.abs(cp.y - tile.y) <= 4);
+  const kind = R.weighted(this.weights(tile));
   return { kind, tile, camp: nearCamp };
 };
 
@@ -101,6 +128,7 @@ Events.frame = function (kind, tile, title, text, options) {
 };
 Events.done = function (msg, kind = 'good') {
   UI.closeAll();
+  if (typeof RoadView !== 'undefined' && RoadView.open) RoadView.close(true);
   if (msg) { Log.add(msg, kind); UI.toast(msg); }
   Game.after();
 };
@@ -263,6 +291,137 @@ Events.ev_prospect = function (ev) {
       }),
       act('Ride on alone', () => this.done('You leave them on the road.', 'dim')),
     ]);
+};
+
+// ---------------------------------------------------------------- new roadside variety (several open first-person RoadView)
+Events.ev_stranded = function (ev) {
+  const mc = ch(G.mcId);
+  const c = spawnWanderer(nearestTown(ev.tile.x, ev.tile.y) ? G.world.towns.indexOf(nearestTown(ev.tile.x, ev.tile.y)) : randomTownIdx());
+  c.orientKnown = true;
+  const town = G.world.towns[c.town];
+  RoadView.start({
+    kind: 'stranded',
+    tile: ev.tile,
+    title: 'A Stranded Traveler',
+    intro: `A traveler sits by a broken cart. Mud cakes their boots. They look up as you approach.`,
+    npc: { name: c.name, look: figLook(c), line: `"${town ? town.name : 'The next town'} is still a day's walk, and my mule threw a shoe. Will you help?"` },
+    choices: [
+      { label: 'Help mend the cart', sub: '4 days · prestige', run: () => { advanceDays(4); G.house.prestige += Math.round(2 * repMult()); addBond(c, mc, 20); recordChoice('charity', 0.5, mc.id); chron(`${mc.name} helped ${c.name}, stranded on the road.`, 'good', [mc.id, c.id], 'deed'); RoadView.close(() => this.done()); } },
+      { label: 'Share coin and food', sub: '20g', disabled: () => G.house.gold < 20, run: () => { G.house.gold -= 20; addProsperity(0.5); G.house.prestige += 1; addBond(c, mc, 15); recordChoice('charity', 0.4, mc.id); RoadView.close(() => this.done(`${c.name} blesses House ${G.house.name}.`)); } },
+      { label: 'Offer a place in the House', disabled: () => householdCount() >= GD.ESTATE[G.house.tier].household, run: () => { c.status = G.party.length < 4 ? 'party' : 'household'; if (c.status === 'party') G.party.push(c.id); c.servedHouse = true; c.loyalty += 20; chron(`${c.name} joined after ${mc.name} found them stranded.`, 'good', [c.id], 'join'); RoadView.close(() => this.done()); } },
+      { label: 'Ride on', dim: true, run: () => { recordChoice('charity', -0.3, mc.id); RoadView.close(() => this.done('You leave them with the broken cart.', 'dim')); } },
+    ],
+  });
+};
+
+Events.ev_shrine = function (ev) {
+  const mc = ch(G.mcId);
+  const lit = R.chance(0.35);
+  RoadView.start({
+    kind: 'shrine',
+    tile: ev.tile,
+    title: lit ? 'A Roadside Vigil' : 'A Cold Wayside Shrine',
+    intro: lit
+      ? 'Candles gutter in a stone niche. A few pilgrims keep a quiet vigil for the lost.'
+      : 'An old shrine leans by the road. The niche is empty; the stone is cold under your palm.',
+    npc: { name: lit ? 'A pilgrim' : 'The shrine', look: { skin: '#d9a77e', hair: '#6a5a4a', tunic: '#5a6a7a', race: 'human', stage: 'elder', gender: 'woman', hairStyle: 'long' }, line: lit ? '"Light a candle with us. The dead hear those who remember."' : 'Dust and lichen. Someone carved a name here long ago — too worn to read.' },
+    choices: [
+      { label: lit ? 'Keep vigil with them' : 'Kneel and pray', sub: '1 day · clear a little corruption', run: () => { advanceDays(1); G.party.map(ch).forEach((c) => { if (c) { c.corruption = Math.max(0, c.corruption - 8); addFormative(c, 0.5); } }); G.house.prestige += 1; recordChoice('charity', 0.3, mc.id); RoadView.close(() => this.done('A quiet peace settles on the party.')); } },
+      { label: 'Leave an offering', sub: '15g', disabled: () => G.house.gold < 15, run: () => { G.house.gold -= 15; addProsperity(0.4); G.house.prestige += 1; if (G.house.heirloom) G.house.heirloom.power += R.chance(0.15) ? 1 : 0; RoadView.close(() => this.done('The offering sits in the niche. The wind stills for a moment.')); } },
+      { label: 'Pass without stopping', dim: true, run: () => RoadView.close(() => this.done('You ride past the shrine.', 'dim')) },
+    ],
+  });
+};
+
+Events.ev_ruin = function (ev) {
+  const mc = ch(G.mcId);
+  const ruins = G.world.map.tiles.filter((t) => t.feature === 'ruins' && Math.abs(t.x - ev.tile.x) + Math.abs(t.y - ev.tile.y) <= 8);
+  const target = ruins.length ? R.pick(ruins) : null;
+  const whisper = R.pick([
+    'a hollow crown under broken arches',
+    'bones that still remember marching',
+    'a door that opens only for the worthy',
+    'gold sealed behind a ward of ash',
+  ]);
+  this.frame('ruin', ev.tile, 'A Whisper of Ruins', `A shepherd by the road speaks low: travelers dream of ${whisper}${target ? `, somewhere near ${questPlace(target)}` : ''}.`, [
+    target ? act('Mark the ruins on your map', () => { target.known = true; this.done(`You fix the place in mind. The ruins wait.`); }, { sub: 'reveals a nearby ruin' }) : null,
+    act('Ask what else they know', () => {
+      G.house.gold = Math.max(0, G.house.gold);
+      if (R.chance(0.4)) { G.house.potions++; UI.toast('They press a dusty vial into your hand.'); }
+      else addProsperity(0.3);
+      this.done('You listen. Half of it is superstition. Half of it might save your life.');
+    }, { sub: 'rumors · maybe a potion' }),
+    act('Ride on', () => this.done()),
+  ].filter(Boolean));
+};
+
+Events.ev_wedding = function (ev) {
+  const mc = ch(G.mcId);
+  const a = R.pick(['Miren', 'Tallo', 'Sera', 'Bram', 'Liora', 'Odric']);
+  const b = R.pick(['Joss', 'Elowen', 'Hart', 'Nima', 'Cale', 'Ryn']);
+  RoadView.start({
+    kind: 'wedding',
+    tile: ev.tile,
+    title: 'A Wedding on the Road',
+    intro: `Ribbons in the hedges. A small wedding party blocks the lane — ${a} and ${b}, hand in hand, laughing.`,
+    npc: { name: `${a} & ${b}`, look: { skin: '#d9a77e', hair: '#2a1a10', tunic: '#d8c8e0', race: 'human', stage: 'youth', gender: 'woman', hairStyle: 'long' }, line: `"Share a cup with us! The road is kinder when strangers bless a joining."` },
+    choices: [
+      { label: 'Bless the marriage', sub: '10g · prestige, prosperity', disabled: () => G.house.gold < 10, run: () => { G.house.gold -= 10; G.house.prestige += Math.round(2 * repMult()); addProsperity(0.8); recordChoice('charity', 0.4, mc.id); chron(`${mc.name} blessed a roadside wedding of ${a} and ${b}.`, 'good', [mc.id], 'deed'); RoadView.close(() => this.done()); } },
+      { label: 'Dance a while', sub: '2 days · bonds', run: () => { advanceDays(2); G.party.map(ch).forEach((c) => { if (c) { addFormative(c, 0.5); c.loyalty = clamp(c.loyalty + 2, -100, 100); } }); RoadView.close(() => this.done('Music and dust. You leave smiling.')); } },
+      { label: 'Wish them well and ride on', dim: true, run: () => RoadView.close(() => this.done()) },
+    ],
+  });
+};
+
+Events.ev_omen = function (ev) {
+  const mc = ch(G.mcId);
+  const left = doomYearsLeft();
+  RoadView.start({
+    kind: 'omen',
+    tile: ev.tile,
+    title: 'A Spirit Flicker',
+    intro: 'The air thins. A pale flicker drifts above the road — not quite a bird, not quite a flame.',
+    npc: { name: 'The flicker', look: null, line: left < 200 ? `A whisper without a mouth: "${left} winters… then the Hollow King."` : 'It circles once, as if measuring your bloodline, then waits.' },
+    choices: [
+      { label: 'Reach toward it', sub: 'formative · a little corruption risk', run: () => {
+        G.party.map(ch).forEach((c) => { if (c) addFormative(c, 1); });
+        if (R.chance(0.35)) { mc.corruption = Math.min(100, (mc.corruption || 0) + 6); UI.toast('A chill settles behind your eyes.'); }
+        else if (G.house.heirloom) { G.house.heirloom.power += R.chance(0.2) ? 1 : 0; }
+        RoadView.close(() => this.done('The flicker dissolves into daylight.'));
+      } },
+      { label: 'Ward it off', sub: 'INT check', run: () => {
+        const r = check('int', 8);
+        if (r.ok) { G.party.map(ch).forEach((c) => { if (c) c.corruption = Math.max(0, c.corruption - 5); }); RoadView.close(() => this.done(`${r.c.name} speaks a ward. The road feels ordinary again.`)); }
+        else { const v = R.pick(G.party.map(ch).filter(Boolean)); if (v) v.hp = Math.max(1, Math.round(v.hp - maxHp(v) * 0.15)); RoadView.close(() => this.done('The flicker lashes out and is gone.', 'dim')); }
+      } },
+      { label: 'Avert your eyes and ride on', dim: true, run: () => RoadView.close(() => this.done('You do not look back.', 'dim')) },
+    ],
+  });
+};
+
+Events.ev_scout = function (ev) {
+  const mc = ch(G.mcId);
+  const house = R.pick(['Ashfeld', 'Redmere', 'Venn', 'Thornwall', 'Kalder', 'Mossbank']);
+  const hostile = R.chance(0.4);
+  this.frame('scout', ev.tile, 'A Rival House Scout', `You catch a scout of House ${house} watching the road from a stand of trees. ${hostile ? 'Their hand rests on a blade.' : 'They raise an empty palm.'}`, [
+    act('Parley', () => {
+      if (hostile && R.chance(0.35)) { UI.closeAll(); return Game.battle(buildEncounter(ev.tile, { count: 2 }), { kind: 'wild', title: `House ${house}`, intro: `The scout signals. Blades come out!` }); }
+      G.house.prestige += 1;
+      this.done(`You exchange careful words. House ${house} will remember the courtesy — or the slight you withheld.`);
+    }, { sub: hostile ? 'may turn into a fight' : 'prestige' }),
+    act('Drive them off', () => { UI.closeAll(); Game.battle([{ type: 'bandit', lvl: Math.max(1, Math.round(partyLevel())) }, { type: 'raider', lvl: Math.max(1, Math.round(partyLevel())) }], { kind: 'wild', title: `Scout of ${house}`, after: (res) => { if (res.outcome === 'victory') { G.house.prestige += 2; recordChoice('martial', 0.4, mc.id); chron(`${mc.name} drove off a scout of House ${house}.`, 'good', [mc.id], 'deed'); } } }); }, { cls: 'danger' }),
+    act('Let them slip away', () => { recordChoice('martial', -0.15, mc.id); this.done(`The scout melts into the trees. House ${house} still watches.`, 'dim'); }),
+  ]);
+};
+
+Events.ev_dens_spill = function (ev) {
+  const mc = ch(G.mcId);
+  const pack = R.pick(['wolves', 'boars', 'something with too many teeth']);
+  this.frame('dens_spill', ev.tile, 'Beasts on the Road', `Tracks and torn brush. A dens nearby has spilled ${pack} onto the road. Fresh blood on the grass.`, [
+    act('Hunt them down', () => { UI.closeAll(); Game.battle(buildEncounter(ev.tile, { count: R.int(2, 4) }), { kind: 'wild', title: 'Dens Spill', intro: `The pack turns on you!`, after: (res) => { if (res.outcome === 'victory') { G.house.prestige += 2; addProsperity(0.8); recordChoice('martial', 0.5, mc.id); chron(`${mc.name}'s party cleared a dens spill on the road.`, 'good', [mc.id], 'deed'); } } }); }, { cls: 'danger', sub: 'combat' }),
+    act('Warn the nearest town', () => { const town = nearestTown(ev.tile.x, ev.tile.y); advanceDays(town ? 6 : 3); G.house.prestige += 1; addProsperity(0.5); recordChoice('charity', 0.3, mc.id); this.done(town ? `${town.name} bars its gates and posts a watch.` : 'You raise the alarm where you can.'); }, { sub: '6 days · prestige' }),
+    act('Cut around and ride on', () => this.done('You leave the hunting grounds to the beasts.', 'dim')),
+  ]);
 };
 
 // ---------------------------------------------------------------- mines
@@ -777,4 +936,158 @@ Campfire.toggleSound = function () {
     this.sound = { ctx };
   } catch (e) { UI.toast('Sound is not available here.'); }
   this.renderButtons();
+};
+
+// ---------------------------------------------------------------- roadside first-person (lightweight RoadView)
+const RoadView = { open: false, el: null, cv: null };
+
+RoadView.start = function (scene) {
+  if (this.open) this.close(true);
+  UI.closeAll();
+  this.open = true;
+  this.scene = scene;
+  this.talked = false;
+  this.hover = false;
+  this.tile = scene.tile || tileAt(G.pos.x, G.pos.y);
+  this.cv = h('canvas', { class: 'camp-canvas' });
+  this.box = h('div', { class: 'camp-say' });
+  this.btns = h('div', { class: 'camp-btns' });
+  this.el = h('div', { class: 'roadview', 'data-kind': scene.kind || '' }, this.cv, h('div', { class: 'camp-ui road-ui' }, this.box, this.btns));
+  document.body.append(this.el);
+  this.cv.addEventListener('click', () => this.talk());
+  this.cv.addEventListener('mousemove', (e) => {
+    const hit = this.hitNpc(e);
+    this.hover = hit;
+    this.cv.style.cursor = hit ? 'pointer' : 'default';
+  });
+  this.setSay(scene.intro || '');
+  this.renderButtons();
+  const loop = (ts) => { if (!this.open) return; this.t = ts; try { this.draw(); } catch (err) { console.error(err); } requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+};
+
+RoadView.close = function (silentOrThen) {
+  if (!this.open) {
+    if (typeof silentOrThen === 'function') silentOrThen();
+    return;
+  }
+  this.open = false;
+  if (this.el) this.el.remove();
+  this.el = null;
+  this.scene = null;
+  UI.refresh();
+  if (typeof silentOrThen === 'function') silentOrThen();
+  else if (silentOrThen !== true) Game.after();
+};
+
+RoadView.setSay = function (text, who) {
+  const name = who || (this.scene && this.scene.npc && this.scene.npc.name);
+  this.box.replaceChildren(...[name ? h('div', {}, h('b', {}, name), h('p', {}, text)) : h('p', {}, text)].filter(Boolean));
+};
+
+RoadView.renderButtons = function () {
+  const choices = (this.scene && this.scene.choices) || [];
+  this.btns.replaceChildren(
+    ...choices.map((chc) => h('button', {
+      class: 'camp-btn' + (chc.dim ? ' leave' : ''),
+      disabled: typeof chc.disabled === 'function' ? !!chc.disabled() : !!chc.disabled,
+      onclick: () => { if (chc.run) chc.run(); },
+    }, chc.label, chc.sub ? h('small', {}, ' · ' + chc.sub) : null)),
+  );
+};
+
+RoadView.talk = function () {
+  if (!this.scene || !this.scene.npc) return;
+  this.talked = true;
+  this.setSay(this.scene.npc.line || '…', this.scene.npc.name);
+};
+
+RoadView.hitNpc = function (e) {
+  if (!this.scene || !this.scene.npc) return false;
+  const r = this.cv.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const nx = this.cv.clientWidth * 0.55, ny = this.cv.clientHeight * 0.62;
+  return Math.abs(mx - nx) < 50 && my < ny + 10 && my > ny - 120;
+};
+
+RoadView.draw = function () {
+  const cv = this.cv;
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  if (!W || !H) return;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const kind = (this.scene && this.scene.kind) || 'stranded';
+  const t = (this.t || 0) / 1000;
+  const biome = GD.BIOMES[this.tile.type] || GD.BIOMES.grass;
+  const hz = H * 0.48;
+  const dusk = kind === 'omen' || kind === 'shrine';
+  const sky = c.createLinearGradient(0, 0, 0, hz);
+  if (kind === 'omen') { sky.addColorStop(0, '#1a1e38'); sky.addColorStop(1, '#6a5a78'); }
+  else if (kind === 'shrine') { sky.addColorStop(0, '#3a4a68'); sky.addColorStop(1, '#c4b08a'); }
+  else if (kind === 'wedding') { sky.addColorStop(0, '#6f9ccc'); sky.addColorStop(1, '#f0e0b0'); }
+  else { sky.addColorStop(0, dusk ? '#4a5a78' : '#5b7ea8'); sky.addColorStop(1, '#c9b48a'); }
+  c.fillStyle = sky; c.fillRect(0, 0, W, hz + 2);
+  // distant hills
+  c.fillStyle = shade(biome.top, -0.35);
+  c.beginPath(); c.moveTo(0, hz);
+  for (let x = 0; x <= W; x += 24) c.lineTo(x, hz - 18 - Math.sin(x * 0.02) * 14 - ((x / 40) % 3) * 6);
+  c.lineTo(W, hz); c.closePath(); c.fill();
+  // road
+  const road = c.createLinearGradient(0, hz, 0, H);
+  road.addColorStop(0, shade(biome.top, -0.15)); road.addColorStop(1, shade(biome.top, -0.4));
+  c.fillStyle = road; c.fillRect(0, hz, W, H - hz);
+  c.fillStyle = 'rgba(80,70,55,0.45)';
+  c.beginPath(); c.moveTo(W * 0.35, hz); c.lineTo(W * 0.18, H); c.lineTo(W * 0.82, H); c.lineTo(W * 0.65, hz); c.closePath(); c.fill();
+  // scene props
+  if (kind === 'shrine' || kind === 'omen') {
+    const sx = W * 0.62, sy = hz + 20;
+    c.fillStyle = '#8a867a'; c.fillRect(sx - 10, sy - 90, 20, 100);
+    c.fillRect(sx - 28, sy - 95, 56, 12);
+    if (kind === 'shrine') {
+      for (let i = 0; i < 3; i++) {
+        c.fillStyle = `rgba(255,180,80,${0.5 + Math.sin(t * 4 + i) * 0.3})`;
+        c.beginPath(); c.arc(sx - 14 + i * 14, sy - 78, 3, 0, Math.PI * 2); c.fill();
+      }
+    }
+    if (kind === 'omen') {
+      const ox = W * 0.45 + Math.sin(t) * 18, oy = hz * 0.35 + Math.cos(t * 1.3) * 10;
+      c.fillStyle = `rgba(210,230,255,${0.35 + Math.sin(t * 3) * 0.2})`;
+      c.beginPath(); c.ellipse(ox, oy, 28, 36, 0, 0, Math.PI * 2); c.fill();
+      c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.ellipse(ox, oy, 10, 14, 0, 0, Math.PI * 2); c.fill();
+    }
+  }
+  if (kind === 'wedding') {
+    c.fillStyle = '#c8a060';
+    for (let i = 0; i < 5; i++) { c.fillRect(W * 0.25 + i * 28, hz - 40, 4, 40); c.fillStyle = i % 2 ? '#d86070' : '#e8d080'; c.beginPath(); c.moveTo(W * 0.25 + i * 28 - 8, hz - 40); c.lineTo(W * 0.25 + i * 28 + 2, hz - 58); c.lineTo(W * 0.25 + i * 28 + 12, hz - 40); c.fill(); c.fillStyle = '#c8a060'; }
+  }
+  if (kind === 'stranded') {
+    c.fillStyle = '#6a4a28'; c.fillRect(W * 0.68, hz + 40, 70, 28); c.fillRect(W * 0.7, hz + 20, 8, 24); c.fillRect(W * 0.78, hz + 18, 8, 26);
+    c.fillStyle = '#3a2a1a'; c.beginPath(); c.arc(W * 0.7, hz + 70, 10, 0, Math.PI * 2); c.arc(W * 0.82, hz + 70, 10, 0, Math.PI * 2); c.fill();
+  }
+  // NPC figure(s)
+  const saved = Render.ctx; Render.ctx = c;
+  try {
+    const nx = W * 0.55, ny = H * 0.72;
+    const sc = Math.min(1.6, H / 420);
+    if (kind === 'wedding') {
+      Render.drawFigure(nx - 36, ny, { skin: '#d9a77e', hair: '#2a1a10', tunic: '#c8b070', race: 'human', stage: 'youth', gender: 'man', hairStyle: 'short' }, sc, {});
+      Render.drawFigure(nx + 10, ny, { skin: '#d9a77e', hair: '#3a2a1a', tunic: '#d8c8e0', race: 'human', stage: 'youth', gender: 'woman', hairStyle: 'long' }, sc, {});
+    } else if (kind === 'omen') {
+      // spirit only — drawn above
+    } else if (this.scene && this.scene.npc && this.scene.npc.look) {
+      Render.drawFigure(nx, ny, this.scene.npc.look, sc, {});
+    } else {
+      Render.drawFigure(nx, ny, { skin: '#d9a77e', hair: '#3a2a1a', tunic: '#7b6a52', race: 'human', stage: 'prime', gender: 'man', hairStyle: 'short' }, sc, {});
+    }
+    if (this.hover && kind !== 'omen') {
+      c.fillStyle = '#f2ead8'; c.font = '14px Georgia, serif'; c.textAlign = 'center';
+      c.fillText((this.scene.npc && this.scene.npc.name) || 'Talk', nx, ny - 70 * sc);
+    }
+  } finally { Render.ctx = saved; }
+  // soft vignette
+  const vg = c.createRadialGradient(W / 2, H * 0.55, H * 0.2, W / 2, H * 0.55, Math.max(W, H) * 0.7);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(10,8,14,0.45)');
+  c.fillStyle = vg; c.fillRect(0, 0, W, H);
 };

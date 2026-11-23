@@ -379,18 +379,23 @@ p.small { font-size: 12px; }
 .town-ui { background: linear-gradient(transparent, rgba(12, 10, 8, 0.9) 28%); }
 .town-ui .camp-say small { font-weight: normal; }
 
-.campfire, .townview { padding-top: env(safe-area-inset-top, 0px); }
+/* roadside first-person encounters */
+.roadview { position: fixed; inset: 0; z-index: 30; background: #15131c; display: flex; flex-direction: column; }
+.road-ui { background: linear-gradient(transparent, rgba(12, 10, 8, 0.88) 28%); }
+.road-ui .camp-btn small { display: inline; font-size: 12px; opacity: 0.75; font-weight: normal; }
+
+.campfire, .townview, .roadview { padding-top: env(safe-area-inset-top, 0px); }
 
 /* iPhone home-screen apps lay the page out shorter than the screen (by --xb, measured in ui.js).
    Stretch every full-screen layer down to the real bottom edge. */
 :root { --xb: 0px; }
 @media (max-width: 900px) {
-  #game, #backdrop, .modal-wrap, .campfire, .townview { bottom: calc(0px - var(--xb)); }
+  #game, #backdrop, .modal-wrap, .campfire, .townview, .roadview { bottom: calc(0px - var(--xb)); }
   #drawer { bottom: calc(0px - var(--xb)); }
   #sheet { bottom: calc(0px - var(--xb)); }
   #menuBtn { bottom: calc(10px + env(safe-area-inset-bottom, 0px) - var(--xb)); }
 }
-.campfire, .townview { bottom: calc(0px - var(--xb)); }
+.campfire, .townview, .roadview { bottom: calc(0px - var(--xb)); }
 
 /* living map encounter cards */
 .enc-danger { margin: 0 0 6px; font-weight: bold; }
@@ -409,7 +414,7 @@ button.act.ability { border-left: 3px solid var(--accent); }
 /* phones: every full-screen layer is exactly the real screen tall, and the bottom controls sit down
    in the home-bar area instead of leaving it empty */
 @media (max-width: 900px) {
-  #game, #backdrop, #drawer, .modal-wrap, .campfire, .townview { top: 0; bottom: auto; height: var(--appH, 100%); }
+  #game, #backdrop, #drawer, .modal-wrap, .campfire, .townview, .roadview { top: 0; bottom: auto; height: var(--appH, 100%); }
   #menuBtn { bottom: calc(max(8px, env(safe-area-inset-bottom, 0px) - 10px) - var(--xb)); }
   #log { bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) - 12px)); right: 108px; }
   #sheet { bottom: calc(0px - var(--xb)); padding-bottom: max(6px, calc(env(safe-area-inset-bottom, 0px) - 10px)); }

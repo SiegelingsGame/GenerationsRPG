@@ -191,12 +191,19 @@ The land goes through **eras**, each 6–15 years long:
 
 ## 7c. The road and the campfire
 
-**Road events:** a step through the wilds can turn up any of these, weighted by biome and era (traders in peace, refugees in war and famine, mines in hills and desert):
-- **Traders:** cheap potions, gear, tonics that permanently raise a stat, and maps that reveal caves and mines.
+**Road events:** a step through the wilds can turn up any of these, weighted by biome and era (ambushes and people in need rise in hard eras; traders are uncommon; mines in hills and desert). Weights live in `Events.weights` — traders are deliberately a small share so the road feels varied.
+- **Traders:** cheap potions, gear, tonics that permanently raise a stat, and maps that reveal caves and mines (low weight so they no longer dominate).
 - **Ambushes**, which come more often near bandit camps.
 - **People in need:** a cart in the mud, refugees, starving families, a wounded traveler who may join you, wolves at a farm. Helping raises prestige and prosperity and pushes the culture toward charity. Sometimes it's a ruse.
 - **Lost children**, who can be adopted, taken to a town, or left behind (and remember it).
 - **Wanderers** who ask to join.
+- **Stranded traveler (first person):** a broken cart and a clickable NPC in `RoadView` — help, share coin, recruit, or ride on.
+- **Roadside shrine / vigil (first person):** pray, leave an offering, or pass; clears a little corruption.
+- **Ruin whisper:** a shepherd tips you to nearby ruins (marks them) or shares dusty rumors.
+- **Wedding party (first person):** bless, dance, or ride past a roadside joining.
+- **Omen / spirit flicker (first person):** reach toward a pale omen, ward it off, or avert your eyes.
+- **Rival House scout:** parley, fight, or let them slip away.
+- **Dens spill:** beasts from a nearby dens on the road — hunt, warn a town, or cut around.
 - **Mines:** working one takes 20 days and pays gold based on STR. Cave-ins can injure, and the seam runs out.
 - **Caves and dungeons:** a crawl of several rooms. Fights can be sneaked past with AGI, chests may be trapped, there are traps to beat with AGI or INT, healing springs, altars that strengthen the heirloom, and a boss at the end.
 
@@ -318,5 +325,6 @@ Implemented in the playable concept (`index.html`):
 
 - [x] Equipment slots and inventory try-on: class kits choose armour or robes, helms or crowns, blades/staves/bows, boots or shoes; house stash; Kasaya UI frames
 - [x] Mobile Here/Menu split, grouped place actions, and news popups for births, marriages, deaths, income and eras
+- [x] Road encounter variety: trader weight cut; stranded / shrine / wedding / omen first-person `RoadView`; ruin whisper, rival scout, dens spill
 
 Future work: authored quests and story events, more enemy and skill variety, rival houses with politics, sprite art, music, and a balance pass.
