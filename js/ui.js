@@ -204,11 +204,13 @@ UI.renderParty = function () {
   $('#party').replaceChildren(
     h('div', { class: 'ptitle' }, 'Party'),
     ...party.map((c) => {
-      const u = bu && bu.find((x) => x.charId === c.id);
+      const u = bu && bu.find((x) => x.charId === c.id && !x.squire);
       const hp = u ? u.hp : c.hp, mhp = u ? u.maxHp : maxHp(c);
       const stage = stageKey(c);
       const life = age(c) / c.lifespan;
-      return h('div', { class: 'pcard' + (c.id === G.mcId ? ' mc' : '') + (u && !u.alive ? ' fallen' : '') + (Battle.cur && u === Battle.cur ? ' active' : ''), onclick: () => this.showChar(c) },
+      const squire = typeof Court !== 'undefined' ? Court.squireOf(c.id) : null;
+      const su = squire && bu ? bu.find((x) => x.squire && x.charId === squire.id) : null;
+      const card = h('div', { class: 'pcard' + (c.id === G.mcId ? ' mc' : '') + (u && !u.alive ? ' fallen' : '') + (Battle.cur && u === Battle.cur ? ' active' : ''), onclick: () => this.showChar(c) },
         portrait(c, 52),
         h('div', { class: 'pinfo' },
           h('div', { class: 'pname' }, c.id === G.mcId ? '♛ ' : '', c.name, h('span', { class: 'lvl' }, `L${c.level}`)),
@@ -217,6 +219,19 @@ UI.renderParty = function () {
           h('div', { class: 'psub' }, `HP ${Math.round(hp)}/${mhp} · XP ×${xpMod(c).toFixed(2)}`),
           h('div', { class: 'lifebar', title: 'Lifespan used (estimate)' }, h('div', { style: `width:${clamp(life * 100, 0, 100)}%`, class: 'st-' + stage })),
         ));
+      if (!squire || !squire.alive) return card;
+      const shp = su ? su.hp : squire.hp, smhp = su ? su.maxHp : maxHp(squire);
+      const nest = h('div', {
+        class: 'psquire' + (su && !su.alive ? ' fallen' : '') + (Battle.cur && su === Battle.cur ? ' active' : ''),
+        onclick: (e) => { e.stopPropagation(); this.showChar(squire); },
+      },
+        portrait(squire, 28),
+        h('div', { class: 'pinfo' },
+          h('div', { class: 'pname' }, squire.name, h('span', { class: 'lvl' }, `L${squire.level}`)),
+          h('div', { class: 'psub' }, `Squire of ${c.name}`),
+          bar(shp, smhp, 'hp'),
+        ));
+      return h('div', { class: 'pcard-wrap' }, card, nest);
     }),
     this.heirBox(),
   );
@@ -269,12 +284,14 @@ UI.estatePanel = function () {
   const unmarried = !spouseOf(mc);
   return [
     h('h3', {}, `${GD.ESTATE[hs.tier].name} of House ${hs.name}`),
-    h('p', { class: 'dim' }, `Income ${Math.round(GD.ESTATE[hs.tier].income * era().income + hs.up.livestock * 40)}g a year. Household ${householdCount()}/${GD.ESTATE[hs.tier].household}. Retinue ${hs.retinue}.`),
+    h('p', { class: 'dim' }, `Income ${Math.round(GD.ESTATE[hs.tier].income * era().income + hs.up.livestock * 40)}g a year. Household ${householdCount()}/${GD.ESTATE[hs.tier].household}. Court ${Court.list().length}/${Court.courtCap()}. Retinue ${hs.retinue}.`),
     act('Rest a season', () => Game.rest(90), { sub: '90 days · heal everyone' }),
     act('Train a season', () => Game.train(), { sub: '90 days · XP for the party' }),
     act('Let a year pass', () => Game.rest(360), { sub: '360 days · watch your family grow' }),
     act('Improve the Estate', () => this.showEstate(), { sub: 'tiers, upgrades, retinue' }),
     act('Household & Heir', () => this.showHousehold(), { sub: 'party, children, succession' }),
+    act('Retainer Court', () => this.showCourt(), { sub: `${Court.list().length}/${Court.courtCap()} · summon companions later` }),
+    act('Orphanage', () => this.showOrphanage(), { sub: `${Court.orphans().length}/${Court.orphanCap()} · wards grow here` }),
     act('Armory & Inventory', () => this.showInventory(ch(G.mcId)), { sub: 'try on armour, robes, helms, weapons' }),
     unmarried ? act('Arranged Match', () => Game.arrangedMatch(), { sub: 'choose 1 of 3 partners', cls: 'hl' }) : null,
     act('Adopt a Child', () => this.showAdoption(), { sub: 'give an orphan a family and a name' }),
@@ -452,6 +469,10 @@ UI.charBody = function (c) {
     c.evil ? h('span', { class: 'tag bad' }, 'Rival') : null,
     c.id === G.mcId ? h('span', { class: 'tag good' }, 'Head of House') : null,
     c.id === G.heirId ? h('span', { class: 'tag good' }, 'Heir') : null,
+    c.status === 'court' ? h('span', { class: 'tag' }, 'Court') : null,
+    c.status === 'orphanage' ? h('span', { class: 'tag' }, 'Orphanage') : null,
+    c.role === 'ward' ? h('span', { class: 'tag good' }, `Ward${c.masterId && ch(c.masterId) ? ' of ' + ch(c.masterId).name : ''}`) : null,
+    c.role === 'squire' ? h('span', { class: 'tag good' }, `Squire${c.masterId && ch(c.masterId) ? ' of ' + ch(c.masterId).name : ''}`) : null,
     !c.alive ? h('span', { class: 'tag dim' }, 'Deceased') : null,
   ];
   let lineage;
@@ -551,9 +572,37 @@ UI.charActions = function (c) {
   }
   if (c.house === G.house.name && c.birth === 'bastard' && !c.legit) out.push(act('Legitimise', () => { Game.legitimise(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '10 prestige', disabled: G.house.prestige < 10 }));
   if (c.house === G.house.name && isDescendantOf(c, mc.id) && G.heirId !== c.id) out.push(act('Name as Heir', () => { G.heirId = c.id; chron(`${c.name} is named heir of House ${G.house.name}.`, 'good', [c.id], 'heir'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }));
-  if (atEstate && (c.status === 'household') && isAdult(c)) out.push(act('Add to Party', () => { Game.toParty(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { disabled: G.party.length >= 4 }));
-  if (atEstate && c.status === 'party') out.push(act('Leave at Estate', () => { Game.toHousehold(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }));
-  if ((c.status === 'party' || c.status === 'household') && !c.house) out.push(act('Dismiss', () => { Game.dismiss(c); this.closeModal(); }, { cls: 'danger' }));
+  if (atEstate && (c.status === 'household' || c.status === 'court') && isAdult(c)) {
+    out.push(act('Add to Party', () => { Game.toParty(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { disabled: G.party.length >= PARTY_CAP, sub: c.status === 'court' ? 'summon from court' : null }));
+  }
+  if (atEstate && c.status === 'party' && c.id !== mc.id) {
+    out.push(act('Leave at Estate', () => { Game.toHousehold(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }));
+    out.push(act('Send to Court', () => { Game.toCourt(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: 'live at court · summon later' }));
+  }
+  if (atEstate && c.status === 'household' && c.id !== mc.id) {
+    out.push(act('Send to Court', () => { Game.toCourt(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }));
+  }
+  if (atEstate && c.status === 'court') {
+    out.push(act('Summon to Party', () => { Game.summonFromCourt(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { cls: 'hl', disabled: G.party.length >= PARTY_CAP }));
+  }
+  // Wards & squires
+  if (atEstate && c.alive && c.id !== mc.id) {
+    if (!isAdult(c) && c.role !== 'ward') {
+      out.push(act('Take as Ward', () => { Game.takeAsWard(c, mc); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: 'camp help · no combat' }));
+    }
+    if ((isAdult(c) || age(c) >= GD.RACES[c.race].maturity - 4) && c.role !== 'squire') {
+      out.push(act('Take as Squire', () => { Game.takeAsSquire(c, mc); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: 'fights on your turn · vulnerable' }));
+    }
+    if (c.role === 'ward' || c.role === 'squire') {
+      out.push(act('Release ward/squire', () => { Game.clearRetainerRole(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }));
+    }
+    if (c.status === 'npc' && !isAdult(c) && (c.orphaned || c.parents.every((p) => !ch(p) || !ch(p).alive))) {
+      out.push(act('Take into Orphanage', () => { Game.takeIntoOrphanage(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }));
+    }
+  }
+  if ((c.status === 'party' || c.status === 'household' || c.status === 'court') && c.id !== mc.id && !c.house) {
+    out.push(act('Dismiss', () => { Game.dismiss(c); this.closeModal(); }, { cls: 'danger' }));
+  }
   return out;
 };
 
@@ -790,13 +839,51 @@ UI.showInventory = function (c, tryId) {
 UI.showAdoption = function () {
   const list = Game.adoptables();
   this.modal([
-    h('p', { class: 'dim' }, 'Orphans and foundlings of the realm. An adopted child carries your House name, can be named heir, and inherits the House legacy, but not your blood.'),
+    h('p', { class: 'dim' }, 'Orphans and foundlings of the realm. An adopted child carries your House name, can be named heir, and inherits the House legacy, but not your blood. You can also raise them in the Orphanage as wards.'),
     h('div', { class: 'grid' }, list.map((k) => this.miniCard(k, () => { }, [
       h('small', {}, `${bodyText(k)}${k.condition ? ' · ' + GD.CONDITIONS[k.condition].name : ''}`),
       k.foundling ? h('small', { class: 'dim' }, 'A foundling: lineage unknown') : null,
       act('Adopt (40g)', () => { this.closeAll(); Game.adopt(k); }, { disabled: G.house.gold < 40 }),
+      act('Orphanage', () => { this.closeAll(); Game.takeIntoOrphanage(k); }, { sub: 'raise them · adopt later', disabled: !Court.canTakeOrphan() }),
     ]))),
   ], { title: 'Adopt a Child', wide: true });
+};
+
+UI.showCourt = function () {
+  Court.ensure();
+  const list = Court.list();
+  const body = h('div', {},
+    h('p', { class: 'dim' }, `Retainers beyond the party of ${PARTY_CAP} live here. They marry, age, and may die like anyone else. Summon them when you have room.`),
+    h('p', {}, `Court ${list.length}/${Court.courtCap()} · Estate ${GD.ESTATE[G.house.tier].name}`),
+    list.length ? h('div', { class: 'grid' }, list.map((c) => this.miniCard(c, () => this.replaceModalChar(c), [
+      c.role === 'squire' ? h('small', { class: 'good' }, `Squire of ${ch(c.masterId)?.name || '?'}`) : null,
+      c.role === 'ward' ? h('small', { class: 'good' }, `Ward of ${ch(c.masterId)?.name || '?'}`) : null,
+      act('Summon', () => { Game.summonFromCourt(c); this.closeModal(); this.showCourt(); }, { cls: 'hl', disabled: G.party.length >= PARTY_CAP || (!isAdult(c) && c.role !== 'squire') }),
+      act('Inspect', () => this.replaceModalChar(c)),
+    ]))) : h('p', { class: 'dim' }, 'The court is empty. Recruit beyond your party limit and they will wait here.'),
+  );
+  this.modal(body, { title: 'Retainer Court', wide: true });
+};
+
+UI.showOrphanage = function () {
+  Court.ensure();
+  const list = Court.orphans();
+  const body = h('div', {},
+    h('p', { class: 'dim' }, 'Children under the House roof grow traits and formative years here. When they come of age they may join the court, leave, or be adopted into the bloodline. Wards help at camp; squires fight beside their master.'),
+    h('p', {}, `Orphanage ${list.length}/${Court.orphanCap()}`),
+    list.length ? h('div', { class: 'grid' }, list.map((k) => this.miniCard(k, () => this.replaceModalChar(k), [
+      h('small', {}, `${Math.ceil(GD.RACES[k.race].maturity - age(k))} yrs to adulthood`),
+      k.trait ? h('small', {}, GD.TRAITS[k.trait].name) : h('small', { class: 'dim' }, 'Personality still forming'),
+      k.role === 'ward' ? h('small', { class: 'good' }, `Ward of ${ch(k.masterId)?.name || '?'}`) : null,
+      act('Adopt (40g)', () => { Game.adoptFromOrphanage(k); this.closeModal(); this.showOrphanage(); }, { disabled: G.house.gold < 40 }),
+      act('Take as Ward', () => { Game.takeAsWard(k); this.closeModal(); this.showOrphanage(); }, { sub: 'camp assist', disabled: k.role === 'ward' }),
+      age(k) >= GD.RACES[k.race].maturity - 4
+        ? act('Take as Squire', () => { Game.takeAsSquire(k); this.closeModal(); this.showOrphanage(); }, { sub: 'fights on your turn' })
+        : null,
+      act('Release', () => { Game.releaseOrphan(k); this.closeModal(); this.showOrphanage(); }, { cls: 'danger' }),
+    ]))) : h('p', { class: 'dim' }, 'No children in care. Orphans of the realm may arrive with the years, or you can take foundlings in.'),
+  );
+  this.modal(body, { title: 'House Orphanage', wide: true });
 };
 
 // ---------------------------------------------------------------- estate screens
@@ -838,10 +925,18 @@ UI.showHousehold = function () {
     h('div', { class: 'grid' }, blood.map((c) => this.miniCard(c, () => this.replaceModalChar(c), [
       c.id === G.heirId ? h('small', { class: 'good' }, '★ Heir') : null,
       c.status === 'party' ? h('small', {}, 'In party') : null,
+      c.role === 'ward' ? h('small', { class: 'good' }, 'Ward') : null,
+      c.role === 'squire' ? h('small', { class: 'good' }, 'Squire') : null,
       !isAdult(c) ? h('small', { class: 'dim' }, `Comes of age in ${Math.ceil(GD.RACES[c.race].maturity - age(c))} yrs`) : null,
     ]))),
     h('h4', {}, 'Companions'),
-    comp.length ? h('div', { class: 'grid' }, comp.map((c) => this.miniCard(c, () => this.replaceModalChar(c), [c.status === 'party' ? h('small', {}, 'In party') : h('small', { class: 'dim' }, 'At the estate')]))) : h('p', { class: 'dim' }, 'No companions. Recruit some in town taverns.'),
+    comp.length ? h('div', { class: 'grid' }, comp.map((c) => this.miniCard(c, () => this.replaceModalChar(c), [
+      c.status === 'party' ? h('small', {}, 'In party') : h('small', { class: 'dim' }, 'At the estate'),
+      c.role === 'squire' ? h('small', { class: 'good' }, 'Squire') : null,
+    ]))) : h('p', { class: 'dim' }, 'No companions. Recruit some in town taverns.'),
+    h('div', { class: 'row' },
+      act('Retainer Court', () => { this.closeModal(); this.showCourt(); }, { sub: `${Court.list().length}/${Court.courtCap()}` }),
+      act('Orphanage', () => { this.closeModal(); this.showOrphanage(); }, { sub: `${Court.orphans().length}/${Court.orphanCap()}` })),
     h('h4', {}, 'Line of succession'),
     cand.length ? h('ol', {}, cand.map((x) => h('li', {}, `${x.c.name} (${x.why}, ${ageStr(x.c)})`))) : h('p', { class: 'bad' }, 'No one can inherit. Marry and have children!'),
   );

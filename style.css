@@ -50,11 +50,21 @@ body { display: flex; flex-direction: column; }
 .le.year { color: var(--gold); border-top: 1px solid var(--line); margin-top: 2px; padding-top: 2px; }
 
 .ptitle { color: var(--dim); text-transform: uppercase; font-size: 11px; letter-spacing: 1px; margin: 4px 2px 8px; }
+.pcard-wrap { margin-bottom: 6px; }
 .pcard { display: flex; gap: 8px; padding: 6px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; margin-bottom: 6px; cursor: pointer; }
+.pcard-wrap > .pcard { margin-bottom: 0; }
 .pcard:hover { border-color: var(--accent); }
 .pcard.mc { border-color: var(--gold); }
 .pcard.active { box-shadow: 0 0 0 2px var(--gold); }
 .pcard.fallen { opacity: 0.5; }
+.psquire { display: flex; gap: 6px; align-items: center; margin: 2px 0 0 22px; padding: 3px 6px 3px 4px; background: rgba(0, 0, 0, 0.28); border-left: 2px solid var(--gold); border-radius: 0 4px 4px 0; cursor: pointer; max-width: calc(100% - 22px); }
+.psquire:hover { background: rgba(0, 0, 0, 0.4); }
+.psquire.active { outline: 1px solid var(--gold); }
+.psquire.fallen { opacity: 0.5; }
+.psquire .portrait { width: 28px !important; height: 28px !important; opacity: 0.92; }
+.psquire .pname { font-size: 11px; font-weight: 600; }
+.psquire .psub { font-size: 10px; color: var(--good); }
+.psquire .bar { height: 3px; margin: 2px 0 0; }
 .pinfo { flex: 1; min-width: 0; }
 .pname { font-weight: bold; display: flex; justify-content: space-between; }
 .lvl { color: var(--gold); font-weight: normal; font-size: 12px; }

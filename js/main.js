@@ -512,19 +512,26 @@ Game.deed = function (town, kind) {
 };
 
 Game.recruit = function (c) {
-  if (householdCount() >= GD.ESTATE[G.house.tier].household) return UI.toast('Your household is full. Improve your estate.');
+  Court.ensure();
+  const hhFull = householdCount() >= GD.ESTATE[G.house.tier].household;
+  const courtFull = !Court.canTakeCourt();
+  if (G.party.length >= PARTY_CAP && hhFull && courtFull) return UI.toast('Party, household and court are full. Improve your estate.');
   G.house.gold -= hireCost(c);
   c.loyalty = clamp(c.loyalty + 20, -100, 100);
   c.corruption = Math.max(0, c.corruption - 15);
   Equip.ensureChar(c);
   if (!Equip.worn(c).length) Equip.seedStarter(c, Math.min(3, Math.max(1, c.level - 1)));
-  if (G.party.length < 4) { c.status = 'party'; G.party.push(c.id); } else c.status = 'household';
+  let where = 'party';
+  if (G.party.length < PARTY_CAP) { c.status = 'party'; G.party.push(c.id); where = 'party'; }
+  else if (!hhFull) { c.status = 'household'; where = 'household'; }
+  else { Court.toCourt(c, { force: true }); where = 'court'; }
   c.servedHouse = true;
-  const parentComp = c.parents.map(ch).find((p) => p && p.alive && (p.status === 'party' || p.status === 'household'));
+  const parentComp = c.parents.map(ch).find((p) => p && p.alive && (p.status === 'party' || p.status === 'household' || p.status === 'court'));
   if (parentComp) { addBond(c, parentComp, 15); c.loyalty += 10; }
   if (c.lineageKnown && c.secret === 'noble') G.house.prestige += 2;
   recordChoice('open', 0.6, G.mcId);
-  chron(`${c.name} joins House ${G.house.name}${c.status === 'household' ? ' (waiting at the estate)' : ''}.`, 'good', [c.id], 'join');
+  const place = where === 'party' ? '' : where === 'court' ? ' (joins the retainer court)' : ' (waiting at the estate)';
+  chron(`${c.name} joins House ${G.house.name}${place}.`, 'good', [c.id], 'join');
   this.after();
 };
 Game.court = function (c) {
@@ -619,6 +626,7 @@ Game.adopt = function (k) {
   k.status = 'household';
   k.adoptedBy = [mc.id, sp ? sp.id : null].filter(Boolean);
   k.loyalty = 45; k.corruption = 0;
+  G.house.orphanage = (G.house.orphanage || []).filter((id) => id !== k.id);
   mc.children.push(k.id);
   if (sp) sp.children.push(k.id);
   const legacy = Math.floor(G.house.generation / 2);
@@ -629,6 +637,22 @@ Game.adopt = function (k) {
   recordChoice('open', 1, mc.id);
   chron(`${mc.name}${sp ? ' and ' + sp.name : ''} adopted ${k.name}${k.foundling ? ', a foundling' : ', an orphan'}, into House ${G.house.name}.`, 'birth', [k.id, mc.id], 'adopt');
   this.after();
+};
+Game.adoptFromOrphanage = function (k) {
+  if (!k || k.status !== 'orphanage') return;
+  if (G.house.gold < 40) return UI.toast('Adoption costs 40g.');
+  this.adopt(k);
+};
+Game.takeIntoOrphanage = function (k) {
+  if (!Court.toOrphanage(k)) return UI.toast('The orphanage is full. Improve your estate.');
+  chron(`${k.name} was placed in the House orphanage.`, 'dim', [k.id], 'orphan');
+  UI.toast(`${k.name} enters the orphanage.`);
+  this.after(true);
+};
+Game.releaseOrphan = function (k) {
+  Court.releaseOrphan(k);
+  chron(`${k.name} left the orphanage to live among the towns.`, 'dim', [k.id], 'leave');
+  this.after(true);
 };
 
 Game.research = function (c) {
@@ -650,15 +674,61 @@ Game.legitimise = function (c) {
   chron(`${c.name} is legitimised and recognised as a true child of House ${G.house.name}.`, 'good', [c.id], 'legit');
   this.after(true);
 };
-Game.toParty = function (c) { if (G.party.length >= 4) return; c.status = 'party'; G.party.push(c.id); this.after(true); };
+Game.toParty = function (c) {
+  if (G.party.length >= PARTY_CAP) return UI.toast('The party is full (4).');
+  G.house.court = (G.house.court || []).filter((id) => id !== c.id);
+  G.house.orphanage = (G.house.orphanage || []).filter((id) => id !== c.id);
+  c.status = 'party';
+  if (!G.party.includes(c.id)) G.party.push(c.id);
+  this.after(true);
+};
 Game.toHousehold = function (c) {
   if (c.id === G.mcId) return;
-  c.status = 'household'; G.party = G.party.filter((id) => id !== c.id); this.after(true);
+  c.status = 'household';
+  G.party = G.party.filter((id) => id !== c.id);
+  G.house.court = (G.house.court || []).filter((id) => id !== c.id);
+  this.after(true);
+};
+Game.toCourt = function (c) {
+  if (!Court.toCourt(c)) return UI.toast('The retainer court is full. Improve your estate.');
+  chron(`${c.name} takes a place in the retainer court of House ${G.house.name}.`, 'dim', [c.id], 'court');
+  UI.toast(`${c.name} joins the court.`);
+  this.after(true);
+};
+Game.summonFromCourt = function (c) {
+  if (!Court.summon(c)) return UI.toast(G.party.length >= PARTY_CAP ? 'The party is full.' : 'Cannot summon them right now.');
+  UI.toast(`${c.name} joins the party from court.`);
+  this.after(true);
+};
+Game.takeAsWard = function (kid, master) {
+  master = master || ch(G.mcId);
+  if (!Court.assignWard(kid, master)) return UI.toast('Cannot make them a ward.');
+  chron(`${kid.name} becomes a ward of ${master.name}. They assist at camp but stay out of battle.`, 'good', [kid.id, master.id], 'ward');
+  UI.toast(`${kid.name} is now a ward of ${master.name}.`);
+  this.after(true);
+};
+Game.takeAsSquire = function (youth, master) {
+  master = master || ch(G.mcId);
+  if (!Court.assignSquire(youth, master)) return UI.toast('Cannot make them a squire.');
+  chron(`${youth.name} is sworn as squire to ${master.name}. They fight on their master's turn.`, 'good', [youth.id, master.id], 'squire');
+  UI.toast(`${youth.name} is now squire to ${master.name}.`);
+  this.after(true);
+};
+Game.clearRetainerRole = function (c) {
+  Court.clearRole(c);
+  UI.toast(`${c.name} is released from ward/squire duties.`);
+  this.after(true);
 };
 Game.dismiss = function (c) {
-  c.status = 'npc'; c.town = randomTownIdx();
-  G.party = G.party.filter((id) => id !== c.id);
-  c.loyalty -= 20; c.grudge = true;
+  if (c.status === 'court') Court.dismissFromCourt(c, true);
+  else {
+    c.status = 'npc'; c.town = randomTownIdx();
+    G.party = G.party.filter((id) => id !== c.id);
+    G.house.court = (G.house.court || []).filter((id) => id !== c.id);
+    G.house.orphanage = (G.house.orphanage || []).filter((id) => id !== c.id);
+    Court.clearRole(c);
+    c.loyalty -= 20; c.grudge = true;
+  }
   recordChoice('open', -0.8, G.mcId);
   chron(`${c.name} was dismissed and leaves bitter.`, 'bad', [c.id], 'leave');
   this.after();
