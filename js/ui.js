@@ -494,9 +494,12 @@ UI.battleChanged = function () {
         onclick: (e) => { e.stopPropagation(); this.showEnemy(f); },
       }, f.type ? EnemyLore.shortTag(f.type) : f.name))));
   }
+  if ((Battle.traps || []).some((t) => t.side === 'party')) {
+    kids.push(h('p', { class: 'dim small' }, 'A snare is armed — it springs at the start of the next round.'));
+  }
   if (Battle.waiting && u && u.side === 'party') {
     const cl = GD.CLASSES[u.cls];
-    const st = Object.keys(u.st || {}).filter((k) => Battle.st(u, k)).map((k) => ({ atkUp: 'inspired', bloodlust: 'bloodlust', guard: 'guarded', defDown: 'exposed', slow: 'slowed', mark: 'marked', shield: `shield ${u.st.shield && u.st.shield.v}`, riposte: 'riposte' }[k])).filter(Boolean);
+    const st = Object.keys(u.st || {}).filter((k) => Battle.st(u, k)).map((k) => ({ atkUp: 'inspired', bloodlust: 'bloodlust', guard: 'guarded', defDown: 'exposed', slow: 'slowed', poison: 'venom', mark: 'marked', shield: `shield ${u.st.shield && u.st.shield.v}`, riposte: 'riposte' }[k])).filter(Boolean);
     kids.push(h('p', {}, h('b', {}, `${u.name}'s turn`), h('br'), h('small', { class: 'dim' }, `${cl ? cl.icon + ' ' + cl.name + ' · ' : ''}Focus ${u.focus}/3${st.length ? ' · ' + st.join(', ') : ''}`)));
     if (this.targeting) {
       kids.push(h('p', { class: 'dim' }, `Choose a target for ${this.targeting === 'skill' ? GD.ABILITIES[this.targetSkill].name : this.targeting}: tap the field or below.`));
@@ -689,7 +692,7 @@ UI.battleCharActions = function (c) {
   if (u) {
     const st = Object.keys(u.st || {}).filter((k) => Battle.st(u, k)).map((k) => ({
       atkUp: 'inspired', bloodlust: 'bloodlust', guard: 'guarded', defDown: 'exposed',
-      slow: 'slowed', mark: 'marked', shield: 'shielded', riposte: 'riposte',
+      slow: 'slowed', poison: 'venom', mark: 'marked', shield: 'shielded', riposte: 'riposte',
     }[k] || k));
     out.push(h('p', { class: 'dim' }, `In battle · ATK ${Math.round(u.atk)} · DEF ${Math.round(u.def)} · MAG ${Math.round(u.mag)} · Focus ${u.focus}/3`));
     out.push(h('p', { class: 'dim' }, `HP ${Math.round(u.hp)}/${u.maxHp}${u.defending ? ' · guarding' : ''}${st.length ? ' · ' + st.join(', ') : ''}`));

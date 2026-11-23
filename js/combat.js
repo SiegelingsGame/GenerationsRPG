@@ -72,6 +72,7 @@ function unitPos(u) {
 Battle.start = function (opts) {
   PackArt.effects = [];
   this.active = true; this.over = false; this.round = 0; this.fx = []; this.log = [];
+  this.traps = [];
   this.kind = opts.kind || 'wild';
   this.title = opts.title || 'Battle';
   this.onEnd = opts.onEnd;
@@ -106,6 +107,9 @@ Battle.next = function () {
   if (!this.queue.length) {
     this.round++;
     this.units.forEach((u) => { if (u.taunt) u.taunt--; });
+    if (this.round > 1 && this.triggerTraps) this.triggerTraps();
+    if (!this.alive('enemy').length) return setTimeout(() => this.finish('victory'), 500);
+    if (!this.alive('party').length) return setTimeout(() => this.finish('defeat'), 500);
     if (G.house.retinue > 0 && this.round > 0) {
       const t = R.pick(this.alive('enemy'));
       const dmg = Math.round(3 + G.house.retinue * 3 + partyLevel() * 1.2);
@@ -120,6 +124,11 @@ Battle.next = function () {
   this.cur = u;
   u.defending = false;
   this.tickStatus(u);
+  if (!u.alive) {
+    if (!this.alive('enemy').length) return setTimeout(() => this.finish('victory'), 400);
+    if (!this.alive('party').length) return setTimeout(() => this.finish('defeat'), 400);
+    return setTimeout(() => this.next(), 400);
+  }
   u.focus = Math.min(3, u.focus + 1);
   if (u.side === 'party' && !this.auto) {
     this.waiting = true;

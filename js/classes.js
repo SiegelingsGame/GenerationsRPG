@@ -59,6 +59,14 @@ GD.CLASSES = {
     growth: { agi: 0.5, str: 0.15 },
     skills: ['aimedShot', 'volley', 'huntersMark'],
   },
+  thief: {
+    name: 'Thief', icon: '🗡', weapon: 'dagger', top: ['agi'],
+    desc: 'A trickster of shadows. Lays snares and caltrops that punish whole groups, and coats a blade in venom.',
+    passive: 'Ambush: the first strike each battle deals 40% more damage.',
+    mods: { atk: 1.15, def: 0.8, hp: 0.9, mag: 0.7, heal: 0.7, spd: 1.25 },
+    growth: { agi: 0.5, str: 0.15 },
+    skills: ['laySnare', 'venomBlade', 'caltrops'],
+  },
 };
 
 // role tells the battle AI when to use it; target: enemy | enemies | ally | allies | self
@@ -86,6 +94,9 @@ GD.ABILITIES = {
   challenge:      { name: 'Challenge',       cost: 2, target: 'enemy',   role: 'mark',  anim: 'cast',  desc: 'Call out one foe: they are marked (+30% damage taken) and enemies must attack you for 3 rounds.' },
   flurry:         { name: 'Flurry',          cost: 2, target: 'enemy',   role: 'nuke',  anim: 'lunge', desc: 'Two quick strikes with a high crit chance.' },
   bulwark:        { name: 'Bulwark',         cost: 2, target: 'self',    role: 'guard', anim: 'cast',  desc: 'Guard and draw enemy attacks for 2 rounds.' },
+  laySnare:       { name: 'Lay Snare',       cost: 2, target: 'enemies', role: 'trap',  anim: 'cast',  desc: 'Set a snare. Next round it springs: every enemy takes damage and is slowed for 2 rounds.' },
+  venomBlade:     { name: 'Venom Blade',     cost: 2, target: 'enemy',   role: 'nuke',  anim: 'lunge', desc: 'A poisoned strike for 160% damage; the venom ticks for 3 rounds.' },
+  caltrops:       { name: 'Caltrops',        cost: 3, target: 'enemies', role: 'aoe',   anim: 'cast',  desc: 'Scatter caltrops: hit every enemy for 75% damage and strip half their armour for 3 rounds.' },
 };
 // skills learned the old way (by stat) map onto abilities
 GD.LEGACY_SKILL = { str: 'cleave', agi: 'flurry', int: 'firebolt', wil: 'mend', vit: 'bulwark' };
@@ -99,7 +110,13 @@ function classFor(c) {
   if (parentCls.length && R.chance(0.35)) return (c.cls = R.pick(parentCls));
   const order = STATS.slice().sort((a, b) => (c.base[b] + (c.bonus[b] || 0)) - (c.base[a] + (c.bonus[a] || 0)));
   const top = order[0];
-  const pick = { str: R.chance(0.6) ? 'warrior' : 'berserker', vit: R.chance(0.5) ? 'knight' : 'warrior', int: 'sorcerer', wil: R.chance(0.6) ? 'priest' : 'bard', agi: R.chance(0.65) ? 'ranger' : 'bard' }[top];
+  const pick = {
+    str: R.chance(0.6) ? 'warrior' : 'berserker',
+    vit: R.chance(0.5) ? 'knight' : 'warrior',
+    int: 'sorcerer',
+    wil: R.chance(0.6) ? 'priest' : 'bard',
+    agi: R.chance(0.45) ? 'ranger' : (R.chance(0.55) ? 'thief' : 'bard'),
+  }[top];
   return (c.cls = pick);
 }
 function classOf(c) { return GD.CLASSES[classFor(c)]; }
@@ -117,6 +134,14 @@ Battle.st = function (u, k) { return (u.st && u.st[k] && u.st[k].t > 0) ? u.st[k
 Battle.give = function (u, k, turns, v = 0) { u.st = u.st || {}; u.st[k] = { t: turns, v }; if (['shield','guard','riposte'].includes(k)) PackArt.emit('shield',u); else if (['atkUp','bloodlust'].includes(k)) PackArt.emit('buff',u); };
 Battle.tickStatus = function (u) {
   if (!u.st) return;
+  // venom ticks at the start of the turn, then statuses count down
+  if (this.st(u, 'poison') && u.alive) {
+    const dmg = Math.max(1, Math.round(u.st.poison.v || u.maxHp * 0.06));
+    u.hp = Math.max(0, u.hp - dmg);
+    this.fx.push({ uid: u.uid, text: dmg, color: '#8fd36a', t0: performance.now() });
+    this.fx.push({ uid: u.uid, text: 'Venom', color: '#6a9a4a', t0: performance.now() + 40, small: true });
+    if (u.hp <= 0) { u.alive = false; this.say(`${u.name} succumbs to venom.`); }
+  }
   for (const k of Object.keys(u.st)) { u.st[k].t--; if (u.st[k].t <= 0 && k !== 'shield') delete u.st[k]; }
   if (u.st.shield && u.st.shield.v <= 0) delete u.st.shield;
 };
@@ -126,8 +151,42 @@ Battle.outMult = function (u) {
   const up = this.st(u, 'atkUp'); if (up) m += up.v;
   const bl = this.st(u, 'bloodlust'); if (bl) m += 0.5;
   if (u.cls === 'berserker') m *= 1 + 0.6 * (1 - u.hp / u.maxHp); // rage
+  if (u.cls === 'thief' && !u._ambushUsed) m *= 1.4; // ambush
   if (u.brave) m *= 1.1;
   return m;
+};
+Battle.markAmbush = function (u) {
+  if (u && u.cls === 'thief') u._ambushUsed = true;
+};
+// delayed traps laid by thieves (and anyone with a trap ability)
+Battle.addTrap = function (u, kind, rounds = 1) {
+  this.traps = this.traps || [];
+  this.traps.push({ ownerUid: u.uid, side: u.side, kind, atk: u.atk, agi: u.agi, rounds });
+};
+Battle.triggerTraps = function () {
+  if (!this.traps || !this.traps.length) return;
+  const keep = [];
+  for (const trap of this.traps) {
+    trap.rounds--;
+    if (trap.rounds > 0) { keep.push(trap); continue; }
+    const owner = this.find(trap.ownerUid);
+    const foes = this.alive(trap.side === 'party' ? 'enemy' : 'party');
+    if (!foes.length) continue;
+    const src = owner && owner.alive
+      ? owner
+      : { uid: trap.ownerUid, side: trap.side, atk: trap.atk, agi: trap.agi, cls: 'thief', st: {}, brave: false, hp: 1, maxHp: 1, _ambushUsed: true };
+    if (trap.kind === 'snare') {
+      foes.forEach((f) => {
+        const r = this.physical(src, f, 0.9);
+        this.damage(src, f, r.dmg, r.crit, 'Snare');
+        this.give(f, 'slow', 2);
+        this.fx.push({ uid: f.uid, burst: '#c8a060', t0: performance.now() });
+      });
+      this.markAmbush(owner);
+      this.say('A snare springs! The enemy is caught.');
+    }
+  }
+  this.traps = keep;
 };
 Battle.inMult = function (t) {
   let m = 1;
@@ -213,8 +272,37 @@ Battle.useAbility = function (u, id, t) {
     case 'precisionStrike': { const f = pickFoe(); const r = this.physical(u, f, 1.7, 0.3, 0.6); this.damage(u, f, r.dmg, r.crit); msg = `${u.name} finds the gap in ${f.name}'s guard for ${r.dmg}${r.crit ? ' (critical!)' : ''}.`; break; }
     case 'riposte': { this.give(u, 'riposte', 2); u.defending = true; label(u, 'Riposte'); msg = `${u.name} takes a guarded stance, blade ready to answer.`; break; }
     case 'challenge': { const f = pickFoe(); this.give(f, 'mark', 3); u.taunt = 3; label(f, 'Challenged', '#ffd76a'); label(u, 'Challenge'); msg = `${u.name} challenges ${f.name}! All eyes turn to the knight.`; break; }
-    case 'flurry': { const f = pickFoe(); let tot = 0; for (let i = 0; i < 2 && f.alive; i++) { const r = this.physical(u, f, 0.65, 0.2); this.damage(u, f, r.dmg, r.crit); tot += r.dmg; } msg = `${u.name} unleashes a Flurry on ${f.name} for ${tot}.`; break; }
+    case 'flurry': { const f = pickFoe(); let tot = 0; for (let i = 0; i < 2 && f.alive; i++) { const r = this.physical(u, f, 0.65, 0.2); this.damage(u, f, r.dmg, r.crit); tot += r.dmg; } this.markAmbush(u); msg = `${u.name} unleashes a Flurry on ${f.name} for ${tot}.`; break; }
     case 'bulwark': { u.defending = true; u.taunt = 2; this.give(u, 'guard', 2); label(u, 'Bulwark'); msg = `${u.name} raises a Bulwark and draws the enemy's attacks.`; break; }
+    case 'laySnare': {
+      this.addTrap(u, 'snare', 1);
+      label(u, 'Snare set', '#c8a060');
+      fx(u, '#c8a060');
+      msg = `${u.name} lays a snare across the field.`;
+      break;
+    }
+    case 'venomBlade': {
+      const f = pickFoe();
+      const r = this.physical(u, f, 1.6, 0.1);
+      this.damage(u, f, r.dmg, r.crit);
+      this.give(f, 'poison', 3, Math.max(2, Math.round(u.atk * 0.28)));
+      this.markAmbush(u);
+      fx(f, '#8fd36a');
+      label(f, 'Venom', '#8fd36a');
+      msg = `${u.name} slips a Venom Blade into ${f.name} for ${r.dmg}.`;
+      break;
+    }
+    case 'caltrops': {
+      foes.forEach((f) => {
+        const r = this.physical(u, f, 0.75);
+        this.damage(u, f, r.dmg, r.crit);
+        this.give(f, 'defDown', 3);
+        fx(f, '#a09070');
+      });
+      this.markAmbush(u);
+      msg = `${u.name} scatters caltrops; the enemy stumbles, exposed.`;
+      break;
+    }
     default: msg = `${u.name} hesitates.`;
   }
   u.vfxSkill = null;
@@ -232,6 +320,7 @@ Battle.basicAttack = function (u, t) {
   const r = this.physical(u, t, 1);
   this.damage(u, t, r.dmg, r.crit);
   this.leech(u, r.dmg);
+  this.markAmbush(u);
   this.say(`${u.name} strikes ${t.name} for ${r.dmg}${r.crit ? ' (critical!)' : ''}.`);
 };
 // what an AI-controlled unit (enemy, or a party member on auto) chooses
@@ -256,6 +345,8 @@ Battle.choose = function (u) {
   if (bf.length && foes.length >= 2 && !friends.some((f) => this.st(f, 'atkUp') || this.st(f, 'bloodlust')) && R.chance(0.75)) return { id: bf[0] };
   const ra = has('rally'); if (ra.length && friends.filter((f) => f.focus < 2).length >= 2 && R.chance(0.5)) return { id: ra[0] };
   const mk = has('mark'); if (mk.length && !foes.some((f) => this.st(f, 'mark')) && R.chance(0.6)) return { id: mk[0], t: taunter || foes.slice().sort((a, b) => b.hp - a.hp)[0] };
+  const tr = has('trap');
+  if (tr.length && foes.length >= 2 && !(this.traps || []).some((t) => t.side === u.side) && R.chance(0.7)) return { id: pick(tr) };
   const ao = has('aoe'); if (ao.length && foes.length >= 2) return { id: pick(ao) };
   const nk = has('nuke');
   // berserkers will not risk a reckless strike when nearly dead

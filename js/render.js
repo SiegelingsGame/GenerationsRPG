@@ -1150,8 +1150,17 @@ Render.drawFigure = function (x, y, look, scale = 1, o = {}) {
       c.fillStyle = '#2a1a0a'; c.beginPath(); c.arc(hx0 - 2 * s, hy0 - 4 * s, 1.2 * s, 0, Math.PI * 2); c.fill();
     } else {
       const staff = w === 'staff' || w === 'orb';
-      c.strokeStyle = staff || w === 'lance' ? '#7a5a3a' : '#cfd6dc'; c.lineWidth = (w === 'axe' ? 2.6 : 2.2) * s;
-      c.beginPath(); c.moveTo(hx0, hy0); c.lineTo(x + 18 * s * wd, by - (staff ? 34 : 26) * s); c.stroke();
+      const dagger = w === 'dagger';
+      c.strokeStyle = staff || w === 'lance' ? '#7a5a3a' : '#cfd6dc'; c.lineWidth = (w === 'axe' ? 2.6 : dagger ? 1.8 : 2.2) * s;
+      c.beginPath(); c.moveTo(hx0, hy0); c.lineTo(x + (dagger ? 14 : 18) * s * wd, by - (staff ? 34 : dagger ? 18 : 26) * s); c.stroke();
+      if (dagger) {
+        c.fillStyle = '#d8dde2';
+        c.beginPath();
+        c.moveTo(x + 14 * s * wd, by - 18 * s);
+        c.lineTo(x + 16.5 * s * wd, by - 22 * s);
+        c.lineTo(x + 12.5 * s * wd, by - 19 * s);
+        c.closePath(); c.fill();
+      }
       if (w === 'staff') { c.fillStyle = '#fff3a0'; c.beginPath(); c.arc(x + 18 * s * wd, by - 35 * s, 3 * s, 0, Math.PI * 2); c.fill(); c.fillRect(x + 17 * s * wd, by - 41 * s, 2 * s, 5 * s); }
       if (w === 'orb') { const g = 0.6 + Math.sin(this.t / 200) * 0.3; c.fillStyle = `rgba(180,138,255,${g})`; c.beginPath(); c.arc(x + 18 * s * wd, by - 36 * s, 4.2 * s, 0, Math.PI * 2); c.fill(); }
       if (w === 'lance') {
@@ -1374,6 +1383,7 @@ Render.drawBattle = function () {
       if (u.st && u.st.shield) tags.push(['◎', '#b48aff']);
       if (S('defDown')) tags.push(['▼', '#e0904a']);
       if (S('slow')) tags.push(['❄', '#9fe0ff']);
+      if (S('poison')) tags.push(['☠', '#8fd36a']);
       if (S('mark')) tags.push(['✶', '#ff5c5c']);
       if (S('riposte')) tags.push(['⚔', '#cfd6dc']);
       c.font = 'bold 11px Georgia, serif'; c.textAlign = 'left';
