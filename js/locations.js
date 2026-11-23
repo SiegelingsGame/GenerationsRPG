@@ -62,7 +62,7 @@ const LocationPrompt = {
       $('#stage').append(this.el);
     }
     const t = this.nearby();
-    this.el.hidden = !t || Battle.active || TownView.open || Campfire.open || UI.modalStack.length > 0 || Game.busy;
+    this.el.hidden = !t || Battle.active || TownView.open || Campfire.open || (typeof RoadView !== 'undefined' && RoadView.open) || UI.modalStack.length > 0 || Game.busy;
     if (this.el.hidden) return;
     this.tile = t; this.title.textContent = this.name(t);
     this.enter.textContent = t.feature === 'town' ? 'Enter' : 'Explore';
