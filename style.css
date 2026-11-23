@@ -614,3 +614,6 @@ body.opening-cutscene-active #mobilebar,
 body.opening-cutscene-active .mapctl { display: none; }
 body.opening-cutscene-active #panel button.act,
 body.opening-cutscene-active #panel .auto { display: none; }
+/* During 2.5D approach, hide chrome that fights the tracking shot */
+body.oc-approach-active #minimap,
+body.oc-approach-active .compass { display: none; }

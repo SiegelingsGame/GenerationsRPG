@@ -245,11 +245,56 @@ OpeningCutscene.phaseEpilogue = function (king) {
   this.after(4800, () => this.phaseSpiritFlight(king || target));
 };
 
-// Continuous follow-cam: a white spirit flees the Hollow King across the world into a mother’s belly.
+// Continuous 2.5D tracking shot: map flight → town → neighborhood → house → room → belly.
+OpeningCutscene.APPROACH_STAGES = ['town', 'neighborhood', 'house', 'room', 'belly'];
+
+OpeningCutscene.approachBeats = function () {
+  // Camera: z = depth along street (dolly), y = height, pitch = look-down (negative) / look-up.
+  // Spirit rides slightly ahead of the camera so the follow-cam feels intentional.
+  return [
+    {
+      name: 'town', dur: 2600,
+      cam: { z: 26, y: 7.2, x: 0, pitch: -0.32, fov: 1.05 },
+      spirit: { z: 20, y: 5.4, x: 0.15 },
+      chapter: 'A Living Town', line: 'Down through streets and hearths, seeking the right bloodline.', speaker: '',
+    },
+    {
+      name: 'neighborhood', dur: 2400,
+      cam: { z: 11, y: 3.4, x: 0.05, pitch: -0.08, fov: 1.0 },
+      spirit: { z: 7.2, y: 2.6, x: -0.1 },
+      chapter: 'The Quiet Lanes', line: 'Between the eaves, a quiet house waits.', speaker: '',
+    },
+    {
+      name: 'house', dur: 2200,
+      cam: { z: 4.8, y: 1.55, x: 0, pitch: -0.02, fov: 0.92 },
+      spirit: { z: 2.7, y: 1.35, x: 0 },
+      chapter: 'The Threshold', line: 'Through the door — into the living dark.', speaker: '',
+    },
+    {
+      name: 'room', dur: 2400,
+      cam: { z: 2.55, y: 1.35, x: 0, pitch: 0.02, fov: 0.86 },
+      spirit: { z: 1.45, y: 1.15, x: 0.05 },
+      chapter: 'A Mother’s Room', line: 'A mother rests. The spark finds her.', speaker: '',
+    },
+    {
+      name: 'belly', dur: 3200,
+      cam: { z: 1.35, y: 1.15, x: 0, pitch: 0.06, fov: 0.7 },
+      spirit: { z: 0.85, y: 0.95, x: 0 },
+      chapter: 'The Hollow King', line: 'I will seek the right bloodline. This time, I will prevail.', speaker: 'The Hollow King',
+    },
+  ];
+};
+
+OpeningCutscene.lerpCam = function (a, b, u) {
+  const out = {};
+  for (const k of Object.keys(a)) out[k] = a[k] + (b[k] - a[k]) * u;
+  return out;
+};
+
 OpeningCutscene.phaseSpiritFlight = function (king) {
   this.phase = 'spiritFlight';
   const vig = this.el && this.el.querySelector('#oc-vignette');
-  if (vig) { vig.hidden = true; vig.className = 'oc-vignette'; }
+  if (vig) { vig.hidden = true; vig.className = 'oc-vignette'; vig.replaceChildren(); }
 
   // Leave the battle canvas so the world map can host the tracking shot.
   PackArt.effects = [];
@@ -280,17 +325,21 @@ OpeningCutscene.phaseSpiritFlight = function (king) {
   }
 
   const ease = (t) => t * t * (3 - 2 * t);
+  // Map legs end overhead of the town; intimacy stages continue in 2.5D.
   const legs = [
-    { x: spire.x, y: spire.y, alt: 56, dur: 900, chapter: 'The Hollow King', line: 'Denied its ending, the King dwindles to a white spark.', speaker: '' },
-    { x: spire.x - (spire.x - estate.x) * 0.35, y: spire.y - (spire.y - estate.y) * 0.25, alt: 72, dur: 2200, chapter: 'Chronicle', line: 'A spirit of unmaking casts itself across the seas.', speaker: '' },
-    { x: estate.x + (town.x - estate.x) * 0.15, y: estate.y + (town.y - estate.y) * 0.1, alt: 48, dur: 2400, chapter: 'The Starting Isle', line: 'It finds the island where a House will one day rise.', speaker: '' },
-    { x: town.x, y: town.y, alt: 28, dur: 2000, chapter: 'A Living Town', line: 'Down through streets and hearths, seeking the right bloodline.', speaker: '' },
-    { x: town.x + 0.15, y: town.y + 0.1, alt: 10, dur: 1600, chapter: 'The Hollow King', line: 'This time, I will prevail.', speaker: 'The Hollow King' },
+    { x: spire.x, y: spire.y, alt: 56, dur: 800, chapter: 'The Hollow King', line: 'Denied its ending, the King dwindles to a white spark.', speaker: '' },
+    { x: spire.x - (spire.x - estate.x) * 0.35, y: spire.y - (spire.y - estate.y) * 0.25, alt: 72, dur: 1800, chapter: 'Chronicle', line: 'A spirit of unmaking casts itself across the seas.', speaker: '' },
+    { x: estate.x + (town.x - estate.x) * 0.15, y: estate.y + (town.y - estate.y) * 0.1, alt: 48, dur: 1800, chapter: 'The Starting Isle', line: 'It finds the island where a House will one day rise.', speaker: '' },
+    { x: town.x, y: town.y, alt: 22, dur: 1600, chapter: 'A Living Town', line: 'Over rooftops and hearths — the tracking shot begins.', speaker: '' },
   ];
 
+  const beats = this.approachBeats();
   this.spirit = {
     active: true,
     stage: 'flight',
+    stageIndex: -1,
+    stageProgress: 0,
+    approachProgress: 0,
     t0: performance.now(),
     leg: 0,
     legT0: performance.now(),
@@ -299,9 +348,13 @@ OpeningCutscene.phaseSpiritFlight = function (king) {
     alt: legs[0].alt,
     trail: [],
     legs,
+    beats,
     ease,
     kingUid: king && king.uid,
     mother: false,
+    cam: { ...beats[0].cam },
+    spiritLocal: { ...beats[0].spirit },
+    seed: ((town.x * 92821 + town.y * 68917) % 100000) || 4242,
     doneAt: null,
   };
 
@@ -309,23 +362,45 @@ OpeningCutscene.phaseSpiritFlight = function (king) {
   if (typeof Render !== 'undefined' && Render.shake) Render.shake(400, 6);
 };
 
+OpeningCutscene.beginApproach = function (now) {
+  const s = this.spirit;
+  if (!s) return;
+  s.stageIndex = 0;
+  s.stage = s.beats[0].name;
+  s.stageT0 = now || performance.now();
+  s.stageProgress = 0;
+  s.approachProgress = 0;
+  s.cam = { ...s.beats[0].cam };
+  s.spiritLocal = { ...s.beats[0].spirit };
+  s.trail = [];
+  s.mother = false;
+  document.body.classList.add('oc-approach-active');
+  this.setText(s.beats[0].chapter, s.beats[0].line, s.beats[0].speaker || '');
+  if (typeof Render !== 'undefined') {
+    Render.zoomTarget = 1;
+    Render.zoom = 1;
+  }
+};
+
+OpeningCutscene.isApproachStage = function (stage) {
+  return this.APPROACH_STAGES.includes(stage);
+};
+
 OpeningCutscene.tickSpiritFlight = function (now) {
   const s = this.spirit;
   if (!s || !s.active || this.skipped) return;
+
+  if (this.isApproachStage(s.stage)) {
+    this.tickApproach(now);
+    return;
+  }
+
+  // Legacy mother DOM stage (kept as alias if somehow entered).
   if (s.stage === 'mother') {
-    const k = Math.min(1, (now - (s.motherT0 || now)) / 2800);
-    s.motherK = k;
-    s.alt = 8 * (1 - k);
-    const ember = this.el && this.el.querySelector('#oc-spirit-ember');
-    if (ember) {
-      ember.style.opacity = String(0.35 + 0.65 * (1 - k));
-      ember.style.transform = `translate(-50%, ${(-18 + k * 36)}px) scale(${1.2 - k * 0.7})`;
-    }
-    if (k >= 1 && !s.finishing) {
-      s.finishing = true;
-      this.setText('Chronicle', 'And so a House is founded — the bloodline the King still hunts.');
-      this.after(2200, () => this.complete());
-    }
+    s.stage = 'belly';
+    s.stageIndex = s.beats.length - 1;
+    s.stageT0 = now;
+    this.tickApproach(now);
     return;
   }
 
@@ -344,46 +419,101 @@ OpeningCutscene.tickSpiritFlight = function (now) {
       s.alt = from.alt + (to.alt - from.alt) * u;
       break;
     }
-    // Snap to destination and advance.
     s.x = to.x; s.y = to.y; s.alt = to.alt;
     s.leg = i + 1;
     s.legT0 = now;
     i = s.leg;
     this.setText(to.chapter, to.line, to.speaker || '');
     if (i >= legs.length - 1) {
-      this.enterMotherBelly(now);
+      this.beginApproach(now);
       return;
     }
   }
 
-  s.trail.push({ x: s.x, y: s.y, alt: s.alt, t: now });
+  s.trail.push({ x: s.x, y: s.y, alt: s.alt, t: now, mode: 'map' });
   if (s.trail.length > 28) s.trail.splice(0, s.trail.length - 28);
 
   if (typeof Render !== 'undefined') {
-    const zGoal = i >= 3 ? 1.85 : i >= 2 ? 1.55 : 1.25;
+    const zGoal = i >= 3 ? 1.9 : i >= 2 ? 1.55 : 1.25;
     Render.zoomTarget = zGoal;
   }
 };
 
+OpeningCutscene.tickApproach = function (now) {
+  const s = this.spirit;
+  if (!s || !s.beats) return;
+  const beats = s.beats;
+  let i = Math.max(0, s.stageIndex | 0);
+
+  while (i < beats.length) {
+    const beat = beats[i];
+    const next = beats[Math.min(i + 1, beats.length - 1)];
+    const dur = Math.max(1, beat.dur || 1000);
+    const raw = (now - (s.stageT0 || now)) / dur;
+    if (raw < 1 || i >= beats.length - 1) {
+      const u = s.ease(Math.min(1, Math.max(0, raw)));
+      s.stageProgress = Math.min(1, Math.max(0, raw));
+      s.approachProgress = (i + s.stageProgress) / beats.length;
+      // Blend toward the next beat's camera so stages feel continuous, not hard-cut.
+      const blend = i >= beats.length - 1 ? u : u;
+      const camFrom = beat.cam;
+      const camTo = i >= beats.length - 1
+        ? { z: beat.cam.z * 0.62, y: beat.cam.y * 0.95, x: 0, pitch: beat.cam.pitch + 0.08, fov: beat.cam.fov * 0.7 }
+        : next.cam;
+      const spFrom = beat.spirit;
+      const spTo = i >= beats.length - 1
+        ? { z: beat.spirit.z * 0.75, y: beat.spirit.y * 0.95, x: 0 }
+        : next.spirit;
+      s.cam = this.lerpCam(camFrom, camTo, blend);
+      s.spiritLocal = this.lerpCam(spFrom, spTo, blend);
+      s.stage = beat.name;
+      s.mother = beat.name === 'belly';
+      s.motherK = beat.name === 'belly' ? u : 0;
+
+      // Drift map coords slightly so any residual world cam stays near the town.
+      const legs = s.legs;
+      const town = legs[legs.length - 1];
+      s.x = town.x + Math.sin(now / 900) * 0.02;
+      s.y = town.y + Math.cos(now / 1100) * 0.02;
+      s.alt = 4 + (1 - s.approachProgress) * 12;
+
+      s.trail.push({
+        x: s.spiritLocal.x, y: s.spiritLocal.y, z: s.spiritLocal.z,
+        t: now, mode: 'approach',
+      });
+      if (s.trail.length > 36) s.trail.splice(0, s.trail.length - 36);
+
+      if (i >= beats.length - 1 && u >= 1 && !s.finishing) {
+        s.finishing = true;
+        this.setText('Chronicle', 'And so a House is founded — the bloodline the King still hunts.');
+        this.after(2200, () => this.complete());
+      }
+      return;
+    }
+    // Advance stage
+    s.stageIndex = i + 1;
+    s.stageT0 = now;
+    i = s.stageIndex;
+    const arrived = beats[i];
+    s.stage = arrived.name;
+    this.setText(arrived.chapter, arrived.line, arrived.speaker || '');
+  }
+};
+
+// Kept for callers/tests that still name the final beat "mother".
 OpeningCutscene.enterMotherBelly = function (now) {
   const s = this.spirit;
   if (!s) return;
-  s.stage = 'mother';
+  if (!this.isApproachStage(s.stage) && s.stage !== 'flight') this.beginApproach(now);
+  // Jump to belly beat.
+  const idx = s.beats.findIndex((b) => b.name === 'belly');
+  s.stageIndex = Math.max(0, idx);
+  s.stage = 'belly';
+  s.stageT0 = now || performance.now();
   s.mother = true;
-  s.motherT0 = now || performance.now();
   s.motherK = 0;
-  const vig = this.el && this.el.querySelector('#oc-vignette');
-  if (vig) {
-    vig.hidden = false;
-    vig.className = 'oc-vignette oc-womb oc-mother';
-    vig.replaceChildren(
-      h('div', { class: 'oc-mother-scene', 'aria-hidden': 'true' },
-        h('div', { class: 'oc-mother-doll' },
-          h('div', { class: 'oc-mother-head' }),
-          h('div', { class: 'oc-mother-body' }, h('div', { class: 'oc-mother-belly' }, h('div', { class: 'oc-spirit-ember', id: 'oc-spirit-ember' }))),
-          h('div', { class: 'oc-mother-skirt' }))));
-  }
-  this.setText('The Hollow King', 'I will seek the right bloodline. This time, I will prevail.', 'The Hollow King');
+  const beat = s.beats[s.stageIndex];
+  this.setText(beat.chapter, beat.line, beat.speaker || '');
 };
 
 OpeningCutscene.skip = function () {
@@ -400,6 +530,7 @@ OpeningCutscene.teardown = function () {
     this.keyHandler = null;
   }
   if (this.spirit) { this.spirit.active = false; this.spirit = null; }
+  document.body.classList.remove('oc-approach-active');
   if (typeof Render !== 'undefined') {
     Render.zoomTarget = 1;
     Render.followOverride = null;
