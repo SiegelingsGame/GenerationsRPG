@@ -745,11 +745,17 @@ Game.after = function (quiet) {
     return;
   }
   TownView.sync();
-  if (G.pendingSuccession) return this.succession();
+  if (G.pendingSuccession) {
+    G.newsQueue = []; // succession timeline covers the same events
+    return this.succession();
+  }
   const q = G.world.doom && G.world.doom.quest;
   if (q && q.type === 'champion' && G.party.map(ch).some((c) => c && c.level >= q.count)) completeQuest();
   if (G.world.doom && !G.world.doom.quest && !G.world.doom.ended) newQuest();
   UI.refresh();
+  if (!quiet && !Battle.active && G.newsQueue && G.newsQueue.length) {
+    return UI.showNews(() => { if (!quiet) saveGame(); UI.refresh(); });
+  }
   if (!quiet) saveGame();
 };
 

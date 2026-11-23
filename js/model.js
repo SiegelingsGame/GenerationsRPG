@@ -37,12 +37,20 @@ const Log = {
 function relevant(c) {
   return !!c && (c.house === G.house.name || c.status === 'party' || c.status === 'household' || c.status === 'rival' || c.servedHouse);
 }
+// Kinds that interrupt play with a news popup (skipped during succession timeskip).
+const NEWS_KINDS = new Set(['birth', 'death', 'marriage', 'era', 'head', 'rival', 'renounce', 'age', 'year', 'injury']);
+function queueNews(e) {
+  if (!G || G.skipLog) return;
+  if (!G.newsQueue) G.newsQueue = [];
+  G.newsQueue.push(e);
+}
 function chron(text, kind = 'good', ids = [], type = 'event') {
   Log.add(text, kind, ids);
   if (!G.ledger) G.ledger = [];
   const e = { year: year(), day: G.day, text, kind, ids: ids.filter(Boolean), type };
   G.ledger.push(e);
   if (G.skipLog) G.skipLog.push(e);
+  else if (NEWS_KINDS.has(kind) || NEWS_KINDS.has(type)) queueNews(e);
   return e;
 }
 
@@ -705,7 +713,9 @@ function yearTickInner() {
   G.house.scandal = Math.max(0, (G.house.scandal || 0) - 0.05);
   if (y % 5 === 0) pruneDead();
 
-  Log.add(`— Year ${y} begins (${GD.ERAS[G.world.era.type].short}). Estate income +${income}g.`, 'year');
+  const yearLine = `— Year ${y} begins (${GD.ERAS[G.world.era.type].short}). Estate income +${income}g.`;
+  Log.add(yearLine, 'year');
+  queueNews({ year: y, day: G.day, text: `Year ${y} · Estate income +${income}g (${GD.ERAS[G.world.era.type].short}).`, kind: 'year', ids: [], type: 'income', income });
 }
 function siblings(a, b) { return a.parents.length && a.parents.some((p) => b.parents.includes(p)); }
 

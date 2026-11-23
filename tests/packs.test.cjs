@@ -1,6 +1,6 @@
-const {test}=require('node:test');const assert=require('node:assert/strict');const {chromium}=require('playwright');
+const {test}=require('node:test');const assert=require('node:assert/strict');const {chromium}=require('playwright');const fs=require('fs');function chromePath(){if(fs.existsSync('/usr/bin/chromium'))return'/usr/bin/chromium';if(fs.existsSync('/usr/local/bin/google-chrome'))return'/usr/local/bin/google-chrome';}
 test('bundled art loads; seeded rooms persist; combat effects follow damage/heal/status targets',async()=>{
- const b=await chromium.launch({headless:true,executablePath:'/usr/bin/chromium',args:['--no-sandbox']});
+ const b=await chromium.launch({headless:true,...(chromePath()?{executablePath:chromePath()}:{channel:'chrome'}),args:['--no-sandbox']});
  try{
  const p=await b.newPage({viewport:{width:390,height:844}}),errors=[];p.on('pageerror',e=>errors.push(e.message));
  await p.goto(process.env.GAME_TEST_URL||'http://127.0.0.1:8770');await p.getByRole('button',{name:/^Random Lineage/}).click();await p.getByRole('button',{name:'Start the game',exact:true}).click();await p.getByRole('button',{name:'Continue playing',exact:true}).click();

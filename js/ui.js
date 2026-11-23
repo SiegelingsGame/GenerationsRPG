@@ -68,11 +68,12 @@ UI.isMobile = () => window.matchMedia('(max-width: 900px)').matches;
 UI.buildMobile = function () {
   this.mob = {
     bar: h('div', { id: 'mobilebar' },
-      h('button', { id: 'hudchip', onclick: () => this.openDrawer() }, ''),
-      h('button', { id: 'menuBtn', 'aria-label': 'Open menu', onclick: () => this.openDrawer() }, '☰ Menu')),
+      h('button', { id: 'hudchip', 'aria-label': 'Actions here', onclick: () => this.openHere() }, ''),
+      h('button', { id: 'hereBtn', 'aria-label': 'Actions here', onclick: () => this.openHere() }, 'Here'),
+      h('button', { id: 'menuBtn', 'aria-label': 'Open house menu', onclick: () => this.openDrawer() }, '☰ Menu')),
     backdrop: h('div', { id: 'backdrop', onclick: () => this.closeDrawer() }),
     drawer: h('aside', { id: 'drawer', 'aria-hidden': 'true' },
-      h('div', { class: 'drawer-head' }, h('b', {}, 'Generations'), h('button', { class: 'drawer-x', 'aria-label': 'Close menu', onclick: () => this.closeDrawer() }, '×')),
+      h('div', { class: 'drawer-head' }, h('b', {}, 'House menu'), h('button', { class: 'drawer-x', 'aria-label': 'Close menu', onclick: () => this.closeDrawer() }, '×')),
       h('div', { id: 'drawer-body' })),
     sheet: h('div', { id: 'sheet' }),
   };
@@ -100,8 +101,27 @@ UI.fixStandalone = function () {
   // iOS paints nothing outside the page box, so the page itself has to be screen-tall as well
   document.documentElement.classList.toggle('ios-short', full > window.innerHeight);
 };
-UI.openDrawer = function () { document.body.classList.add('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'false'); this.placeLayout(); };
+UI.openDrawer = function () {
+  this.closeModalQuiet();
+  document.body.classList.add('drawer-open');
+  this.mob.drawer.setAttribute('aria-hidden', 'false');
+  this.placeLayout();
+};
 UI.closeDrawer = function () { document.body.classList.remove('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'true'); };
+UI.closeModalQuiet = function () {
+  // Drop unlocked modals (Here sheet) without triggering a full refresh cascade.
+  while (this.modalStack.length && !this.modalStack[this.modalStack.length - 1].locked) {
+    const m = this.modalStack.pop();
+    m.el.remove();
+  }
+};
+UI.placeName = function () {
+  if (!G || !G.world || !G.world.map) return '';
+  const t = tileAt(G.pos.x, G.pos.y);
+  return t.feature === 'town' ? G.world.towns[t.townIdx].name : t.feature === 'estate' ? 'Your estate' : t.feature === 'ruins' ? 'Ruins'
+    : t.feature === 'spire' ? 'The Black Spire' : t.feature === 'shrine' ? 'Beacon Shrine'
+    : (Events.label && Events.label(t)) || (isWater(t) ? 'At sea' : GD.BIOMES[t.type].name);
+};
 UI.placeLayout = function () {
   if (!this.mob) return;
   const topbar = $('#topbar'), party = $('#party'), panel = $('#panel'), game = $('#game'), stage = $('#stage');
@@ -112,9 +132,19 @@ UI.placeLayout = function () {
   if (!(mobile && Battle.active)) stage.style.bottom = '';
   if (mobile) {
     if (Battle.active) { if (panel.parentNode !== this.mob.sheet) this.mob.sheet.append(panel); this.closeDrawer(); }
-    else if (panel.parentNode !== body) body.prepend(panel);
-    if (party.parentNode !== body) body.insertBefore(party, panel.parentNode === body ? panel.nextSibling : body.firstChild);
-    if (topbar.parentNode !== body) body.append(topbar);
+    else {
+      // Sectioned drawer: Here → Party → House tools
+      let here = $('#drawer-here'), partySec = $('#drawer-party'), house = $('#drawer-house');
+      if (!here) {
+        here = h('section', { id: 'drawer-here', class: 'drawer-sec' }, h('h4', { class: 'drawer-sec-title' }, 'Here'));
+        partySec = h('section', { id: 'drawer-party', class: 'drawer-sec' }, h('h4', { class: 'drawer-sec-title' }, 'Party'));
+        house = h('section', { id: 'drawer-house', class: 'drawer-sec' }, h('h4', { class: 'drawer-sec-title' }, 'House'));
+        body.replaceChildren(here, partySec, house);
+      }
+      if (panel.parentNode !== here) here.append(panel);
+      if (party.parentNode !== partySec) partySec.append(party);
+      if (topbar.parentNode !== house) house.append(topbar);
+    }
   } else {
     if (topbar.parentNode !== document.body || topbar.nextElementSibling !== game) document.body.insertBefore(topbar, game);
     if (party.parentNode !== game) game.insertBefore(party, stage);
@@ -126,11 +156,31 @@ UI.placeLayout = function () {
 UI.updateChip = function () {
   document.body.classList.toggle('has-game', !!(G && G.mcId));
   if (!this.mob || !G || !G.mcId || !G.world || !G.world.map) return;
-  const t = tileAt(G.pos.x, G.pos.y);
-  const place = t.feature === 'town' ? G.world.towns[t.townIdx].name : t.feature === 'estate' ? 'Your estate' : t.feature === 'ruins' ? 'Ruins'
-    : t.feature === 'spire' ? 'The Black Spire' : (Events.label && Events.label(t)) || (isWater(t) ? 'At sea' : GD.BIOMES[t.type].name);
+  const place = this.placeName();
   const mc = ch(G.mcId);
-  $('#hudchip').replaceChildren(h('b', {}, place), h('small', {}, ` · ${seasonName()} ${year()} · ${Math.round(G.house.gold)}g${mc ? ` · ${mc.name} ${Math.round(mc.hp)}/${maxHp(mc)}` : ''}`));
+  $('#hudchip').replaceChildren(
+    h('b', {}, place),
+    h('small', {}, ` · ${seasonName()} ${year()} · ${Math.round(G.house.gold)}g${mc ? ` · ${mc.name} ${Math.round(mc.hp)}/${maxHp(mc)}` : ''}`),
+    h('em', { class: 'chip-hint' }, ' tap for actions'),
+  );
+};
+// Compact location action sheet — clearer than digging through the full House menu.
+UI.openHere = function () {
+  if (!G || !G.mcId || Battle.active) return;
+  this.closeDrawer();
+  this.closeModalQuiet();
+  const place = this.placeName();
+  const acts = this.locationActs();
+  const body = h('div', { class: 'here-sheet' },
+    h('p', { class: 'dim' }, 'Choose an action for this place.'),
+    ...acts,
+    act('House menu', () => { this.closeModal(); this.openDrawer(); }, { sub: 'party, chronicle, save, settings' }),
+  );
+  for (const button of body.querySelectorAll('button.act')) {
+    if (button.textContent.startsWith('House menu')) continue;
+    button.addEventListener('click', () => this.closeModalQuiet(), { capture: true, once: true });
+  }
+  this.modal(body, { title: place || 'Here' });
 };
 
 // ---------------------------------------------------------------- modal
@@ -160,6 +210,49 @@ UI.toast = function (text) {
   setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 2600);
 };
 
+const NEWS_TITLE = {
+  birth: 'Birth', death: 'Death', marriage: 'Marriage', year: 'Income', era: 'New era',
+  head: 'Succession', rival: 'Rival', renounce: 'Renounced', age: 'Coming of age', injury: 'Injury',
+};
+UI.showNews = function (done) {
+  this.closeDrawer();
+  this.closeModalQuiet();
+  const items = (G.newsQueue || []).splice(0);
+  if (!items.length) { if (done) done(); return; }
+  // Prefer family moments over routine income when the list is long.
+  const rank = (e) => ({ birth: 0, death: 1, marriage: 2, era: 3, rival: 4, renounce: 4, head: 5, age: 6, injury: 7, year: 8 }[e.kind] ?? 9);
+  const sorted = items.slice().sort((a, b) => rank(a) - rank(b) || a.year - b.year);
+  const shown = sorted.slice(0, 12);
+  const incomes = items.filter((e) => e.kind === 'year');
+  const incomeTotal = incomes.reduce((s, e) => s + (e.income || 0), 0);
+  const title = items.some((e) => e.kind === 'birth') ? 'A child is born'
+    : items.some((e) => e.kind === 'death') ? 'A death in the House'
+    : items.some((e) => e.kind === 'marriage') ? 'A marriage'
+    : items.some((e) => e.kind === 'era') ? 'A new era'
+    : incomes.length ? 'The year turns' : 'House news';
+  const body = h('div', { class: 'news-popup' },
+    incomes.length > 1 || (incomes.length && items.length > 1)
+      ? h('p', { class: 'news-summary' }, `Estate gathered ${incomeTotal}g across ${incomes.length} year${incomes.length === 1 ? '' : 's'}.`)
+      : h('p', { class: 'dim' }, 'While time passed at the House…'),
+    h('div', { class: 'news-list' }, shown.map((e) => {
+      const who = (e.ids || []).map(ch).filter(Boolean)[0];
+      return h('div', { class: 'news-row k-' + (e.kind || 'info') },
+        who ? portrait(who, 40) : h('span', { class: 'news-icon' }, KIND_ICON[e.kind] || '•'),
+        h('div', { class: 'news-body' },
+          h('b', {}, NEWS_TITLE[e.kind] || 'News'),
+          h('small', { class: 'dim' }, `Year ${e.year}`),
+          h('p', {}, e.text)));
+    })),
+    items.length > shown.length ? h('p', { class: 'dim small' }, `+${items.length - shown.length} more in the Chronicle`) : null,
+    act('Continue', () => {
+      this.closeModal();
+      if (done) done();
+      else this.refresh();
+    }, { cls: 'hl', sub: 'return to the map' }),
+  );
+  this.modal(body, { title, locked: true });
+};
+
 // ---------------------------------------------------------------- HUD
 UI.refresh = function () {
   if (!G || !G.mcId) return;
@@ -185,10 +278,12 @@ UI.renderTop = function () {
     h('div', { class: 'tb' }, h('small', {}, 'Prestige'), h('b', {}, Math.round(hs.prestige))),
     h('div', { class: 'tb' }, h('small', {}, 'Gold'), h('b', { class: 'gold' }, Math.round(hs.gold))),
     h('div', { class: 'tb' }, h('small', {}, 'Potions'), h('b', {}, hs.potions)),
-    h('button', { class: 'small', onclick: () => this.showTree() }, 'Family Tree'),
-    h('button', { class: 'small', onclick: () => this.showChronicle() }, 'Chronicle'),
-    h('button', { class: 'small', onclick: () => this.showWorld() }, 'World'),
-    h('button', { class: 'small', onclick: () => this.showMenu() }, 'Menu'),
+    h('div', { class: 'tb-tools' },
+      h('button', { class: 'small', onclick: () => this.showTree() }, 'Family Tree'),
+      h('button', { class: 'small', onclick: () => this.showChronicle() }, 'Chronicle'),
+      h('button', { class: 'small', onclick: () => this.showWorld() }, 'World'),
+      h('button', { class: 'small', onclick: () => this.showMenu() }, 'Save & Help'),
+    ),
   );
 };
 
@@ -240,8 +335,7 @@ UI.renderLog = function () {
 };
 
 // ---------------------------------------------------------------- side panel by location
-UI.renderPanel = function () {
-  const p = $('#panel');
+UI.locationActs = function () {
   const t = tileAt(G.pos.x, G.pos.y);
   const body = [];
   if (t.feature === 'estate') body.push(...this.estatePanel());
@@ -251,34 +345,49 @@ UI.renderPanel = function () {
   else if (Events.panel(t)) body.push(...Events.panel(t));
   else if (t.feature === 'shrine') body.push(h('h3', {}, 'Beacon Shrine'), h('p', { class: 'dim' }, t.lit ? 'The beacon burns again, a ward against the dark.' : 'A cold beacon from an older age.'));
   else body.push(h('h3', {}, isWater(t) ? 'At Sea' : GD.BIOMES[t.type].name), h('p', { class: 'dim' }, isWater(t) ? 'Your boat rides the waves.' : 'Tap anywhere to travel. Time passes only while you move, and danger is everywhere.'));
-  if (!isWater(t) && t.feature !== 'town' && t.feature !== 'estate') body.push(act('Make camp', () => Campfire.start(), { sub: 'sit by the fire with your party · rest the night' }));
+  if (!isWater(t) && t.feature !== 'town' && t.feature !== 'estate') body.push(act('Make camp', () => Campfire.start(), { sub: 'sit by the fire with your party · rest the night', cls: 'hl' }));
   body.push(this.questBox());
+  return body.filter(Boolean);
+};
+UI.renderPanel = function () {
+  const p = $('#panel');
+  const body = this.locationActs();
   body.push(h('div', { class: 'hint' }, this.isMobile()
-    ? `Tap the map to travel${hasTech('flight') ? ' (or fly to far tiles)' : ''}. Pinch to zoom; use the buttons to rotate.`
+    ? `Tap the map to travel${hasTech('flight') ? ' (or fly to far tiles)' : ''}. Use Here for place actions, Menu for the House.`
     : `Click the map to travel${hasTech('flight') ? ' (or fly to far tiles)' : ''}. Wheel to zoom, Q/E to rotate.`));
-  p.replaceChildren(...body.filter(Boolean));
+  p.replaceChildren(...body);
 };
 
 function act(label, fn, opts = {}) {
-  return h('button', { class: 'act' + (opts.cls ? ' ' + opts.cls : ''), disabled: opts.disabled, title: opts.title, onclick: fn }, label, opts.sub ? h('small', {}, opts.sub) : null);
+  return h('button', {
+    class: 'act' + (opts.cls ? ' ' + opts.cls : ''), disabled: opts.disabled, title: opts.title,
+    'aria-label': opts.sub ? `${label}. ${opts.sub}` : undefined, onclick: fn,
+  }, label, opts.sub ? h('small', {}, opts.sub) : null);
 }
 
 UI.estatePanel = function () {
   const hs = G.house;
   const mc = ch(G.mcId);
   const unmarried = !spouseOf(mc);
+  const income = Math.round(GD.ESTATE[hs.tier].income * era().income + hs.up.livestock * 40);
   return [
     h('h3', {}, `${GD.ESTATE[hs.tier].name} of House ${hs.name}`),
-    h('p', { class: 'dim' }, `Income ${Math.round(GD.ESTATE[hs.tier].income * era().income + hs.up.livestock * 40)}g a year. Household ${householdCount()}/${GD.ESTATE[hs.tier].household}. Retinue ${hs.retinue}.`),
-    act('Rest a season', () => Game.rest(90), { sub: '90 days · heal everyone' }),
-    act('Train a season', () => Game.train(), { sub: '90 days · XP for the party' }),
-    act('Let a year pass', () => Game.rest(360), { sub: '360 days · watch your family grow' }),
-    act('Improve the Estate', () => this.showEstate(), { sub: 'tiers, upgrades, retinue' }),
-    act('Household & Heir', () => this.showHousehold(), { sub: 'party, children, succession' }),
-    act('Armory & Inventory', () => this.showInventory(ch(G.mcId)), { sub: 'try on armour, robes, helms, weapons' }),
-    unmarried ? act('Arranged Match', () => Game.arrangedMatch(), { sub: 'choose 1 of 3 partners', cls: 'hl' }) : null,
-    act('Adopt a Child', () => this.showAdoption(), { sub: 'give an orphan a family and a name' }),
-    act('Family Tree', () => this.showTree()),
+    h('p', { class: 'dim' }, `Income ${income}g a year. Household ${householdCount()}/${GD.ESTATE[hs.tier].household}. Retinue ${hs.retinue}.`),
+    h('div', { class: 'act-group' },
+      h('p', { class: 'act-group-label' }, 'Pass time'),
+      act('Rest a season', () => Game.rest(90), { sub: '90 days · heal everyone', cls: 'hl' }),
+      act('Train a season', () => Game.train(), { sub: '90 days · XP for the party', cls: 'hl' }),
+      act('Let a year pass', () => Game.rest(360), { sub: '360 days · watch your family grow' }),
+    ),
+    h('div', { class: 'act-group' },
+      h('p', { class: 'act-group-label' }, 'House'),
+      act('Improve the Estate', () => this.showEstate(), { sub: 'tiers, upgrades, retinue' }),
+      act('Household & Heir', () => this.showHousehold(), { sub: 'party, children, succession' }),
+      act('Armory & Inventory', () => this.showInventory(ch(G.mcId)), { sub: 'try on armour, robes, helms, weapons' }),
+      unmarried ? act('Arranged Match', () => Game.arrangedMatch(), { sub: 'choose 1 of 3 partners', cls: 'hl' }) : null,
+      act('Adopt a Child', () => this.showAdoption(), { sub: 'give an orphan a family and a name' }),
+      act('Family Tree', () => this.showTree()),
+    ),
   ];
 };
 
@@ -301,12 +410,16 @@ UI.townPanel = function (t) {
   return [
     h('h3', {}, town.name), h('p', { class: 'dim' }, `${GD.TOWN_SIZES[town.size]} · founded ${town.founded}`),
     act('Enter Town', () => TownView.start(t), { cls: 'hl', sub: 'walk the streets, talk to people, hear rumors' }),
-    h('p', { class: 'dim' }, `${this.townPeople(t.townIdx).length} people of note live here. Quick options:`),
-    act('Tavern', () => this.showTavern(t.townIdx), { sub: 'recruit, court, lineage' }),
-    act('Market', () => this.showMarket(), { sub: 'gear & potions' }),
-    act('Rest at the Inn', () => Game.inn(), { sub: '10g · 7 days · heal', disabled: G.house.gold < 10 }),
-    h('h4', {}, 'Deeds for the Realm', deedDone ? h('small', {}, ' (done this year)') : null),
-    ...deeds,
+    h('div', { class: 'act-group' },
+      h('p', { class: 'act-group-label' }, 'Quick tasks'),
+      act('Tavern', () => this.showTavern(t.townIdx), { sub: 'recruit, court, lineage' }),
+      act('Market', () => this.showMarket(), { sub: 'gear & potions' }),
+      act('Rest at the Inn', () => Game.inn(), { sub: '10g · 7 days · heal', disabled: G.house.gold < 10 }),
+    ),
+    h('div', { class: 'act-group' },
+      h('p', { class: 'act-group-label' }, deedDone ? 'Deeds (done this year)' : 'Deeds for the Realm'),
+      ...deeds,
+    ),
   ];
 };
 UI.townPeople = function (idx) {
