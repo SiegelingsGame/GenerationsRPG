@@ -11,8 +11,9 @@ test('class kits drive equipment; try-on and equip update figure and combat bonu
     p.on('pageerror', (e) => errors.push(e.message));
     await p.goto(process.env.GAME_TEST_URL || 'http://127.0.0.1:8770');
     await p.getByRole('button', { name: /^Random Lineage/ }).click();
-    await p.getByRole('button', { name: 'Start the game', exact: true }).click();
-    await p.getByRole('button', { name: 'Continue playing', exact: true }).click();
+    await p.getByRole('button', { name: 'Continue', exact: true }).click();
+    await p.locator('.origin-intro').waitFor();
+    await p.getByRole('button', { name: /begin playing now/ }).click();
 
     const state = await p.evaluate(() => {
       Equip.ensureHouse();
@@ -62,11 +63,13 @@ test('class kits drive equipment; try-on and equip update figure and combat bonu
     const zero = await p.evaluate(() => {
       const c = makeChar({ cls: 'sorcerer', race: 'human', birth: 'lowborn', house: G.house.name, status: 'party', level: 2 });
       Equip.ensureChar(c);
-      c.equip.body = Equip.makeItem('robe', 1); // def 0
-      c.equip.hand = Equip.makeItem('orb', 1); // atk 0
+      // Force plain common pieces so random affixes cannot pad atk/def.
+      for (const slot of Object.keys(c.equip)) c.equip[slot] = null;
+      c.equip.body = Equip.makeItem('robe', 1, { rarity: 'common', mods: [] }); // def 0
+      c.equip.hand = Equip.makeItem('orb', 1, { rarity: 'common', mods: [] }); // atk 0
       Equip.syncLegacy(c);
       const before = { def: armorDef(c), atk: weaponAtk(c), armorTier: c.gear.armor };
-      c.equip.feet = Equip.makeItem('shoes', 3); // def 1
+      c.equip.feet = Equip.makeItem('shoes', 3, { rarity: 'common', mods: [] }); // def 1
       return { before, afterDef: armorDef(c) };
     });
     assert.equal(zero.before.def, 0);

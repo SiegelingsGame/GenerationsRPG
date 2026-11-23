@@ -66,6 +66,43 @@ GD.ITEM_KINDS = {
 
 GD.ITEM_ICON_ORDER = ['sword', 'bow', 'staff', 'helm', 'armor', 'legs', 'necklace', 'glove', 'ring', 'gem', 'boots'];
 
+// Rarity weights and what each grade can roll. Higher rarity → more mods / skills / passives.
+GD.RARITY = {
+  common:    { name: 'Common',    color: '#c8c0b0', weight: 52, cost: 1,   mods: [0, 1], skill: 0.00, passive: 0.00 },
+  uncommon:  { name: 'Uncommon',  color: '#6fe08a', weight: 26, cost: 1.6, mods: [0, 1], skill: 0.10, passive: 0.08 },
+  rare:      { name: 'Rare',      color: '#6fb3d9', weight: 14, cost: 2.4, mods: [1, 2], skill: 0.28, passive: 0.20 },
+  epic:      { name: 'Epic',      color: '#b48aff', weight: 6,  cost: 3.6, mods: [1, 2], skill: 0.50, passive: 0.40 },
+  legendary: { name: 'Legendary', color: '#ffd76a', weight: 2,  cost: 5.5, mods: [2, 3], skill: 0.75, passive: 0.60 },
+};
+
+// Affixes: combat numbers or flat wearer stats.
+GD.ITEM_MODS = {
+  keen:     { name: 'Keen',     atk: 1 },
+  ruthless: { name: 'Ruthless', atk: 2 },
+  sturdy:   { name: 'Sturdy',   def: 1 },
+  bulwark:  { name: 'Bulwarked', def: 2 },
+  arcane:   { name: 'Arcane',   mag: 1 },
+  radiant:  { name: 'Radiant',  mag: 2 },
+  strong:   { name: 'of Strength',  stats: { str: 1 } },
+  swift:    { name: 'of Swiftness', stats: { agi: 1 } },
+  wise:     { name: 'of Insight',   stats: { int: 1 } },
+  steadfast:{ name: 'of Will',      stats: { wil: 1 } },
+  hardy:    { name: 'of Vigor',     stats: { vit: 1 } },
+};
+
+// Passives while the piece is worn (combat / economy hooks).
+GD.ITEM_PASSIVES = {
+  warding:    { name: 'Warding',     desc: 'Takes 6% less damage.' },
+  bloodthirst:{ name: 'Bloodthirst', desc: 'Deals 6% more damage.' },
+  thrifty:    { name: 'Thrifty',     desc: '+12% gold from victories.' },
+  scholar:    { name: 'Scholar',     desc: '+10% XP while worn.' },
+  laststand:  { name: 'Last Stand',  desc: 'Below 30% HP, takes 12% less damage.' },
+  hunter:     { name: 'Hunter',      desc: '+8% critical chance.' },
+};
+
+// Bonus moves that can appear on rare+ gear (ability ids from GD.ABILITIES).
+GD.ITEM_SKILLS = ['cleave', 'flurry', 'firebolt', 'mend', 'bulwark', 'aimedShot', 'inspire', 'smite'];
+
 const Equip = {
   _seq: 1,
   uiReady: false,
@@ -93,17 +130,65 @@ Equip.emptyEquip = function () {
   return { head: null, neck: null, body: null, hand: null, offhand: null, feet: null, ring: null };
 };
 
+Equip.rollRarity = function (bias) {
+  // bias: rarity key to favor, 'high' to tilt toward rare+, or a weight mult map
+  const weights = {};
+  for (const [k, r] of Object.entries(GD.RARITY)) {
+    let w = r.weight;
+    if (bias === k) w *= 4;
+    else if (bias === 'high') w *= ({ common: 0.4, uncommon: 0.8, rare: 1.6, epic: 2.2, legendary: 2.8 }[k] || 1);
+    else if (bias === 'low') w *= ({ common: 1.4, uncommon: 1.1, rare: 0.6, epic: 0.3, legendary: 0.1 }[k] || 1);
+    else if (bias && typeof bias === 'object' && bias[k] != null) w *= bias[k];
+    weights[k] = w;
+  }
+  return R.weighted(weights);
+};
+
 Equip.makeItem = function (kind, tier, o = {}) {
   const k = GD.ITEM_KINDS[kind];
   if (!k) return null;
   const t = clamp(tier | 0, 1, 5);
+  const rarity = o.rarity || this.rollRarity(o.rarityBias);
+  const rare = GD.RARITY[rarity] || GD.RARITY.common;
   const id = o.id || (`it${Date.now().toString(36)}_${Equip._seq++}`);
+  let atk = k.atk[t - 1], def = k.def[t - 1], mag = k.mag[t - 1];
+  const stats = {};
+  const mods = [];
+  const modCount = o.mods ? o.mods.length : R.int(rare.mods[0], rare.mods[1]);
+  const pool = Object.keys(GD.ITEM_MODS);
+  const chosenMods = o.mods || [];
+  if (!o.mods) {
+    for (let i = 0; i < modCount && pool.length; i++) {
+      if (i === 0 && rarity === 'common' && !R.chance(0.22)) break;
+      const left = pool.filter((x) => !chosenMods.includes(x));
+      if (!left.length) break;
+      chosenMods.push(R.pick(left));
+    }
+  }
+  for (const mid of chosenMods) {
+    const m = GD.ITEM_MODS[mid];
+    if (!m) continue;
+    mods.push(mid);
+    if (m.atk) atk += m.atk;
+    if (m.def) def += m.def;
+    if (m.mag) mag += m.mag;
+    if (m.stats) for (const s of Object.keys(m.stats)) stats[s] = (stats[s] || 0) + m.stats[s];
+  }
+  let skill = o.skill || null;
+  if (!('skill' in o) && R.chance(rare.skill)) skill = R.pick(GD.ITEM_SKILLS);
+  let passive = o.passive || null;
+  if (!('passive' in o) && R.chance(rare.passive)) passive = R.pick(Object.keys(GD.ITEM_PASSIVES));
+  const baseName = o.name || k.names[t - 1];
+  const prefix = mods.map((mid) => GD.ITEM_MODS[mid]).filter((m) => m && !m.stats).map((m) => m.name);
+  const suffix = mods.map((mid) => GD.ITEM_MODS[mid]).filter((m) => m && m.stats).map((m) => m.name);
+  let name = baseName;
+  if (prefix.length) name = `${prefix[0]} ${name}`;
+  if (suffix.length) name = `${name} ${suffix[0]}`;
+  if (o.name) name = o.name;
   return {
-    id, kind, tier: t, slot: k.slot,
-    name: o.name || k.names[t - 1],
-    atk: k.atk[t - 1], def: k.def[t - 1], mag: k.mag[t - 1],
-    weapon: k.weapon || null,
-    icon: k.icon,
+    id, kind, tier: t, slot: k.slot, rarity, name,
+    atk, def, mag, stats, mods, skill, passive,
+    weapon: k.weapon || null, icon: k.icon,
   };
 };
 
@@ -171,6 +256,23 @@ Equip.bonus = function (c, key) {
   return n;
 };
 
+Equip.statBonus = function (c, key) {
+  this.ensureChar(c);
+  let n = 0;
+  for (const it of this.worn(c)) n += (it.stats && it.stats[key]) || 0;
+  return n;
+};
+
+Equip.passives = function (c) {
+  return this.worn(c).map((it) => it.passive).filter((p) => p && GD.ITEM_PASSIVES[p]);
+};
+
+Equip.hasPassive = function (c, id) { return this.passives(c).includes(id); };
+
+Equip.skills = function (c) {
+  return this.worn(c).map((it) => it.skill).filter((s) => s && GD.ABILITIES[s]);
+};
+
 Equip.weaponLook = function (c) {
   this.ensureChar(c);
   if (c.equip.hand && c.equip.hand.weapon) return c.equip.hand.weapon;
@@ -196,11 +298,22 @@ Equip.headStyle = function (c) {
 Equip.itemDesc = function (item) {
   if (!item) return '';
   const bits = [];
+  const rare = GD.RARITY[item.rarity] || GD.RARITY.common;
+  bits.push(rare.name);
   if (item.atk) bits.push(`+${item.atk} atk`);
   if (item.def) bits.push(`+${item.def} def`);
   if (item.mag) bits.push(`+${item.mag} mag`);
+  if (item.stats) {
+    for (const [s, v] of Object.entries(item.stats)) if (v) bits.push(`+${v} ${STAT_NAMES[s] || s}`);
+  }
+  if (item.skill && GD.ABILITIES[item.skill]) bits.push(`move: ${GD.ABILITIES[item.skill].name}`);
+  if (item.passive && GD.ITEM_PASSIVES[item.passive]) bits.push(GD.ITEM_PASSIVES[item.passive].name);
   bits.push(`tier ${item.tier}`);
   return bits.join(' · ');
+};
+
+Equip.rarityColor = function (item) {
+  return (GD.RARITY[item && item.rarity] || GD.RARITY.common).color;
 };
 
 Equip.slotLabel = function (c, slot) {
@@ -277,26 +390,42 @@ Equip.marketOffers = function (c, maxTier) {
     const worn = c.equip[slot];
     const next = (worn ? worn.tier : 0) + 1;
     if (next > maxTier) continue;
-    const item = this.makeItem(kind, next);
+    const item = this.makeItem(kind, next, { rarityBias: 'low' });
     const base = GD.GEAR[next - 1] ? GD.GEAR[next - 1].cost : 40 * next * next;
     const mult = slot === 'body' ? 1.1 : slot === 'hand' ? 1 : slot === 'offhand' ? 0.7 : slot === 'head' || slot === 'feet' ? 0.55 : 0.4;
-    offers.push({ slot, kind, item, cost: Math.round(base * mult) });
+    const rareMult = (GD.RARITY[item.rarity] || GD.RARITY.common).cost;
+    offers.push({ slot, kind, item, cost: Math.round(base * mult * rareMult) });
   }
   return offers;
 };
 
-Equip.seedStarter = function (c, tier) {
+Equip.seedStarter = function (c, tier, o = {}) {
   // Give a new recruit / highborn a basic kit matching their class.
   this.ensureChar(c);
   const kit = this.kitFor(c);
   const t = clamp(tier | 0, 0, 5);
   if (t <= 0) return;
-  if (kit.hand && !c.equip.hand) c.equip.hand = this.makeItem(kit.hand, t);
-  if (kit.body && !c.equip.body) c.equip.body = this.makeItem(kit.body, t);
-  if (kit.head && t >= 2 && !c.equip.head) c.equip.head = this.makeItem(kit.head, t - 1);
-  if (kit.feet && t >= 2 && !c.equip.feet) c.equip.feet = this.makeItem(kit.feet, Math.max(1, t - 1));
-  if (kit.offhand && t >= 1 && !c.equip.offhand) c.equip.offhand = this.makeItem(kit.offhand, Math.max(1, t - 1));
+  const bias = o.rarityBias || 'low';
+  const mk = (kind, ti) => this.makeItem(kind, ti, { rarityBias: bias, rarity: o.rarity, skill: o.skill, passive: o.passive });
+  if (kit.hand && !c.equip.hand) c.equip.hand = mk(kit.hand, t);
+  if (kit.body && !c.equip.body) c.equip.body = mk(kit.body, t);
+  if (kit.head && t >= 2 && !c.equip.head) c.equip.head = mk(kit.head, t - 1);
+  if (kit.feet && t >= 2 && !c.equip.feet) c.equip.feet = mk(kit.feet, Math.max(1, t - 1));
+  if (kit.offhand && t >= 1 && !c.equip.offhand) c.equip.offhand = mk(kit.offhand, Math.max(1, t - 1));
   this.syncLegacy(c);
+};
+
+// Grant a named piece (often a story start reward) and equip it.
+Equip.grant = function (c, kind, tier, opts = {}) {
+  this.ensureChar(c);
+  const item = this.makeItem(kind, tier, opts);
+  if (!item) return null;
+  if (this.canWear(c, item)) {
+    if (c.equip[item.slot]) this.addToStash(c.equip[item.slot]);
+    c.equip[item.slot] = item;
+    this.syncLegacy(c);
+  } else this.addToStash(item);
+  return item;
 };
 
 Equip.iconIndex = function (item) {

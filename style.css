@@ -484,3 +484,21 @@ body:not(.has-game) #guide-goal { display: none; }
   .equip-left, .inv-left, .equip-doll { width: 100%; }
   .eq-slots { grid-template-columns: 1fr 1fr; }
 }
+
+/* ---------------------------------------------------------------- origin intro & guided start */
+.origin-intro { max-width: 560px; margin: 0 auto; }
+.origin-photo { display: block; width: 100%; max-width: 520px; height: auto; margin: 0 auto 14px; border-radius: 6px; image-rendering: auto; border: 1px solid #665a42; }
+.origin-intro h2 { color: var(--gold); margin: 4px 0 6px; font-weight: normal; letter-spacing: 1px; }
+.origin-goal { font-style: italic; color: #e8d6a0; margin: 0 0 12px; }
+.origin-story { margin: 6px 0; line-height: 1.45; }
+.origin-actions { margin-top: 16px; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.origin-actions button.act { min-width: 140px; text-align: center; }
+
+.guide-guided { max-width: 480px; }
+.guide-progress { display: flex; gap: 6px; margin: 8px 0 14px; }
+.guide-progress .gp { width: 10px; height: 10px; border-radius: 50%; background: #3a3448; border: 1px solid #665a42; }
+.guide-progress .gp.on { background: var(--gold); border-color: var(--gold); }
+.guide-progress .gp.done { background: #6fe08a; border-color: #6fe08a; }
+.guide-nav { margin-top: 12px; gap: 8px; flex-wrap: wrap; }
+.rarity { font-weight: 600; }
+.inv-cell .rarity, .eq-slot .rarity { font-size: 10px; }

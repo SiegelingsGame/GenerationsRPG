@@ -29,10 +29,13 @@ Game.title = function () {
 Game.randomLineage = function () {
   newGame();
   const pick = (table) => R.pick(Object.keys(table));
+  const birth = pick(GD.BIRTH);
+  const cls = pick(GD.CLASSES);
   const race = pick(GD.RACES);
+  const originId = Origins.pick({ birth, cls });
   this.found({ race, name: genName(race), house: R.pick(GD.HOUSE_NAMES), color: R.pick(GD.HOUSE_COLORS),
     gender: pick(GD.GENDERS), orientation: pick(GD.ORIENTATIONS), pref: pick(GD.PREFERENCES),
-    height: pick(GD.HEIGHTS), build: pick(GD.BUILDS), cls: pick(GD.CLASSES), birth: pick(GD.BIRTH) }, true);
+    height: pick(GD.HEIGHTS), build: pick(GD.BUILDS), cls, birth, originId }, true);
 };
 
 // ---------------------------------------------------------------- founding
@@ -123,10 +126,13 @@ Game.found = function (sel, random = false) {
     condition: null, infertile: R.chance(0.04), orientKnown: true, beard: sel.gender === 'man' ? R.chance(0.4) : sel.race === 'dwarf',
   });
   if (sel.birth === 'orphan') { mc.orphaned = true; mc.formative = 2; mc.lineageKnown = true; mc.secret = 'common'; }
-  if (sel.birth === 'highborn') { G.house.prestige += 10; G.house.gold += 100; Equip.seedStarter(mc, 1); }
-  else Equip.seedStarter(mc, 1);
+  if (sel.birth === 'highborn') { G.house.prestige += 10; G.house.gold += 100; }
   if (sel.birth === 'lowborn') G.house.potions++;
   if (sel.birth === 'bastard') G.house.prestige = 0;
+  // Story origin: gear, wealth swings, injuries, rarer starts.
+  const originId = sel.originId || Origins.pick({ birth: sel.birth, cls: sel.cls });
+  Origins.apply(mc, originId);
+  if (!Equip.worn(mc).length) Equip.seedStarter(mc, 1, { rarityBias: R.chance(0.18) ? 'high' : 'low' });
   mc.hp = maxHp(mc);
   G.mcId = mc.id;
   G.founderId = mc.id;
@@ -142,6 +148,7 @@ Game.creationSummary = function (random = false, draftName) {
   const mc = ch(G.mcId), partner = spouseOf(mc);
   let houseName = draftName ?? G.house.name;
   const detail = (label, value) => h('div', {}, h('dt', {}, label), h('dd', {}, value));
+  const origin = Origins.get(G.house.originId);
   UI.modal(h('div', { class: 'create house-summary' },
     h('p', { class: 'dim small' }, random ? 'Random Lineage · Ready to play' : 'Step 8 of 8 · Review your House'),
     random ? h('p', {}, 'Your lineage is ready. Random Lineage is the intended way to start: discover your family as you play. Keep this House name or make it your own.') : null,
@@ -152,6 +159,7 @@ Game.creationSummary = function (random = false, draftName) {
     h('div', { class: 'row' }, portrait(mc, 100), partner ? portrait(partner, 100) : null),
     h('dl', {},
       detail('Founder', mc.name),
+      detail('Beginning', origin.name),
       detail('Sex & preferences', `${GD.GENDERS[mc.gender].name} · ${GD.ORIENTATIONS[mc.orientation].name} · ${GD.PREFERENCES[mc.pref].name}`),
       detail('Race', GD.RACES[mc.race].name), detail('Class', GD.CLASSES[mc.cls].name),
       detail('Appearance', `${GD.HEIGHTS[mc.height].name} · ${GD.BUILDS[mc.build].name}`),
@@ -163,20 +171,43 @@ Game.creationSummary = function (random = false, draftName) {
     h('p', {}, 'Travel, earn prestige and raise an heir. Your family will carry the House into the next generation.'),
     h('div', { class: 'row creation-nav' },
       act('Back to start options', () => { UI.closeAll(); this.title(); }),
-      act('Start the game', () => {
+      act('Continue', () => {
         const name = houseName.trim().slice(0, 20);
         if (!name) return UI.toast('Give your House a name.');
         if (name !== G.house.name) {
-          // Rename only this founding family, never an unrelated NPC House.
           for (const c of [mc, partner].filter(Boolean)) c.house = name;
-          const flag=G.house.heraldry;
+          const flag = G.house.heraldry;
           delete G.heraldry[G.house.name];
           G.house.name = name;
-          G.heraldry[name]=flag;
+          G.heraldry[name] = flag;
         }
-        UI.closeAll(); this.enterWorld(true);
+        UI.closeAll();
+        this.originIntro();
       }, { cls: 'hl' }))),
     { title: 'Your House', wide: true, locked: true });
+};
+
+// Photo story of how the founder reached this point, then Start or Start Guide.
+Game.originIntro = function () {
+  const mc = ch(G.mcId);
+  const origin = Origins.get(G.house.originId);
+  const gear = Equip.worn(mc);
+  const gearLine = gear.length
+    ? gear.map((it) => `${it.name} (${(GD.RARITY[it.rarity] || GD.RARITY.common).name})`).join(' · ')
+    : 'little more than the clothes on your back';
+  const injuries = (mc.injuries || []).map((k) => GD.INJURIES[k].name);
+  UI.modal(h('div', { class: 'origin-intro' },
+    Origins.photo(mc, G.house.originId),
+    h('h2', {}, origin.name),
+    h('p', { class: 'origin-goal' }, origin.goal),
+    ...origin.story.map((line) => h('p', { class: 'origin-story' }, line)),
+    h('p', { class: 'dim' }, `${mc.name} · ${GD.RACES[mc.race].name} ${GD.CLASSES[mc.cls].name} · ${Math.round(G.house.gold)}g · ${Math.round(G.house.prestige)} prestige`),
+    h('p', { class: 'dim small' }, `Starting kit: ${gearLine}`),
+    injuries.length ? h('p', { class: 'bad small' }, `Marks of the past: ${injuries.join(', ')}`) : null,
+    h('div', { class: 'row origin-actions' },
+      act('Start', () => { UI.closeAll(); this.enterWorld(true); }, { cls: 'hl', sub: 'begin playing now' }),
+      act('Start Guide', () => { UI.closeAll(); this.enterWorld(true); Guide.showGuided({ fresh: true }); }, { sub: 'a short guided walkthrough' })),
+  ), { title: 'How you begin', wide: true, locked: true });
 };
 
 // Find a spouse for someone of the House (the head, or one of their kin).
@@ -285,7 +316,7 @@ Game.enterWorld = function (fresh) {
   Guide.init();
   UI.refresh();
   saveGame();
-  if (fresh) Guide.show();
+  // Fresh starts open the guided walkthrough only when Start Guide was chosen.
 };
 
 // ---------------------------------------------------------------- travel

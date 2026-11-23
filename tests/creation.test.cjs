@@ -1,8 +1,14 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
+const fs = require('fs');
+function chromePath() {
+  if (fs.existsSync('/usr/bin/chromium')) return '/usr/bin/chromium';
+  if (fs.existsSync('/usr/local/bin/google-chrome')) return '/usr/local/bin/google-chrome';
+  return undefined;
+}
 test('mobile creation preserves choices and starts only after House summary', async () => {
- const browser = await chromium.launch({headless:true, executablePath:'/usr/bin/chromium', args:['--no-sandbox']});
+ const browser = await chromium.launch({headless:true,...(chromePath()?{executablePath:chromePath()}:{channel:'chrome'}),args:['--no-sandbox']});
  try {
   const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
@@ -29,8 +35,10 @@ test('mobile creation preserves choices and starts only after House summary', as
   await page.getByRole('heading',{name:'House Dawn',exact:true}).waitFor();
   assert.match(await page.locator('.house-summary').innerText(),/Arden/);
   assert.equal(await page.locator('#guide-goal').count(),0);
-  await page.getByRole('button',{name:'Start the game',exact:true}).click();
-  await page.getByText('Your first generation',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.locator('.origin-intro').waitFor();
+  await page.getByRole('button',{name:/Start Guide/}).click();
+  await page.locator('.guide-guided').waitFor();
   assert.deepEqual(errors,[]);
  } finally { await browser.close(); }
 });

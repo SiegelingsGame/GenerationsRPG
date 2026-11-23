@@ -260,7 +260,10 @@ UI.renderPanel = function () {
 };
 
 function act(label, fn, opts = {}) {
-  return h('button', { class: 'act' + (opts.cls ? ' ' + opts.cls : ''), disabled: opts.disabled, title: opts.title, onclick: fn }, label, opts.sub ? h('small', {}, opts.sub) : null);
+  return h('button', {
+    class: 'act' + (opts.cls ? ' ' + opts.cls : ''), disabled: opts.disabled, title: opts.title,
+    'aria-label': opts.sub ? `${label}. ${opts.sub}` : undefined, onclick: fn,
+  }, label, opts.sub ? h('small', {}, opts.sub) : null);
 }
 
 UI.estatePanel = function () {
@@ -485,7 +488,9 @@ UI.charBody = function (c) {
         h('b', {}, `${classOf(c).icon} ${classOf(c).name}`), h('small', { class: 'dim' }, ` ${classOf(c).desc}`),
         h('small', { class: 'good' }, classOf(c).passive),
         h('ul', { class: 'abil' }, classOf(c).skills.map((id, i) => h('li', { class: i === 2 && c.level < 5 ? 'dim' : '' }, h('b', {}, GD.ABILITIES[id].name), ` (${GD.ABILITIES[id].cost} focus${i === 2 && c.level < 5 ? ', unlocks at level 5' : ''}): ${GD.ABILITIES[id].desc}`)),
-          c.extraSkill && GD.LEGACY_SKILL[c.extraSkill] && !classOf(c).skills.includes(GD.LEGACY_SKILL[c.extraSkill]) ? h('li', {}, h('b', {}, GD.ABILITIES[GD.LEGACY_SKILL[c.extraSkill]].name), ` (learned): ${GD.ABILITIES[GD.LEGACY_SKILL[c.extraSkill]].desc}`) : null)),
+          c.extraSkill && GD.LEGACY_SKILL[c.extraSkill] && !classOf(c).skills.includes(GD.LEGACY_SKILL[c.extraSkill]) ? h('li', {}, h('b', {}, GD.ABILITIES[GD.LEGACY_SKILL[c.extraSkill]].name), ` (learned): ${GD.ABILITIES[GD.LEGACY_SKILL[c.extraSkill]].desc}`) : null,
+          ...(Equip.isChar(c) ? Equip.skills(c).filter((id) => !classOf(c).skills.includes(id)).map((id) => h('li', { class: 'good' }, h('b', {}, GD.ABILITIES[id].name), ` (from gear): ${GD.ABILITIES[id].desc}`)) : []),
+          ...(Equip.isChar(c) ? Equip.passives(c).map((pid) => h('li', { class: 'good' }, h('b', {}, GD.ITEM_PASSIVES[pid].name), ` (gear): ${GD.ITEM_PASSIVES[pid].desc}`)) : []))),
       (c.injuries || []).length ? h('div', { class: 'tags' }, c.injuries.map((k) => h('span', { class: 'tag ' + (GD.INJURIES[k].good ? 'good' : 'bad'), title: Object.entries(GD.INJURIES[k].mods).map(([s2, v]) => `${STAT_NAMES[s2]} ${v > 0 ? '+' : ''}${v}`).join(', ') }, GD.INJURIES[k].name))) : null,
       c.alive ? h('div', {}, bar(c.xp, xpNeed(c.level), 'xp'), h('small', { class: 'dim' }, `XP ${Math.round(c.xp)}/${xpNeed(c.level)}`)) : null,
       h('table', { class: 'stats' }, statRows),
@@ -635,7 +640,7 @@ UI.slotButton = function (c, slot, opts = {}) {
       return cv;
     })() : null,
     h('small', { class: 'eq-slot-label' }, Equip.slotLabel(c, slot)),
-    item ? h('small', { class: 'eq-slot-name' }, item.name) : null,
+    item ? h('small', { class: 'eq-slot-name', style: `color:${Equip.rarityColor(item)}` }, item.name) : null,
   );
   return btn;
 };
@@ -750,6 +755,7 @@ UI.showInventory = function (c, tryId) {
       onclick: () => rebuild(it.id),
     },
       (() => { const cv = document.createElement('canvas'); cv.width = 36; cv.height = 36; Equip.drawIcon(cv.getContext('2d'), it, 2, 2, 32); return cv; })(),
+      h('small', { class: 'rarity', style: `color:${Equip.rarityColor(it)}` }, (GD.RARITY[it.rarity] || GD.RARITY.common).name),
       h('small', {}, it.name),
     );
 
@@ -1110,7 +1116,7 @@ UI.showMenu = function () {
     act('House flag & sigil', () => { this.closeModal(); this.modal([Heraldry.canvas(G.house.heraldry, 288), act('Edit heraldry', () => { this.closeModal(); this.modal([Heraldry.editor(G.house.heraldry, flag => { G.house.heraldry=flag; G.house.color=Heraldry.color(flag.primary); saveGame(); UI.refresh(); })], { title: 'House heraldry', wide: true }); })], { title: `House ${G.house.name}` }); }),
     G && G.mcId ? act('Inventory & Equipment', () => { this.closeModal(); this.showInventory(ch(G.mcId)); }, { sub: 'try on gear by class' }) : null,
     act('Save Game', () => { UI.toast(saveGame() ? 'Game saved.' : 'Could not save (storage unavailable).'); this.closeModal(); }),
-    act('Interactive starter guide', () => { this.closeModal(); Guide.show(); }),
+    act('Starter guide', () => { this.closeModal(); Guide.showGuided(); }, { sub: 'short guided goals' }),
     act('Art credits', () => { this.closeModal(); this.showArtCredits(); }),
     act('Concept & How to Play', () => { this.closeModal(); this.showHelp(); }),
     act('Abandon & Start Over', () => {

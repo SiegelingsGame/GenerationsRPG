@@ -21,6 +21,7 @@ function unitFromChar(c, side, slot, boss) {
     cls: classFor(c), abilities: abilitiesOf(c), st: {},
     focus: 1, defending: false, taunt: 0,
     brave: c.trait === 'brave', alive: true,
+    itemPassives: (typeof Equip !== 'undefined' && Equip.isChar(c)) ? Equip.passives(c) : [],
     look: figLook(c),
     anim: null, flash: 0,
   };
@@ -212,8 +213,9 @@ function resolveBattle(outcome, b) {
     if (partyUnits.some((u) => u.alive && u.cls === 'bard')) { res.xp = Math.round(res.xp * 1.15); res.bard = true; }
     res.gold = Math.round(enemies.reduce((s, e) => s + (e.gold || 40 + e.lvl * 10), 0) * era().income);
     if (G.world.era.type === 'war') res.xp = Math.round(res.xp * 1.25);
-    G.house.gold += res.gold;
     const alive = partyUnits.filter((u) => u.alive).map((u) => ch(u.charId));
+    if (alive.some((c) => Equip.isChar(c) && Equip.hasPassive(c, 'thrifty'))) res.gold = Math.round(res.gold * 1.12);
+    G.house.gold += res.gold;
     for (const c of alive) {
       const before = c.level;
       res.levels.push({ c, gained: gainXp(c, res.xp / Math.max(1, alive.length) * 1.6), up: c.level > before });

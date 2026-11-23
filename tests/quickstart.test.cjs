@@ -1,8 +1,8 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {chromium}=require('playwright');
+const {chromium}=require('playwright');const fs=require('fs');function chromePath(){if(fs.existsSync('/usr/bin/chromium'))return'/usr/bin/chromium';if(fs.existsSync('/usr/local/bin/google-chrome'))return'/usr/local/bin/google-chrome';}
 test('QuickStart generates founder and partner, validates rename, and saves chosen House',async()=>{
- const b=await chromium.launch({headless:true,executablePath:'/usr/bin/chromium',args:['--no-sandbox']});
+ const b=await chromium.launch({headless:true,...(chromePath()?{executablePath:chromePath()}:{channel:'chrome'}),args:['--no-sandbox']});
  try{
   const p=await b.newPage({viewport:{width:390,height:844}}),errors=[];
   p.on('pageerror',e=>errors.push(e.message));
@@ -13,11 +13,13 @@ test('QuickStart generates founder and partner, validates rename, and saves chos
   await p.getByText('Random Lineage · Ready to play',{exact:true}).waitFor();
   assert.equal(await p.evaluate(()=>!!spouseOf(ch(G.mcId))),true);
   await p.getByLabel('House name',{exact:true}).fill('   ');
-  await p.getByRole('button',{name:'Start the game',exact:true}).click();
+  await p.getByRole('button',{name:'Continue',exact:true}).click();
   await p.getByLabel('House name',{exact:true}).waitFor();
   await p.getByLabel('House name',{exact:true}).fill('Silveroak');
-  await p.getByRole('button',{name:'Start the game',exact:true}).click();
-  await p.getByText('Your first generation',{exact:true}).waitFor();
+  await p.getByRole('button',{name:'Continue',exact:true}).click();
+  await p.locator('.origin-intro').waitFor();
+  await p.getByRole('button',{name:/Start Guide/}).click();
+  await p.locator('.guide-guided').waitFor();
   const family=await p.evaluate(()=>({house:G.house.name,founder:ch(G.mcId).house,partner:spouseOf(ch(G.mcId)).house,saved:JSON.parse(localStorage.getItem(SAVE_KEY)).house.name}));
   assert.deepEqual(family,{house:'Silveroak',founder:'Silveroak',partner:'Silveroak',saved:'Silveroak'});
   await p.reload();
