@@ -329,13 +329,48 @@ function kill(c, cause) {
 }
 
 function marry(a, b) {
+  const remarriage = isWidowed(a) || isWidowed(b);
   a.spouse = b.id;
   b.spouse = a.id;
   addBond(a, b, 20);
-  if (relevant(a) || relevant(b)) chron(`${a.name} and ${b.name} were married.`, 'marriage', [a.id, b.id], 'marriage');
-  else Log.add(`${a.name} and ${b.name} were married.`, 'dim', [a.id, b.id]);
+  const msg = remarriage
+    ? `${a.name} remarried, taking ${b.name} as spouse.`
+    : `${a.name} and ${b.name} were married.`;
+  if (relevant(a) || relevant(b)) chron(msg, 'marriage', [a.id, b.id], remarriage ? 'remarriage' : 'marriage');
+  else Log.add(msg, 'dim', [a.id, b.id]);
 }
+/** Living spouse, or null if unmarried / widowed. Monogamy gates use this. */
 function spouseOf(c) { const s = ch(c.spouse); return s && s.alive ? s : null; }
+/** Late spouse record when the linked spouse is dead (widow / widower). */
+function lateSpouseOf(c) {
+  if (!c || !c.spouse) return null;
+  const s = ch(c.spouse);
+  return s && !s.alive ? s : null;
+}
+function isWidowed(c) { return !!lateSpouseOf(c); }
+/** True when there is no living spouse (never married, or widowed). Blocks polygamy. */
+function canTakeSpouse(c) { return !!(c && c.alive && isAdult(c) && !spouseOf(c)); }
+/**
+ * Eligible remarriage / courtship prospects: compatible attraction, available adults,
+ * not close-kin-blocked, preferably town NPCs when townIdx is set.
+ */
+function remarriageProspects(who, opts = {}) {
+  const limit = opts.limit || 6;
+  if (!who || !canTakeSpouse(who)) return [];
+  const list = Object.values(G.chars).filter((c) => {
+    if (!c.alive || c.id === who.id || !isAdult(c) || c.evil) return false;
+    if (spouseOf(c) || c.status === 'rival' || c.status === 'candidate') return false;
+    if (opts.townOnly && c.status !== 'npc') return false;
+    if (opts.townIdx != null && c.status === 'npc' && c.town !== opts.townIdx) return false;
+    if (attraction(who, c) === 0 || attraction(c, who) === 0) return false;
+    if (typeof kinBlocked === 'function' && kinBlocked(who, c)) return false;
+    if (isDescendantOf(c, who.id) || isDescendantOf(who, c.id)) return false;
+    return true;
+  });
+  return list
+    .sort((a, b) => (mutual(b, who) - mutual(a, who)) || (bond(b, who) - bond(a, who)) || (b.level - a.level))
+    .slice(0, limit);
+}
 
 function childBase(a, b, race) {
   const r = GD.RACES[race];

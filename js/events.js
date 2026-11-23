@@ -46,8 +46,8 @@ Events.vignette = function (kind, tile) {
       npc(360, '#6a4c93', { beard: true });
     } else if (kind === 'needy' || kind === 'child') {
       npc(380, '#7b6a52'); if (kind === 'child') npc(420, '#5a7a8a', { stage: 'child', gender: R.chance(0.5) ? 'man' : 'woman' }); else { npc(415, '#6b5a4a', { gender: 'woman', hs: 'long' }); npc(450, '#4a5a6a', { stage: 'child' }); }
-    } else if (kind === 'wanderer') {
-      npc(400, '#3f6b3a', { weapon: 'staff' });
+    } else if (kind === 'wanderer' || kind === 'prospect') {
+      npc(400, kind === 'prospect' ? '#6a4c93' : '#3f6b3a', { weapon: kind === 'prospect' ? undefined : 'staff', gender: R.chance(0.5) ? 'woman' : 'man', hs: 'long' });
     } else if (kind === 'mine' || kind === 'cave') {
       c.fillStyle = '#5a5550'; c.beginPath(); c.moveTo(330, 140); c.lineTo(380, 60); c.lineTo(470, 52); c.lineTo(540, 140); c.closePath(); c.fill();
       c.fillStyle = '#0c0a0e'; c.beginPath(); c.ellipse(440, 125, 28, 32, 0, Math.PI, 0); c.fill(); c.fillRect(412, 125, 56, 15);
@@ -71,6 +71,7 @@ Events.roll = function (tile) {
   const good = E === 'peace' || E === 'abundance' || E === 'golden';
   const t = tile.type;
   const nearCamp = campsList().find((cp) => Math.abs(cp.x - tile.x) + Math.abs(cp.y - tile.y) <= 4);
+  const mc = ch(G.mcId);
   const w = {
     ambush: 3 * era().enc * (nearCamp ? 1.8 : 1),
     trader: (good ? 2.4 : hard ? 0.8 : 1.6) * (['swamp', 'snow'].includes(t) ? 0.5 : 1),
@@ -80,6 +81,8 @@ Events.roll = function (tile) {
     mine: ['hills', 'mountain', 'desert'].includes(t) ? 1.4 : 0,
     cave: ['hills', 'mountain', 'forest', 'jungle', 'snow'].includes(t) ? 1.2 : 0.3,
     camp: ['forest', 'hills', 'grass', 'swamp', 'jungle'].includes(t) && !nearCamp ? (hard ? 1.4 : 0.5) : 0,
+    // Remarriage prospect: only when the head is widowed (monogamy: no living spouse).
+    prospect: (mc && isWidowed(mc)) ? (good ? 1.6 : 1.1) : 0,
   };
   const kind = R.weighted(w);
   return { kind, tile, camp: nearCamp };
@@ -218,6 +221,48 @@ Events.ev_wanderer = function (ev) {
     act('Share a meal and part as friends', () => { addBond(c, mc, 15); this.done(`${c.name} heads for ${G.world.towns[c.town].name}.`, 'dim'); }),
     act('Send them away', () => { recordChoice('open', -0.4, mc.id); this.done(); }),
   ]);
+};
+
+/** Road event: introduce a remarriage prospect when the head is widowed. */
+Events.ev_prospect = function (ev) {
+  const mc = ch(G.mcId);
+  if (!mc || !isWidowed(mc)) return this.done();
+  const late = lateSpouseOf(mc);
+  let c = remarriageProspects(mc, { limit: 8 }).find((x) => x.status === 'npc') || null;
+  if (!c) {
+    c = spawnWanderer(nearestTown(ev.tile.x, ev.tile.y) ? G.world.towns.indexOf(nearestTown(ev.tile.x, ev.tile.y)) : randomTownIdx());
+    // Bias orientation so they can be drawn to the MC.
+    if (attraction(c, mc) === 0) c.orientation = mc.gender === c.gender ? R.pick(['gay', 'bi']) : R.pick(['straight', 'straight', 'bi']);
+    if (attraction(mc, c) === 0 && mc.orientation === 'straight') {
+      c.gender = mc.gender === 'man' ? 'woman' : 'man';
+      c.orientation = 'straight';
+    }
+  }
+  Game.introduceRemarriageProspect(c);
+  const town = G.world.towns[c.town];
+  this.frame('prospect', ev.tile, 'A Possible Match',
+    `On the road you meet ${c.name} (${UI.charLine(c)}). Word of ${late ? late.name + "'s passing" : 'your loss'} has reached them. There is a quiet understanding — if you wish, you could court them.${town ? ` They will be in ${town.name} for a time.` : ''}`,
+    [
+      act('Spend time courting them', () => {
+        UI.closeAll();
+        if (G.house.gold < 20) return this.done(`${c.name} smiles, but you have no coin for a proper courtship.`, 'dim');
+        Game.court(c);
+        this.frame('prospect', ev.tile, 'After Courting',
+          bond(c, mc) >= 70
+            ? `${c.name} looks at you with clear affection. They would say yes to a proposal.`
+            : `${c.name} enjoys your company. Bond is ${Math.round(bond(c, mc))}. Meet them again in town to continue.`,
+          [
+            bond(c, mc) >= 70 ? act('Propose Remarriage', () => { UI.closeAll(); Game.propose(c); }, { cls: 'hl' }) : null,
+            act('Part for now', () => this.done(`${c.name} hopes to see you again.`)),
+          ]);
+      }, { sub: '20g · 10 days', disabled: G.house.gold < 20 }),
+      act('Invite them to visit your estate', () => {
+        addBond(c, mc, 10);
+        c.orientKnown = true;
+        this.done(`${c.name} promises to seek House ${G.house.name}.`);
+      }),
+      act('Ride on alone', () => this.done('You leave them on the road.', 'dim')),
+    ]);
 };
 
 // ---------------------------------------------------------------- mines
@@ -671,7 +716,9 @@ Campfire.line = function (c) {
   if (G.world.era.type === 'war') lines.push('I can smell the smoke of burning farms, even here.');
   if (G.world.era.type === 'famine') lines.push('Eat slowly. Make it last. Who knows when we will eat this well again.');
   if (doomYearsLeft() < 150) lines.push(`${doomYearsLeft()} years, the seers say. And then the end.`);
-  if (!spouseOf(c) && attraction(c, mc) > 1.1 && !spouseOf(mc) && !k.sev) lines.push(`The firelight suits you, ${mc.name}.`);
+  if (canTakeSpouse(c) && attraction(c, mc) > 1.1 && canTakeSpouse(mc) && !k.sev) {
+    lines.push(isWidowed(mc) ? `Grief fades, ${mc.name}. The fire is warmer with two.` : `The firelight suits you, ${mc.name}.`);
+  }
   const mem = (G.ledger || []).filter((e) => (e.ids || []).includes(c.id) && e.type !== 'join').slice(-4);
   if (mem.length) { const e = R.pick(mem); lines.push(`I keep thinking about ${e.year}. ${e.text}`); }
   if (b > 50) lines.push(`There is no one I would rather share a fire with.`);

@@ -122,6 +122,7 @@ Staying alive and levelling naturally is always better than dying and skipping.
 
 - **Courting** a person (time + gifts) raises your bond with them. At 70 you can propose.
 - **Arranged match** at the estate: pick 1 of 3 candidates, the same as the opening choice. Candidate quality depends on prestige and estate tier. If a new protagonist comes of age unmarried, they're offered one at once.
+- **Remarriage (widow / widower):** the House is monogamous. `spouseOf` only counts a *living* spouse, so when a spouse dies the head (or any playable adult) may court and propose again, or use **Seek a new spouse** at the estate, household, tavern, or town streets. Suggested prospects filter for mutual attraction, availability, and not-too-close kin. A road **prospect** event can introduce a remarriage match while you travel. Chronicle notes the remarriage; children of the prior marriage keep their place; succession is unchanged except that a new spouse may bear or adopt further heirs.
 - **Companions bond** with each other through battles and years together, marry, and have children.
 - Companions' children grow up in towns and can be **found and recruited** later, with known lineage.
 - Children of the House and of companions who grow up together become **childhood friends**.
@@ -311,6 +312,7 @@ Implemented in the playable concept (`index.html`):
 - [x] Succession, heir choice and timeskip with flat growth
 - [x] Estate tiers, upgrades, heirlooms, arranged matches
 - [x] Taverns: recruiting, courting, lineage research, legitimisation
+- [x] Remarriage after spouse death: Seek a new spouse / court / propose; prospect road event; monogamy enforced while spouse lives
 - [x] Family tree and character sheets
 - [x] Save/load (browser storage)
 
