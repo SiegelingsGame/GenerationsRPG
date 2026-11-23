@@ -351,8 +351,10 @@ UI.renderLog = function () {
 // ---------------------------------------------------------------- side panel by location
 UI.locationActs = function () {
   const t = tileAt(G.pos.x, G.pos.y);
+  const q = questAt(t.x, t.y);
   const body = [];
-  if (t.feature === 'estate') body.push(...this.estatePanel());
+  if (q && q.type === 'herald') body.push(...this.heraldPanel());
+  else if (t.feature === 'estate') body.push(...this.estatePanel());
   else if (t.feature === 'town') body.push(...this.townPanel(t));
   else if (t.feature === 'ruins') body.push(...this.ruinsPanel(t));
   else if (t.feature === 'spire') body.push(...this.spirePanel());
@@ -459,6 +461,14 @@ UI.spirePanel = function () {
     h('p', { class: 'dim' }, `The seat of ${GD.VILLAIN.name}. It will end the world in ${d.year} unless it is destroyed first. Each ward raised weakens it.`),
     h('p', { class: d.wards >= GD.WARDS_NEEDED ? 'good' : 'bad' }, `Wards ${d.wards}/${GD.WARDS_NEEDED}. ${GD.VILLAIN.name} is around level ${villainLevel()}.`),
     act('Assault the Spire', () => Game.finalBattle(false), { cls: 'danger', sub: 'the final battle; it can be tried again if you survive', disabled: G.world.saved }),
+  ];
+};
+UI.heraldPanel = function () {
+  return [
+    h('h3', {}, 'The Herald'),
+    h('p', { class: 'dim' }, `A Herald of ${GD.VILLAIN.name} has risen here. Destroy it before it spreads the rot.`),
+    h('p', { class: 'good small' }, 'This is your marked quest. Confronting the Herald raises a Ward.'),
+    act('Confront the Herald', () => Game.heraldBattle(), { cls: 'danger', sub: 'quest battle · raises a Ward' }),
   ];
 };
 UI.ruinsPanel = function (t) {

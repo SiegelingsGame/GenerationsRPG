@@ -13,9 +13,19 @@ const LocationPrompt = {
         if (d < distance) { best = t; distance = d; }
       }
     }
+    // Herald (and other map-marked) quests sit on featureless tiles — still treat them as landmarks.
+    const q = G.world.doom && G.world.doom.quest;
+    if (q && q.x != null) {
+      const d = Math.hypot(q.x - p.x, q.y - p.y);
+      if (d < distance) { best = tileAt(q.x, q.y); distance = d; }
+    }
     return best;
   },
   name(t) {
+    const q = questAt(t.x, t.y);
+    if (q && q.type === 'herald') return 'Herald of the Hollow King';
+    if (q && q.type === 'beacon') return t.lit ? 'Beacon (lit)' : 'Beacon Shrine';
+    if (q && q.type === 'seal') return t.ruinOf ? `Ruins of ${t.ruinOf}` : 'Ancient Ruins';
     return t.feature === 'town' ? G.world.towns[t.townIdx].name : t.feature === 'estate' ? `House ${G.house.name}` :
       Events.label(t) || ({ ruins: 'Ruins', spire: 'The Black Spire', shrine: 'Beacon Shrine' }[t.feature]) || t.feature;
   },
@@ -35,14 +45,20 @@ const LocationPrompt = {
     const pending = this.pending;
     if (!pending || pending.x !== t.x || pending.y !== t.y) return;
     this.pending = null;
+    // Herald auto-starts in Game.arrive; do not stack a Here sheet over the battle.
+    if (questAt(t.x, t.y)?.type === 'herald') return;
     this.open(t, pending.mode);
   },
   open(t, mode) {
     Living.stop(); UI.closeDrawer();
     if (mode === 'enter' && t.feature === 'town') return TownView.start(t);
+    const q = questAt(t.x, t.y);
+    // Standing on the herald site: start the fight immediately (user expects a trigger).
+    if (q && q.type === 'herald') return Game.heraldBattle();
     const rows = t.feature === 'town' ? UI.townPanel(t).filter((e, i) => i !== 2) :
       t.feature === 'estate' ? UI.estatePanel() : t.feature === 'ruins' ? UI.ruinsPanel(t) :
-      t.feature === 'spire' ? UI.spirePanel() : Events.panel(t) || [h('p', {}, t.lit ? 'The beacon burns again.' : 'Reach a beacon marked by your current quest to rekindle it.')];
+      t.feature === 'spire' ? UI.spirePanel() :
+      Events.panel(t) || [h('p', {}, t.lit ? 'The beacon burns again.' : 'Reach a beacon marked by your current quest to rekindle it.')];
     // Close this task picker before an action opens another screen or advances time.
     const body = h('div', { class: 'here-sheet' },
       h('p', { class: 'dim' }, 'Pick a clear task, or keep moving.'),
@@ -65,7 +81,8 @@ const LocationPrompt = {
     this.el.hidden = !t || Battle.active || TownView.open || Campfire.open || UI.modalStack.length > 0 || Game.busy;
     if (this.el.hidden) return;
     this.tile = t; this.title.textContent = this.name(t);
-    this.enter.textContent = t.feature === 'town' ? 'Enter' : 'Explore';
+    const q = questAt(t.x, t.y);
+    this.enter.textContent = q && q.type === 'herald' ? 'Confront' : t.feature === 'town' ? 'Enter' : 'Explore';
     const p = Render.iso(t.x, t.y, Render.flat ? 0 : t.h);
     const x = Render.w/2 + (p.x-Render.w/2)*Render.zoom;
     const y = Render.h/2 + (p.y-Render.h/2)*Render.zoom - 55*Render.zoom;
