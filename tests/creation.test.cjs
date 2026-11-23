@@ -1,8 +1,14 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { chromium } = require('playwright');
+const fs = require('fs');
+function chromePath() {
+  if (fs.existsSync('/usr/bin/chromium')) return '/usr/bin/chromium';
+  if (fs.existsSync('/usr/local/bin/google-chrome')) return '/usr/local/bin/google-chrome';
+  return undefined;
+}
 test('mobile creation preserves choices and starts only after House summary', async () => {
- const browser = await chromium.launch({headless:true, executablePath:'/usr/bin/chromium', args:['--no-sandbox']});
+ const browser = await chromium.launch({headless:true,...(chromePath()?{executablePath:chromePath()}:{channel:'chrome'}),args:['--no-sandbox']});
  try {
   const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));

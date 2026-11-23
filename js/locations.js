@@ -44,11 +44,13 @@ const LocationPrompt = {
       t.feature === 'estate' ? UI.estatePanel() : t.feature === 'ruins' ? UI.ruinsPanel(t) :
       t.feature === 'spire' ? UI.spirePanel() : Events.panel(t) || [h('p', {}, t.lit ? 'The beacon burns again.' : 'Reach a beacon marked by your current quest to rekindle it.')];
     // Close this task picker before an action opens another screen or advances time.
-    const body = h('div', {}, ...rows.filter(Boolean));
+    const body = h('div', { class: 'here-sheet' },
+      h('p', { class: 'dim' }, 'Pick a clear task, or keep moving.'),
+      ...rows.filter(Boolean));
     for (const button of body.querySelectorAll('button')) {
       button.addEventListener('click', () => UI.closeModal(), { capture: true, once: true });
     }
-    UI.modal([body, act('Continue travelling', () => UI.closeModal())], { title: `${this.name(t)} · Quick tasks` });
+    UI.modal([body, act('Keep travelling', () => UI.closeModal(), { sub: 'return to the map' })], { title: `${this.name(t)} · Options` });
   },
   render() {
     if (!this.el) {
