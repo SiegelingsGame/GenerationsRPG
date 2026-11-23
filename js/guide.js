@@ -1,8 +1,10 @@
 // Starter goals are saved with each House; no timers, rewards or forced actions.
+// The guided walkthrough shows one short step at a time instead of a wall of text.
 'use strict';
 const Guide = {
   init() {
-    if (!G.guide) G.guide = { prestige: G.house.prestige, origin: { ...G.pos }, done: {}, hidden: false };
+    if (!G.guide) G.guide = { prestige: G.house.prestige, origin: { ...G.pos }, done: {}, hidden: false, step: 0 };
+    if (G.guide.step == null) G.guide.step = 0;
     return G.guide;
   },
   mark(key) {
@@ -22,37 +24,61 @@ const Guide = {
   },
   steps() {
     const towns = G.world.towns.filter(t => !t.fallen).sort((a, b) =>
-      Math.hypot(a.x-G.pos.x,a.y-G.pos.y)-Math.hypot(b.x-G.pos.x,b.y-G.pos.y));
+      Math.hypot(a.x - G.pos.x, a.y - G.pos.y) - Math.hypot(b.x - G.pos.x, b.y - G.pos.y));
     const t = towns[0];
+    const originGoal = G.house.originGoal ? ` Your beginning: ${G.house.originGoal}` : '';
     return [
-      ['travel', 'Take your first journey', 'Tap or click the landscape to walk. Scroll or use + / − to zoom, and Q / E to rotate. Roads help you explore; travel advances time.'],
-      ['town', 'Visit a town', `Look for town buildings on the map.${t ? ` A nearby town is ${t.name}, at map tile ${t.x}, ${t.y}.` : ''} Walk there, then use the location actions to enter its streets. Visit buildings and speak to residents to recruit, court, shop and hear rumors.`],
-      ['renown', 'Earn renown for your House', 'Renown is called Prestige in the HUD. Earn more than you started with by doing good deeds in towns, helping travelers or winning battles. Better reputation opens stronger matches. Prepare equipment and potions before risking ruins.'],
-      ['family', 'Grow your family', 'At your estate, open Household & Heir to meet your family. A compatible couple may have children as years pass; births are not guaranteed. Adopt a Child is another path to an heir. Rest advances time and ages everyone, so plan before skipping years.', () => UI.showHousehold(), 'Open household'],
-      ['tree', 'Explore your family tree', 'Open the family tree and select a person to see their relationships. It records the line you will carry into future generations.', () => UI.showTree(), 'Open family tree'],
-      ['heir', 'Name your successor', 'In Household & Heir, select an eligible descendant and choose Name as Heir. Protect and train them: when your head of House dies, succession lets the family continue.', () => UI.showHousehold(), 'Choose an heir'],
-      ['estate', 'Plan your legacy', 'Return to your estate and inspect its improvements. Invest gold when you can afford it. Deeds improve prosperity; aim for a Golden Age at 95 prosperity while preparing for the thousand-year threat.', () => UI.showEstate(), 'Inspect estate'],
+      ['travel', 'Take your first journey', 'Tap the landscape to walk. Zoom with + / −, rotate with Q / E. Roads are faster; travel advances time.' + originGoal],
+      ['town', 'Visit a town', `Find town buildings on the map.${t ? ` Nearby: ${t.name}.` : ''} Enter the streets to recruit, court, shop and hear rumors.`],
+      ['renown', 'Earn renown', 'Prestige in the HUD is your renown. Deeds, help on the road and victories raise it — and unlock stronger matches. Gear up before ruins.'],
+      ['family', 'Grow your family', 'At the estate, open Household & Heir. Children may come with time; adoption is another path. Rest ages everyone.', () => UI.showHousehold(), 'Open household'],
+      ['tree', 'Open the family tree', 'See relationships and the line you will carry forward.', () => UI.showTree(), 'Open family tree'],
+      ['heir', 'Name a successor', 'In Household & Heir, name an eligible descendant as heir so the House continues when you fall.', () => UI.showHousehold(), 'Choose an heir'],
+      ['estate', 'Plan your legacy', 'Improve the estate when you can. Deeds raise prosperity toward a Golden Age; prepare for the thousand-year doom.', () => UI.showEstate(), 'Inspect estate'],
     ];
   },
+  // Full list (legacy entry points / review).
   show() {
-    const g = this.update(), steps = this.steps();
-    UI.modal([
-      h('p', {}, 'Build a House that outlives its founder. Follow these goals in any order; progress is checked as you play. On a phone, open ☰ Menu to find location actions and this guide.'),
-      h('p', { class: 'dim' }, `${steps.filter(s => g.done[s[0]]).length} / ${steps.length} goals complete. You can close this guide and keep playing at any time.`),
-      ...steps.map(([key, title, text, action, label]) => h('section', { class: 'guide-step' },
-        h('h3', {}, `${g.done[key] ? '✓ ' : ''}${title}`), h('p', {}, text),
-        action ? act(label, () => { UI.closeModal(); action(); }) : null)),
-      act('Continue playing', () => { UI.closeModal(); UI.refresh(); }),
-      act(g.hidden ? 'Show next goal while playing' : 'Hide next goal while playing', () => {
-        g.hidden = !g.hidden; saveGame(); UI.closeModal(); UI.refresh();
-      }),
-    ], { title: 'Your first generation' });
+    this.showGuided({ review: true });
+  },
+  // One step at a time — condensed guided walkthrough.
+  showGuided(opts = {}) {
+    const g = this.update();
+    const steps = this.steps();
+    let i = opts.fresh ? 0 : (opts.review ? steps.findIndex((s) => !g.done[s[0]]) : (g.step || 0));
+    if (i < 0) i = steps.length - 1;
+    if (opts.fresh) g.step = 0;
+    const draw = (idx) => {
+      g.step = idx;
+      const [key, title, text, action, label] = steps[idx];
+      const done = !!g.done[key];
+      const body = h('div', { class: 'guide-guided' },
+        h('p', { class: 'dim small' }, `Guided start · ${idx + 1} of ${steps.length}${G.house.originId ? ` · ${Origins.get(G.house.originId).name}` : ''}`),
+        h('div', { class: 'guide-progress', 'aria-hidden': 'true' },
+          steps.map((_, n) => h('span', { class: 'gp' + (n === idx ? ' on' : '') + (g.done[steps[n][0]] ? ' done' : '') }))),
+        h('h2', {}, `${done ? '✓ ' : ''}${title}`),
+        h('p', {}, text),
+        action ? act(label, () => { UI.closeModal(); action(); }) : null,
+        h('div', { class: 'row guide-nav' },
+          idx > 0 ? act('← Back', () => UI.replaceModal(draw(idx - 1), { title: 'Starter guide', wide: true })) : null,
+          idx < steps.length - 1
+            ? act('Next →', () => UI.replaceModal(draw(idx + 1), { title: 'Starter guide', wide: true }), { cls: 'hl' })
+            : act('Begin playing', () => { UI.closeModal(); UI.refresh(); }, { cls: 'hl' }),
+        ),
+        act('Skip guide', () => { UI.closeModal(); UI.refresh(); }, { sub: 'you can reopen it from the menu' }),
+        act(g.hidden ? 'Show next goal while playing' : 'Hide next goal while playing', () => {
+          g.hidden = !g.hidden; saveGame(); UI.closeModal(); UI.refresh();
+        }),
+      );
+      return body;
+    };
+    UI.modal(draw(i), { title: 'Starter guide', wide: true });
   },
   render() {
     const g = this.update();
     let banner = document.getElementById('guide-goal');
     if (!banner) {
-      banner = h('button', { id: 'guide-goal', onclick: () => this.show(), 'aria-label': 'Current starter goal. Open guide' });
+      banner = h('button', { id: 'guide-goal', onclick: () => this.showGuided(), 'aria-label': 'Current starter goal. Open guide' });
       document.body.append(banner);
     }
     banner.hidden = false;
@@ -62,7 +88,8 @@ const Guide = {
     const card = h('section', { class: 'guide-card', 'aria-label': 'Starter guide' },
       h('b', {}, next ? `Next goal: ${next[1]}` : 'Your House is ready for its next chapter'),
       h('p', { class: 'small dim' }, `${steps.filter(s => g.done[s[0]]).length}/${steps.length} starter goals complete`),
-      act(next ? 'Show me how' : 'Review guide', () => this.show()));
+      G.house.originGoal ? h('p', { class: 'small dim' }, G.house.originGoal) : null,
+      act(next ? 'Show me how' : 'Review guide', () => this.showGuided()));
     $('#panel').prepend(card);
   },
 };

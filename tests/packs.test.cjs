@@ -1,9 +1,9 @@
-const {test}=require('node:test');const assert=require('node:assert/strict');const {chromium}=require('playwright');
+const {test}=require('node:test');const assert=require('node:assert/strict');const {chromium}=require('playwright');const fs=require('fs');function chromePath(){if(fs.existsSync('/usr/bin/chromium'))return'/usr/bin/chromium';if(fs.existsSync('/usr/local/bin/google-chrome'))return'/usr/local/bin/google-chrome';}
 test('bundled art loads; seeded rooms persist; combat effects follow damage/heal/status targets',async()=>{
- const b=await chromium.launch({headless:true,executablePath:'/usr/bin/chromium',args:['--no-sandbox']});
+ const b=await chromium.launch({headless:true,...(chromePath()?{executablePath:chromePath()}:{channel:'chrome'}),args:['--no-sandbox']});
  try{
  const p=await b.newPage({viewport:{width:390,height:844}}),errors=[];p.on('pageerror',e=>errors.push(e.message));
- await p.goto(process.env.GAME_TEST_URL||'http://127.0.0.1:8770');await p.getByRole('button',{name:/^Random Lineage/}).click();await p.getByRole('button',{name:'Start the game',exact:true}).click();await p.getByRole('button',{name:'Continue playing',exact:true}).click();
+ await p.goto(process.env.GAME_TEST_URL||'http://127.0.0.1:8770');await p.getByRole('button',{name:/^Random Lineage/}).click();await p.getByRole('button',{name:'Continue',exact:true}).click();await p.locator('.origin-intro').waitFor();await p.getByRole('button',{name:/begin playing now/}).click();
  await p.waitForFunction(()=>Object.keys(PackArt.images).every(k=>PackArt.ready(k)));
  const state=await p.evaluate(()=>{WorldArt.ensure();const before=JSON.stringify(G.world.assetSites);saveGame();loadGame();WorldArt.ensure();return {same:before===JSON.stringify(G.world.assetSites),sites:Object.keys(G.world.assetSites).length,room:JSON.stringify(WorldArt.roomPlan('market',42))===JSON.stringify(WorldArt.roomPlan('market',42)),different:JSON.stringify(WorldArt.roomPlan('market',42))!==JSON.stringify(WorldArt.roomPlan('market',43)),geometry:Object.entries(PACK_EFFECTS).every(([k,v])=>PackArt.images[k].naturalWidth===v.w*v.frames&&PackArt.images[k].naturalHeight===v.h)};});
  assert.ok(state.same&&state.room&&state.different&&state.geometry);assert.ok(state.sites>10);

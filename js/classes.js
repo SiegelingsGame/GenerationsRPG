@@ -109,6 +109,9 @@ function abilitiesOf(c) {
   const out = cl.skills.slice(0, c.level >= 5 ? 3 : 2);
   const extra = c.extraSkill && GD.LEGACY_SKILL[c.extraSkill];
   if (extra && !out.includes(extra)) out.push(extra);
+  if (typeof Equip !== 'undefined' && Equip.isChar(c)) {
+    for (const sk of Equip.skills(c)) if (!out.includes(sk)) out.push(sk);
+  }
   return out;
 }
 
@@ -127,6 +130,7 @@ Battle.outMult = function (u) {
   const bl = this.st(u, 'bloodlust'); if (bl) m += 0.5;
   if (u.cls === 'berserker') m *= 1 + 0.6 * (1 - u.hp / u.maxHp); // rage
   if (u.brave) m *= 1.1;
+  if (u.itemPassives && u.itemPassives.includes('bloodthirst')) m *= 1.06;
   return m;
 };
 Battle.inMult = function (t) {
@@ -137,13 +141,15 @@ Battle.inMult = function (t) {
   if (t.cls === 'warrior') m *= 0.85;
   if (t.cls === 'knight') m *= 0.8;
   if (this.st(t, 'riposte')) m *= 0.75;
+  if (t.itemPassives && t.itemPassives.includes('warding')) m *= 0.94;
+  if (t.itemPassives && t.itemPassives.includes('laststand') && t.hp <= t.maxHp * 0.3) m *= 0.88;
   return m;
 };
 Battle.armour = function (t) { return t.def * (this.st(t, 'defDown') ? 0.5 : 1); };
 Battle.physical = function (u, t, mult, extraCrit = 0, pierce = 0) {
   if (u.cls === 'knight') pierce = Math.min(0.9, pierce + 0.25);
   let dmg = u.atk * R.float(0.85, 1.15) * mult * this.outMult(u) - this.armour(t) * 0.5 * (1 - pierce);
-  const crit = R.chance(0.05 + u.agi * 0.008 + extraCrit + (u.cls === 'ranger' ? 0.1 : 0) + (u.cls === 'knight' ? 0.08 : 0));
+  const crit = R.chance(0.05 + u.agi * 0.008 + extraCrit + (u.cls === 'ranger' ? 0.1 : 0) + (u.cls === 'knight' ? 0.08 : 0) + (u.itemPassives && u.itemPassives.includes('hunter') ? 0.08 : 0));
   if (crit) dmg *= 1.6;
   dmg *= this.inMult(t);
   return { dmg: Math.max(1, Math.round(dmg)), crit };

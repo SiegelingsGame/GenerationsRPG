@@ -294,5 +294,6 @@ Implemented in the playable concept (`index.html`):
 - [x] Save/load (browser storage)
 
 - [x] Equipment slots and inventory try-on: class kits choose armour or robes, helms or crowns, blades/staves/bows, boots or shoes; house stash; Kasaya UI frames
+- [x] Item rarity, affixes, bonus moves and passives; ten story origins with a photo intro and guided starter walkthrough
 
 Future work: authored quests and story events, more enemy and skill variety, rival houses with politics, sprite art, music, and a balance pass.

@@ -175,6 +175,7 @@ function stat(c, k) {
   if (GD.CLASSES) v += classGrowth(c, k);
   v += (GD.HEIGHTS[c.height || 'average'].mods[k] || 0) + (GD.BUILDS[c.build || 'average'].mods[k] || 0);
   if (c.condition) v += GD.CONDITIONS[c.condition].mods[k] || 0;
+  if (typeof Equip !== 'undefined' && Equip.isChar(c)) v += Equip.statBonus(c, k);
   const b = GD.BIRTH[birthKey(c)];
   if (b.mods[k]) v *= b.mods[k];
   if (birthKey(c) === 'bastard' && c.bastardStat === k) v *= 1.15;
@@ -220,6 +221,7 @@ function xpMod(c) {
   let m = GD.STAGES[stageKey(c)].xp * GD.BIRTH[birthKey(c)].xp * (1 + c.formative * 0.02);
   if (c.trait === 'wise') m *= 1.15;
   if (c.house === G.house.name) m *= 1 + G.house.up.yard * 0.1;
+  if (typeof Equip !== 'undefined' && Equip.isChar(c) && Equip.hasPassive(c, 'scholar')) m *= 1.1;
   return m;
 }
 function xpNeed(level) { return Math.round(40 * Math.pow(level, 1.5)); }

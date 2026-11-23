@@ -29,6 +29,7 @@ A 2.5D roguelike, turn-based RPG about a family line. You play the head of a Hou
 | Continuous landscape: height field, rivers, roads, bridges and fords, painted terrain, fine navigation grid and free-movement paths | `js/landscape.js` |
 | Classes (Warrior, Berserker, Sorcerer, Priest, Bard, Ranger, Knight), abilities, status effects and the battle AI that uses them | `js/classes.js` |
 | Equipment slots and inventory try-on (armour/robes, helms/crowns, weapons/staves, boots/shoes by class) | `js/equipment.js`, `js/ui.js` |
+| Item rarity, affixes, bonus moves and passives; ten story origins with a photo intro | `js/equipment.js`, `js/origins.js` |
 | Static data: races, eras, enemies, estate, gear | `js/data.js` |
 
 ## Quick tips
