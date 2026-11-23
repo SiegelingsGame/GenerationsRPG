@@ -54,26 +54,69 @@ function regionLevel(x, y, bonus = 0) {
 
 // ---------------------------------------------------------------- moving the party
 Living.go = function (tile, agent) { return this.goPoint({ x: tile.x, y: tile.y }, agent); };
+// pull a click onto the nearest town, estate, ruin, shrine, or other landmark
+Living.snapTarget = function (pt) {
+  const map = G.world.map;
+  let best = null, bd = Infinity;
+  for (const t of map.tiles) {
+    if (!t.feature || (t.feature === 'town' && G.world.towns[t.townIdx]?.fallen)) continue;
+    const d = Math.hypot(pt.x - t.x, pt.y - t.y);
+    const allow = (t.feature === 'estate' || t.feature === 'town') ? 1.25 : 1.05;
+    if (d <= allow && d < bd) { best = t; bd = d; }
+  }
+  if (best) return { x: best.x, y: best.y, feature: best };
+  const t = tileAt(clamp(Math.round(pt.x), 0, map.W - 1), clamp(Math.round(pt.y), 0, map.H - 1));
+  if (t && t.feature && Math.hypot(pt.x - t.x, pt.y - t.y) < 0.75) return { x: t.x, y: t.y, feature: t };
+  return { x: pt.x, y: pt.y };
+};
 Living.goPoint = function (pt, agent) {
   LocationPrompt.pending = null;
   if (!this.ensure() || Battle.active || UI.modalStack.length || TownView.open || Campfire.open) return;
   if (!LS.ensure()) return;
-  // snap onto places of note
-  const t = tileAt(clamp(Math.round(pt.x), 0, G.world.map.W - 1), clamp(Math.round(pt.y), 0, G.world.map.H - 1));
-  if (t && t.feature && Math.hypot(pt.x - t.x, pt.y - t.y) < 0.6) pt = { x: t.x, y: t.y };
-  if (agent && Math.hypot(agent.x - G.ppos.x, agent.y - G.ppos.y) < 0.7) { this.stop(); return this.encounter(agent, true); }
-  const path = LS.path(G.ppos, pt);
-  if (!path) {
-    const water = LS.hfAt(pt.x, pt.y) < 0;
-    return UI.toast(water && !hasTech('boats') ? 'You need boats to cross the sea. Sailing has not been invented yet.' : 'There is no way through from here.');
+  // tap near the party while walking: halt without a new destination
+  if (this.moving && !agent && Math.hypot(pt.x - G.ppos.x, pt.y - G.ppos.y) < 0.85) {
+    this.cancel('You halt on the road.');
+    return;
   }
+  const snapped = this.snapTarget(pt);
+  pt = { x: snapped.x, y: snapped.y };
+  if (agent && Math.hypot(agent.x - G.ppos.x, agent.y - G.ppos.y) < 0.7) { this.stop(); return this.encounter(agent, true); }
+  let path = LS.path(G.ppos, pt);
+  if (!path) {
+    // soft recovery: walk to the nearest passable shore/pass instead of a dead toast
+    const near = LS.nearestPassable(pt.x, pt.y, 12);
+    if (near) {
+      const alt = LS.cellCenter(near.i, near.j);
+      path = LS.path(G.ppos, alt);
+      if (path) {
+        UI.toast('Aiming for the nearest open ground.');
+        pt = alt;
+      }
+    }
+  }
+  if (!path) return UI.toast(LS.blockReason(G.ppos, pt));
   this.path = path;
   this.dest = path[path.length - 1];
   this.targetId = agent ? agent.id : null;
   this.repath = 0.4;
   this.moving = true;
+  if (typeof Render !== 'undefined' && Render.updateTravelCtl) Render.updateTravelCtl();
+  if (typeof UI !== 'undefined' && UI.renderPanel) UI.renderPanel();
 };
-Living.stop = function () { this.moving = false; this.path = []; this.dest = null; this.targetId = null; };
+Living.stop = function () {
+  const was = this.moving;
+  this.moving = false; this.path = []; this.dest = null; this.targetId = null;
+  if (typeof Render !== 'undefined' && Render.updateTravelCtl) Render.updateTravelCtl();
+  if (was && typeof UI !== 'undefined' && UI.renderPanel) UI.renderPanel();
+};
+Living.cancel = function (msg) {
+  if (!this.moving) return false;
+  this.stop();
+  this.settleAt();
+  UI.refresh();
+  if (msg) UI.toast(msg);
+  return true;
+};
 // days it takes to cross one tile-width of ground at a point
 Living.daysPerUnit = function (x, y) {
   let c = LS.costAt(x, y);
@@ -87,6 +130,29 @@ Living.daysPerUnit = function (x, y) {
     if (hasTech('rail')) d *= 0.6;
   }
   return Math.max(1.5, d);
+};
+// estimate calendar days along a free-movement path (for hover ETA)
+Living.estimateDays = function (path, from) {
+  if (!path || !path.length) return 0;
+  let x = (from || G.ppos).x, y = (from || G.ppos).y, days = 0;
+  for (const q of path) {
+    const dist = Math.hypot(q.x - x, q.y - y);
+    days += dist * this.daysPerUnit((x + q.x) / 2, (y + q.y) / 2);
+    x = q.x; y = q.y;
+  }
+  return days;
+};
+// settle onto a nearby landmark when a march ends beside it
+Living.settleAt = function () {
+  const near = LocationPrompt.nearby(2.1);
+  if (near && Math.hypot(G.ppos.x - near.x, G.ppos.y - near.y) <= 1.2) {
+    G.ppos = { x: near.x, y: near.y };
+    G.pos = { x: near.x, y: near.y };
+    return near;
+  }
+  const t = tileAt(clamp(Math.round(G.ppos.x), 0, G.world.map.W - 1), clamp(Math.round(G.ppos.y), 0, G.world.map.H - 1));
+  G.pos = { x: t.x, y: t.y };
+  return t;
 };
 
 Living.frame = function (ts) {
@@ -108,8 +174,7 @@ Living.frame = function (ts) {
   const next = this.path[0];
   if (!next) {
     this.stop();
-    const t = tileAt(Math.round(G.ppos.x), Math.round(G.ppos.y));
-    G.pos = { x: t.x, y: t.y };
+    this.settleAt();
     UI.refresh();
     return Game.arrive();
   }
@@ -404,15 +469,29 @@ Living.drawLabel = function (r, c, a, p) {
   c.fillStyle = '#f2ead8'; c.fillText(lab, p.x, p.y - 41);
   if (a.hunting) { c.fillStyle = '#ff5c5c'; c.font = 'bold 14px Georgia, serif'; c.fillText('!', p.x + tw / 2 + 6, p.y - 40); }
 };
-Living.drawDest = function (r) {
-  if (!this.moving || !this.dest) return;
-  const t = this.dest;
-  const p = r.iso(t.x, t.y, t.h);
+Living.drawDest = function (r, dest, opts = {}) {
+  const t = dest || this.dest;
+  if (!t) return;
+  if (!opts.preview && (!this.moving || !this.dest)) return;
+  const p = r.iso(t.x, t.y, t.h || 0);
   const c = r.ctx;
-  c.strokeStyle = '#ffd76a'; c.lineWidth = 2;
-  c.beginPath(); c.ellipse(p.x, p.y, 14, 7, 0, 0, Math.PI * 2); c.stroke();
+  const ok = opts.ok !== false;
+  const pulse = 1 + Math.sin(r.t / 220) * 0.08;
+  c.strokeStyle = ok ? '#ffd76a' : '#e07060';
+  c.lineWidth = opts.preview ? 1.5 : 2;
+  c.globalAlpha = opts.preview ? 0.85 : 1;
+  c.beginPath(); c.ellipse(p.x, p.y, 14 * pulse, 7 * pulse, 0, 0, Math.PI * 2); c.stroke();
   c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x, p.y - 22); c.stroke();
-  c.fillStyle = G.house.color; c.beginPath(); c.moveTo(p.x, p.y - 22); c.lineTo(p.x + 10, p.y - 18); c.lineTo(p.x, p.y - 14); c.closePath(); c.fill();
+  c.fillStyle = ok ? G.house.color : '#a04030';
+  c.beginPath(); c.moveTo(p.x, p.y - 22); c.lineTo(p.x + 10, p.y - 18); c.lineTo(p.x, p.y - 14); c.closePath(); c.fill();
+  if (opts.days != null && opts.days > 0) {
+    const label = opts.days >= 30 ? `~${Math.round(opts.days / 30)} mo` : `~${Math.max(1, Math.round(opts.days))}d`;
+    c.font = '600 11px Georgia, serif'; c.textAlign = 'center';
+    const tw = c.measureText(label).width + 8;
+    c.fillStyle = 'rgba(12,10,16,0.78)'; c.fillRect(p.x - tw / 2, p.y - 40, tw, 14);
+    c.fillStyle = ok ? '#ffe9a8' : '#f0b0a0'; c.fillText(label, p.x, p.y - 29);
+  }
+  c.globalAlpha = 1;
 };
 // tap on a party (in un-zoomed screen space)
 Living.pick = function (pt) {

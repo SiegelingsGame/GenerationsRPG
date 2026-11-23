@@ -100,7 +100,11 @@ Render.init = function (canvas) {
   const btn = (label, title, fn) => { const b = document.createElement('button'); b.textContent = label; b.title = title; b.addEventListener('click', fn); return b; };
   this.ctl = document.createElement('div');
   this.ctl.className = 'mapctl';
+  this.stopBtn = btn('■', 'Stop travelling (Esc)', () => Living.cancel('You halt on the road.'));
+  this.stopBtn.classList.add('stop-travel');
+  this.stopBtn.hidden = true;
   this.ctl.append(
+    this.stopBtn,
     btn('⟲', 'Rotate left (Q)', () => this.rotate(-1)),
     btn('⟳', 'Rotate right (E)', () => this.rotate(1)),
     btn('+', 'Zoom in (+ or mouse wheel)', () => this.setZoom(this.zoomTarget * 1.25)),
@@ -110,6 +114,9 @@ Render.init = function (canvas) {
   canvas.parentElement.append(this.ctl);
   const loop = (ts) => { this.t = ts; try { this.frame(); } catch (err) { console.error(err); } requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
+};
+Render.updateTravelCtl = function () {
+  if (this.stopBtn) this.stopBtn.hidden = !(Living && Living.moving);
 };
 
 Render.rotate = function (dir) { this.rot = (this.rot + dir + 4) % 4; this.spin = this.t; this.lastHover = null; };
@@ -203,6 +210,95 @@ Render.partyWorldPos = function () {
   return { x: t.x, y: t.y, h: t.h, k: 1 };
 };
 
+// dashed route polyline on the landscape (active march or hover preview)
+Render.drawRoute = function (path, opts = {}) {
+  if (!path || !path.length) return;
+  const c = this.ctx;
+  const from = opts.from || G.ppos;
+  const ok = opts.ok !== false;
+  const active = !!opts.active;
+  c.save();
+  c.strokeStyle = ok
+    ? (active ? 'rgba(255,230,140,0.85)' : 'rgba(255,220,120,0.55)')
+    : 'rgba(220,90,70,0.55)';
+  c.lineWidth = active ? 2.4 : 2;
+  c.setLineDash(active ? [7, 5] : [4, 6]);
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  c.beginPath();
+  const s0 = this.iso(from.x, from.y, 0); c.moveTo(s0.x, s0.y);
+  for (const q of path) { const s1 = this.iso(q.x, q.y, 0); c.lineTo(s1.x, s1.y); }
+  c.stroke();
+  c.setLineDash([]);
+  c.restore();
+};
+
+// compute a free-movement path under the cursor (throttled)
+Render.refreshHoverRoute = function () {
+  this.hoverRoute = null; this.hoverDest = null; this.hoverDays = 0; this.hoverOk = true;
+  if (!this.mouse || Living.moving || this.move || !LS.ready || !G || G.mode !== 'world') return;
+  if (Battle.active || TownView.open || Campfire.open || (UI.modalStack && UI.modalStack.length)) return;
+  const wp = this.screenToWorld(this.mouse);
+  const key = `${wp.x.toFixed(1)},${wp.y.toFixed(1)},${G.ppos.x.toFixed(1)},${G.ppos.y.toFixed(1)}`;
+  if (key === this._hoverKey && this._hoverCache) {
+    this.hoverRoute = this._hoverCache.path;
+    this.hoverDest = this._hoverCache.dest;
+    this.hoverDays = this._hoverCache.days;
+    this.hoverOk = this._hoverCache.ok;
+    return;
+  }
+  this._hoverKey = key;
+  const snapped = Living.snapTarget(wp);
+  let path = LS.path(G.ppos, snapped);
+  let ok = !!path;
+  if (!path) {
+    const near = LS.nearestPassable(snapped.x, snapped.y, 10);
+    if (near) {
+      const alt = LS.cellCenter(near.i, near.j);
+      path = LS.path(G.ppos, alt);
+      if (path) { snapped.x = alt.x; snapped.y = alt.y; ok = true; }
+    }
+  }
+  const days = path ? Living.estimateDays(path) : 0;
+  this.hoverRoute = path || [];
+  this.hoverDest = snapped;
+  this.hoverDays = days;
+  this.hoverOk = ok;
+  this._hoverCache = { path: this.hoverRoute, dest: snapped, days, ok };
+};
+
+// early-game coach: ghost path to the nearest town + soft road glints
+Render.drawTravelCoach = function () {
+  if (!G || !G.guide || G.guide.done?.travel || Living.moving || !LS.ready) return;
+  const towns = G.world.towns.filter((t) => !t.fallen)
+    .sort((a, b) => Math.hypot(a.x - G.ppos.x, a.y - G.ppos.y) - Math.hypot(b.x - G.ppos.x, b.y - G.ppos.y));
+  const town = towns[0];
+  if (!town) return;
+  if (!this._coachKey || this._coachKey !== `${town.x},${town.y},${Math.round(G.ppos.x)},${Math.round(G.ppos.y)}`) {
+    this._coachKey = `${town.x},${town.y},${Math.round(G.ppos.x)},${Math.round(G.ppos.y)}`;
+    this._coachPath = LS.path(G.ppos, { x: town.x, y: town.y }) || [];
+  }
+  if (!this._coachPath.length) return;
+  const c = this.ctx;
+  const pulse = 0.28 + Math.sin(this.t / 400) * 0.12;
+  c.save();
+  c.strokeStyle = `rgba(255, 210, 120, ${pulse})`;
+  c.lineWidth = 3; c.setLineDash([10, 10]);
+  c.beginPath();
+  const s0 = this.iso(G.ppos.x, G.ppos.y, 0); c.moveTo(s0.x, s0.y);
+  for (const q of this._coachPath) { const s1 = this.iso(q.x, q.y, 0); c.lineTo(s1.x, s1.y); }
+  c.stroke(); c.setLineDash([]);
+  const tip = this.iso(town.x, town.y, 0);
+  c.fillStyle = `rgba(255, 220, 140, ${0.35 + pulse})`;
+  c.beginPath(); c.ellipse(tip.x, tip.y, 18, 9, 0, 0, Math.PI * 2); c.fill();
+  c.font = '600 11px Georgia, serif'; c.textAlign = 'center';
+  c.fillStyle = 'rgba(12,10,16,0.75)';
+  const label = `Road to ${town.name}`;
+  const tw = c.measureText(label).width + 10;
+  c.fillRect(tip.x - tw / 2, tip.y - 78, tw, 16);
+  c.fillStyle = '#ffe9a8'; c.fillText(label, tip.x, tip.y - 66);
+  c.restore();
+};
+
 // The seamless landscape: a painted terrain texture laid out in the 2.5D view, with trees, peaks,
 // settlements and parties standing upright on it, sorted by depth.
 Render.drawWorld = function () {
@@ -240,13 +336,17 @@ Render.drawLandscape = function () {
   c.imageSmoothingEnabled = true;
   c.drawImage(LS.tex, 0, 0);
   c.restore();
-  // the planned route
-  if (Living.moving && Living.path.length) {
-    c.strokeStyle = 'rgba(255,230,140,0.75)'; c.lineWidth = 2; c.setLineDash([6, 6]);
-    c.beginPath();
-    const s0 = this.iso(G.ppos.x, G.ppos.y, 0); c.moveTo(s0.x, s0.y);
-    for (const q of Living.path) { const s1 = this.iso(q.x, q.y, 0); c.lineTo(s1.x, s1.y); }
-    c.stroke(); c.setLineDash([]);
+  // first-journey road pulse: teach "follow the roads"
+  this.drawTravelCoach();
+  // hover preview + active route
+  this.refreshHoverRoute();
+  this.drawRoute(Living.moving ? Living.path : (this.hoverRoute || []), {
+    from: G.ppos,
+    active: Living.moving,
+    ok: Living.moving || this.hoverOk !== false,
+  });
+  if (!Living.moving && this.hoverDest) {
+    Living.drawDest(this, this.hoverDest, { preview: true, ok: this.hoverOk, days: this.hoverDays });
   }
   // everything that stands up, sorted back to front
   const view = (sx, sy) => { const zx = (sx - this.w / 2) * this.zoom + this.w / 2, zy = (sy - this.h / 2) * this.zoom + this.h / 2; return zx > -90 && zx < this.w + 90 && zy > -140 && zy < this.h + 160; };
@@ -276,13 +376,19 @@ Render.drawLandscape = function () {
     else if (it.a) Living.drawAgent(this, it.a);
     else { Living.drawDest(this); this.drawParty(pp); }
   }
-  // labels
+  // labels — soft ground rings help settlements read as places, not stickers
   c.font = '600 12px Georgia, serif';
   c.textAlign = 'center';
   for (const t of map.tiles) {
     if (!t.feature) continue;
     const p = this.iso(t.x, t.y, 0);
     if (!view(p.x, p.y)) continue;
+    if (t.feature === 'estate' || t.feature === 'town' || t.feature === 'ruins' || t.feature === 'shrine') {
+      c.fillStyle = t.feature === 'estate' ? 'rgba(255, 215, 120, 0.14)' : 'rgba(200, 190, 160, 0.1)';
+      c.beginPath(); c.ellipse(p.x, p.y + 4, 22, 11, 0, 0, Math.PI * 2); c.fill();
+    }
+    // nearby place owns this spot as a live nametag chip
+    if (typeof LocationPrompt !== 'undefined' && LocationPrompt.hidesLabel(t)) continue;
     const town = t.feature === 'town' ? G.world.towns[t.townIdx] : null;
     const label = town ? `${town.name}${town.size >= 4 ? ' ★' : ''}` : t.feature === 'estate' ? `House ${G.house.name}`
       : Events.label(t) ? Events.label(t) : t.feature === 'spire' ? 'The Black Spire' : t.feature === 'shrine' ? (t.lit ? 'Beacon (lit)' : 'Beacon Shrine')
@@ -635,12 +741,12 @@ Render.drawWorldTiles = function () {
   c.translate(this.w / 2, this.h / 2);
   c.scale(this.zoom * (0.75 + 0.25 * sk), this.zoom);
   c.translate(-this.w / 2, -this.h / 2);
-  const pathSet = new Set((this.hoverPath || []).map((t) => t.y * map.W + t.x));
   if (this.hover && this.hover !== this.lastHover) {
     this.lastHover = this.hover;
     this.hoverPath = findPath(tileAt(G.pos.x, G.pos.y), this.hover) || [];
   }
   if (!this.hover) this.hoverPath = [];
+  const pathSet = new Set((this.hoverPath || []).map((t) => t.y * map.W + t.x));
 
   const partyTileOrder = Math.round(prx) + Math.round(pry);
   let partyDrawn = false;
@@ -675,6 +781,7 @@ Render.drawWorldTiles = function () {
   c.textAlign = 'center';
   for (const t of map.tiles) {
     if (!t.feature) continue;
+    if (typeof LocationPrompt !== 'undefined' && LocationPrompt.hidesLabel(t)) continue;
     const p = this.iso(t.x, t.y, t.h);
     const zx = (p.x - this.w / 2) * this.zoom + this.w / 2, zy = (p.y - this.h / 2) * this.zoom + this.h / 2;
     if (zx < -60 || zx > this.w + 60 || zy < -60 || zy > this.h + 100) continue;

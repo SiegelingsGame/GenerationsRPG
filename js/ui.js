@@ -57,7 +57,9 @@ UI.init = function () {
   this.checkForUpdate();
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') this.checkForUpdate(); });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && this.modalStack.length && !this.modalStack[this.modalStack.length - 1].locked) this.closeModal();
+    if (e.key !== 'Escape') return;
+    if (this.modalStack.length && !this.modalStack[this.modalStack.length - 1].locked) return this.closeModal();
+    if (Living.moving && !Battle.active && !TownView.open && !Campfire.open) Living.cancel('You halt on the road.');
   });
 };
 
@@ -117,7 +119,7 @@ UI.closeModalQuiet = function () {
 };
 UI.placeName = function () {
   if (!G || !G.world || !G.world.map) return '';
-  const t = tileAt(G.pos.x, G.pos.y);
+  const t = this.hereTile ? this.hereTile() : tileAt(G.pos.x, G.pos.y);
   return t.feature === 'town' ? G.world.towns[t.townIdx].name : t.feature === 'estate' ? 'Your estate' : t.feature === 'ruins' ? 'Ruins'
     : t.feature === 'spire' ? 'The Black Spire' : t.feature === 'shrine' ? 'Beacon Shrine'
     : (Events.label && Events.label(t)) || (isWater(t) ? 'At sea' : GD.BIOMES[t.type].name);
@@ -349,17 +351,29 @@ UI.renderLog = function () {
 };
 
 // ---------------------------------------------------------------- side panel by location
+UI.hereTile = function () {
+  const standing = tileAt(G.pos.x, G.pos.y);
+  const near = typeof LocationPrompt !== 'undefined' ? LocationPrompt.nearby(1.9) : null;
+  if (near && (!standing.feature || standing === near || Math.hypot((G.ppos || G.pos).x - near.x, (G.ppos || G.pos).y - near.y) <= 1.2)) return near;
+  return standing;
+};
 UI.locationActs = function () {
-  const t = tileAt(G.pos.x, G.pos.y);
+  const t = this.hereTile();
   const body = [];
-  if (t.feature === 'estate') body.push(...this.estatePanel());
+  if (Living.moving) {
+    body.push(
+      h('h3', {}, 'On the road'),
+      h('p', { class: 'dim' }, 'Time advances while you walk. Escape or Stop cancels the march; click near your party to halt.'),
+      act('Stop travelling', () => Living.cancel('You halt on the road.'), { sub: 'cancel this journey · stay where you are', cls: 'hl' }),
+    );
+  } else if (t.feature === 'estate') body.push(...this.estatePanel());
   else if (t.feature === 'town') body.push(...this.townPanel(t));
   else if (t.feature === 'ruins') body.push(...this.ruinsPanel(t));
   else if (t.feature === 'spire') body.push(...this.spirePanel());
   else if (Events.panel(t)) body.push(...Events.panel(t));
   else if (t.feature === 'shrine') body.push(h('h3', {}, 'Beacon Shrine'), h('p', { class: 'dim' }, t.lit ? 'The beacon burns again, a ward against the dark.' : 'A cold beacon from an older age.'));
-  else body.push(h('h3', {}, isWater(t) ? 'At Sea' : GD.BIOMES[t.type].name), h('p', { class: 'dim' }, isWater(t) ? 'Your boat rides the waves.' : 'Tap anywhere to travel. Time passes only while you move, and danger is everywhere.'));
-  if (!isWater(t) && t.feature !== 'town' && t.feature !== 'estate') body.push(act('Make camp', () => Campfire.start(), { sub: 'sit by the fire with your party · rest the night', cls: 'hl' }));
+  else body.push(h('h3', {}, isWater(t) ? 'At Sea' : GD.BIOMES[t.type].name), h('p', { class: 'dim' }, isWater(t) ? 'Your boat rides the waves.' : 'Click land or roads to travel. A gold path previews your route; red means no way through. Time passes only while you move.'));
+  if (!Living.moving && !isWater(t) && t.feature !== 'town' && t.feature !== 'estate') body.push(act('Make camp', () => Campfire.start(), { sub: 'sit by the fire with your party · rest the night', cls: 'hl' }));
   body.push(this.questBox());
   return body.filter(Boolean);
 };
@@ -367,8 +381,8 @@ UI.renderPanel = function () {
   const p = $('#panel');
   const body = this.locationActs();
   body.push(h('div', { class: 'hint' }, this.isMobile()
-    ? `Tap the map to travel${hasTech('flight') ? ' (or fly to far tiles)' : ''}. Use Here for place actions, Menu for the House.`
-    : `Click the map to travel${hasTech('flight') ? ' (or fly to far tiles)' : ''}. Wheel to zoom, Q/E to rotate.`));
+    ? `Tap land or roads to travel${hasTech('flight') ? ' (or fly far)' : ''}. Gold path = route. Stop / Esc cancels. Use Here for place actions.`
+    : `Click land or roads to travel${hasTech('flight') ? ' (or fly far)' : ''}. Hover for the path · Esc stops · Wheel zooms · Q/E rotates.`));
   p.replaceChildren(...body);
 };
 

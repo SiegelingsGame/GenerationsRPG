@@ -253,7 +253,7 @@ LS.astar = function (si, sj, ti, tj, costFn) {
   return out.reverse();
 };
 // nearest walkable cell to a point (for taps on water or cliffs)
-LS.nearestPassable = function (wx, wy, maxR = 6) {
+LS.nearestPassable = function (wx, wy, maxR = 10) {
   const c = this.cellAt(wx, wy);
   for (let r = 0; r <= maxR; r++) {
     for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
@@ -264,6 +264,27 @@ LS.nearestPassable = function (wx, wy, maxR = 6) {
     }
   }
   return null;
+};
+// why a click cannot be walked to — used for clearer travel feedback
+LS.blockReason = function (from, to) {
+  if (!this.ensure()) return 'The land is still settling. Try again in a moment.';
+  const tile = tileAt(clamp(Math.round(to.x), 0, G.world.map.W - 1), clamp(Math.round(to.y), 0, G.world.map.H - 1));
+  const fromTile = tileAt(clamp(Math.round(from.x), 0, G.world.map.W - 1), clamp(Math.round(from.y), 0, G.world.map.H - 1));
+  const water = this.hfAt(to.x, to.y) < 0 || (tile && isWater(tile));
+  const cell = this.cellAt(to.x, to.y);
+  const idx = cell.j * this.W + cell.i;
+  const river = this.river[idx] === 1;
+  const peak = tile && tile.type === 'mountain' && this.hf[idx] > 0.78 && !tile.feature && !(this.passes && this.passes.has(idx));
+  if (water && !hasTech('boats')) return 'That is open water. Follow the shore, or invent boats to sail.';
+  if (river && !hasTech('boats')) return 'A river blocks the way. Look for a bridge or road crossing.';
+  if (peak) return 'Those peaks are too sheer. Seek a pass, or follow the lower hills.';
+  if (tile && fromTile && tile.land != null && fromTile.land != null && tile.land !== fromTile.land && !hasTech('boats')) {
+    return 'That land lies across the sea. Stay on your isle until sailing is known.';
+  }
+  if (!isFinite(this.cost[idx]) && !this.nearestPassable(to.x, to.y, 4)) {
+    return 'No footing there. Aim for roads, grass, or a marked place.';
+  }
+  return 'No path reaches that spot from here. Try a road, bridge, or nearer landmark.';
 };
 // a free-movement path between two world points: A* on the fine grid, then straightened
 LS.path = function (from, to) {
@@ -425,8 +446,12 @@ LS.paint = function () {
       bridgeAt(x, y, across);
     }
   }
-  // roads, then bridges where they cross a river
-  for (const rd of G.world.landscape.roads) { stroke(rd, S * 0.2, 'rgba(90,64,36,0.55)'); stroke(rd, S * 0.12, eraTint('#b8996a')); }
+  // roads, then bridges where they cross a river — slightly brighter so routes read as the world's veins
+  for (const rd of G.world.landscape.roads) {
+    stroke(rd, S * 0.26, 'rgba(70,48,24,0.62)');
+    stroke(rd, S * 0.15, eraTint('#c9a878'));
+    stroke(rd, S * 0.06, 'rgba(235,210,160,0.35)');
+  }
   for (const rd of G.world.landscape.roads) {
     for (let k = 1; k < rd.length - 1; k++) {
       if (!this.roadCross.has(rd[k])) continue;

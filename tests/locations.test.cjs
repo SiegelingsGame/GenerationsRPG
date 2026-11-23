@@ -9,6 +9,10 @@ test('nearby town prompt enters streets or opens working quick tasks on mobile',
   await p.goto(process.env.GAME_TEST_URL||'http://127.0.0.1:8767');
   await p.evaluate(()=>{UI.closeAll();newGame();const c=makeChar({house:G.house.name,status:'party'});G.mcId=G.founderId=c.id;G.party=[c.id];G.house.heroes=[c.id];G.house.heirloom=makeHeirloom();Game.enterWorld(false);const t=G.world.towns[0];G.pos={x:t.x,y:t.y};G.ppos={...G.pos};UI.refresh();});
   const prompt=p.locator('#location-prompt');await prompt.waitFor({state:'visible'});
+  // Nametag blooms into actions; wait for the open state (or open it by tapping the head).
+  await p.waitForFunction(()=>document.querySelector('#location-prompt')?.classList.contains('is-open')||false,{timeout:2000}).catch(async()=>{
+    await prompt.locator('.place-tag-head').click();
+  });
   await prompt.getByRole('button',{name:'Pass through',exact:true}).click();
   await p.getByRole('button',{name:/^Market/}).click();
   await p.getByRole('button',{name:/^Buy Potion/}).waitFor();
