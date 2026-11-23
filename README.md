@@ -24,6 +24,7 @@ A 2.5D roguelike, turn-based RPG about a family line. You play the head of a Hou
 | Enemy lore (House familiarity → modest damage/resist vs studied types) | `js/model.js` (`EnemyLore`), `js/classes.js` |
 | Isometric overworld, estate that changes with its tier, era lighting, battle arena | `js/render.js` |
 | Estate tiers, upgrades, retinue, heirloom, arranged matches, taverns, deeds, family tree | `js/ui.js`, `js/main.js` |
+| Remarriage after spouse death (Seek a new spouse, court/propose, prospect road event) | `js/model.js`, `js/main.js`, `js/ui.js`, `js/town.js`, `js/events.js` |
 | Big biome map, islands, technology, towns rising and falling, culture, kinship and taboo, attractiveness, the 1,000-year doom and its quests | `js/world.js` |
 | Road events (traders, people in need, mines, cave and dungeon crawls, bandit camps that grow) and the first-person campfire | `js/events.js` |
 | First-person town streets: buildings, residents to talk to, recruiting, rumors and intel | `js/town.js` |

@@ -382,7 +382,8 @@ function act(label, fn, opts = {}) {
 UI.estatePanel = function () {
   const hs = G.house;
   const mc = ch(G.mcId);
-  const unmarried = !spouseOf(mc);
+  const freeToMarry = canTakeSpouse(mc);
+  const widowed = isWidowed(mc);
   const income = Math.round(GD.ESTATE[hs.tier].income * era().income + hs.up.livestock * 40);
   return [
     h('h3', {}, `${GD.ESTATE[hs.tier].name} of House ${hs.name}`),
@@ -398,7 +399,7 @@ UI.estatePanel = function () {
       act('Improve the Estate', () => this.showEstate(), { sub: 'tiers, upgrades, retinue' }),
       act('Household & Heir', () => this.showHousehold(), { sub: 'party, children, succession' }),
       act('Armory & Inventory', () => this.showInventory(ch(G.mcId)), { sub: 'try on armour, robes, helms, weapons' }),
-      unmarried ? act('Arranged Match', () => Game.arrangedMatch(), { sub: 'choose 1 of 3 partners', cls: 'hl' }) : null,
+      freeToMarry ? act(widowed ? 'Seek a new spouse' : 'Arranged Match', () => Game.seekNewSpouse(), { sub: widowed ? 'court again, or arrange a remarriage' : 'choose 1 of 3 partners', cls: 'hl' }) : null,
       act('Adopt a Child', () => this.showAdoption(), { sub: 'give an orphan a family and a name' }),
       act('Family Tree', () => this.showTree()),
     ),
@@ -667,7 +668,12 @@ UI.charBody = function (c) {
       h('h4', {}, 'Family'),
       lineage,
       grand.length ? h('p', { class: 'dim' }, 'Grandparents: ', grand.map((g, i) => [i ? ', ' : '', link(g)])) : null,
-      sp ? h('p', {}, 'Spouse: ', link(sp)) : h('p', { class: 'dim' }, 'Unmarried'),
+      (() => {
+        const late = lateSpouseOf(c);
+        if (spouseOf(c) && sp) return h('p', {}, 'Spouse: ', link(sp));
+        if (late) return h('p', {}, 'Widowed · late spouse: ', link(late));
+        return h('p', { class: 'dim' }, 'Unmarried');
+      })(),
       kids.length ? h('p', {}, 'Children: ', kids.map((k, i) => [i ? ', ' : '', link(k), k.alive ? ` (${ageStr(k)})` : ''])) : null,
       mc && c.id !== mc.id && c.alive ? h('p', { class: bond(c, mc) < -40 ? 'bad' : 'dim' }, `Bond with ${mc.name}: ${Math.round(bond(c, mc))}${bond(c, mc) < -40 ? ' (resents you)' : ''} · Loyalty to the House: ${Math.round(c.loyalty)}`) : null,
       mc && c.id !== mc.id && c.alive && isAdult(c) && c.orientKnown && !spouseOf(c) && !isDescendantOf(c, mc.id) ? h('p', { class: 'dim' }, attraction(c, mc) === 0 ? `Not drawn to ${mc.name}.` : attraction(c, mc) > 1.15 ? `Strongly drawn to ${mc.name}.` : `Could be drawn to ${mc.name}.`) : null,
@@ -718,7 +724,16 @@ UI.charActions = function (c) {
     out.push(act('Inventory & Try On', () => { this.closeModal(); this.showInventory(c); }, { sub: 'house stash · try gear on this character' }));
   }
   if (!c.alive || !mc || c.id === mc.id) {
-    if (c.id === mc?.id && !spouseOf(mc) && tileAt(G.pos.x, G.pos.y).feature === 'estate') out.push(act('Arranged Match', () => { this.closeModal(); Game.arrangedMatch(); }));
+    if (c.id === mc?.id && canTakeSpouse(mc)) {
+      const atEst = tileAt(G.pos.x, G.pos.y).feature === 'estate';
+      const inTn = tileAt(G.pos.x, G.pos.y).feature === 'town';
+      if (atEst || inTn || isWidowed(mc)) {
+        out.push(act(isWidowed(mc) ? 'Seek a new spouse' : 'Arranged Match', () => {
+          this.closeModal();
+          Game.seekNewSpouse(inTn ? { townIdx: tileAt(G.pos.x, G.pos.y).townIdx } : {});
+        }, { sub: isWidowed(mc) ? 'court again or arrange a remarriage' : 'choose 1 of 3 partners' }));
+      }
+    }
     return out;
   }
   const inTown = tileAt(G.pos.x, G.pos.y).feature === 'town';
@@ -727,10 +742,10 @@ UI.charActions = function (c) {
     const cost = hireCost(c), req = recruitPrestigeReq(c);
     out.push(act('Recruit', () => { Game.recruit(c); this.closeModal(); }, { sub: `${cost}g${req ? ` · needs ${req} prestige` : ''}`, disabled: G.house.gold < cost || G.house.prestige < req }));
   }
-  const canRomance = isAdult(c) && !spouseOf(mc) && !spouseOf(c) && c.status !== 'rival';
+  const canRomance = isAdult(c) && canTakeSpouse(mc) && canTakeSpouse(c) && c.status !== 'rival';
   if (canRomance && (inTown || c.status !== 'npc')) {
     out.push(act('Court', () => { Game.court(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '20g · 10 days', disabled: G.house.gold < 20 }));
-    if (bond(c, mc) >= 70) out.push(act('Propose Marriage', () => { Game.propose(c); this.closeModal(); }, { cls: 'hl' }));
+    if (bond(c, mc) >= 70) out.push(act(isWidowed(mc) ? 'Propose Remarriage' : 'Propose Marriage', () => { Game.propose(c); this.closeModal(); }, { cls: 'hl' }));
   }
   if (!c.lineageKnown && inTown) {
     const cost = Math.max(10, 40 - G.house.up.library * 10);
@@ -743,8 +758,8 @@ UI.charActions = function (c) {
     if (bond(c, mc) < 0) out.push(act('Heart-to-heart', () => { Game.interact(c, 'talk'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '14 days · may heal old wounds, or open them' }));
     if (c.forcedBy === mc.id && !c.apologised) out.push(act('Ask forgiveness', () => { Game.interact(c, 'apology'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '5 prestige · once' }));
   }
-  if (c.house === G.house.name && isAdult(c) && !spouseOf(c) && c.id !== mc.id && atEstate) {
-    out.push(act('Arrange a marriage', () => { this.closeAll(); Game.matchmaker(c); }, { sub: `match ${c.name} with a suitor` }));
+  if (c.house === G.house.name && isAdult(c) && canTakeSpouse(c) && c.id !== mc.id && atEstate) {
+    out.push(act(isWidowed(c) ? 'Arrange a remarriage' : 'Arrange a marriage', () => { this.closeAll(); Game.matchmaker(c); }, { sub: `match ${c.name} with a suitor` }));
   }
   if (c.house === G.house.name && c.birth === 'bastard' && !c.legit) out.push(act('Legitimise', () => { Game.legitimise(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '10 prestige', disabled: G.house.prestige < 10 }));
   if (c.house === G.house.name && isDescendantOf(c, mc.id) && G.heirId !== c.id) out.push(act('Name as Heir', () => { G.heirId = c.id; chron(`${c.name} is named heir of House ${G.house.name}.`, 'good', [c.id], 'heir'); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }));
@@ -759,17 +774,45 @@ UI.showTavern = function (idx) {
   const people = this.townPeople(idx).filter(isAdult).sort((a, b) => b.level - a.level);
   const kids = this.townPeople(idx).filter((c) => !isAdult(c));
   const mc = ch(G.mcId);
+  const free = mc && canTakeSpouse(mc);
   const body = h('div', {},
     WorldArt.room('tavern', WorldArt.seedHere()),
     h('p', { class: 'dim' }, 'Adventurers, wanderers and locals. Click someone to see their lineage, court them or recruit them.'),
+    free ? h('div', { class: 'act-group' },
+      h('p', { class: 'act-group-label' }, isWidowed(mc) ? 'Remarriage' : 'Seek a spouse'),
+      act(isWidowed(mc) ? 'Seek a new spouse' : 'Seek match', () => { this.closeModal(); Game.seekNewSpouse({ townIdx: idx }); }, { sub: 'compatible adults here · court or propose', cls: 'hl' }),
+    ) : null,
     h('div', { class: 'grid' }, people.map((c) => this.miniCard(c, () => this.replaceModalChar(c), [
       h('small', {}, `${hireCost(c)}g`),
       c.parents.some((p) => ch(p) && (ch(p).status === 'party' || ch(p).status === 'household' || ch(p).house === G.house.name)) ? h('small', { class: 'good' }, 'Child of a companion') : null,
       mc && bond(c, mc) > 20 ? h('small', { class: 'good' }, `Bond ${Math.round(bond(c, mc))}`) : null,
+      free && canTakeSpouse(c) && attraction(c, mc) > 0 && attraction(mc, c) > 0 ? h('small', { class: 'good' }, 'Possible match') : null,
     ]))),
     kids.length ? h('p', { class: 'dim' }, `Children in town: ${kids.map((k) => `${k.name} (${ageStr(k)}, ${GD.RACES[k.race].name})`).join(', ')}`) : null,
   );
   this.modal(body, { title: `Tavern of ${G.world.towns[idx].name}`, wide: true });
+};
+
+UI.showSeekSpouse = function ({ intro, cands, widowed, late, townIdx }) {
+  const mc = ch(G.mcId);
+  const body = h('div', {},
+    h('p', { class: 'dim' }, intro),
+    late ? h('p', { class: 'dim small' }, `Late spouse: ${late.name} † · prior children keep their place in succession.`) : null,
+    cands.length
+      ? h('div', { class: 'grid' }, cands.map((c) => this.miniCard(c, () => this.replaceModalChar(c), [
+        h('small', {}, UI.charLine(c)),
+        h('small', { class: 'dim' }, orientationText(c)),
+        h('small', { class: bond(c, mc) >= 70 ? 'good' : 'dim' }, `Bond ${Math.round(bond(c, mc))}`),
+        act('Court', () => { Game.court(c); this.replaceModal(this.charBody(c), { title: c.name, wide: true }); }, { sub: '20g · 10 days', disabled: G.house.gold < 20 }),
+        bond(c, mc) >= 70 ? act(widowed ? 'Propose Remarriage' : 'Propose Marriage', () => { this.closeAll(); Game.propose(c); }, { cls: 'hl' }) : null,
+      ])))
+      : h('p', { class: 'dim' }, 'No clear prospects nearby. Travel to a town tavern, or ask the matchmaker for an arranged union.'),
+    h('div', { class: 'row' },
+      act('Arranged Match', () => { this.closeAll(); Game.arrangedMatch(); }, { sub: 'choose 1 of 3 partners', cls: 'hl' }),
+      townIdx != null ? act('Back to tavern', () => { this.closeModal(); this.showTavern(townIdx); }) : act('Close', () => this.closeModal()),
+    ),
+  );
+  this.modal(body, { title: widowed ? 'Seek a New Spouse' : 'Seek a Spouse', wide: true });
 };
 UI.replaceModalChar = function (c) { this.modal(this.charBody(c), { title: c.name, wide: true, onclose: () => { } }); };
 
@@ -1030,11 +1073,17 @@ UI.showHousehold = function () {
   const blood = all.filter((c) => c.house === G.house.name);
   const comp = all.filter((c) => c.house !== G.house.name);
   const cand = heirCandidates();
+  const mc = ch(G.mcId);
   const body = h('div', {},
+    mc && canTakeSpouse(mc) ? h('div', { class: 'act-group' },
+      h('p', { class: 'act-group-label' }, isWidowed(mc) ? 'Remarriage' : 'Marriage'),
+      act(isWidowed(mc) ? 'Seek a new spouse' : 'Arranged Match', () => { this.closeModal(); Game.seekNewSpouse(); }, { sub: isWidowed(mc) ? 'court again or arrange a remarriage' : 'choose 1 of 3 partners', cls: 'hl' }),
+    ) : null,
     h('h4', {}, 'House members'),
     h('div', { class: 'grid' }, blood.map((c) => this.miniCard(c, () => this.replaceModalChar(c), [
       c.id === G.heirId ? h('small', { class: 'good' }, '★ Heir') : null,
       c.status === 'party' ? h('small', {}, 'In party') : null,
+      isWidowed(c) ? h('small', { class: 'dim' }, 'Widowed') : null,
       !isAdult(c) ? h('small', { class: 'dim' }, `Comes of age in ${Math.ceil(GD.RACES[c.race].maturity - age(c))} yrs`) : null,
     ]))),
     h('h4', {}, 'Companions'),

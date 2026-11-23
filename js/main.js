@@ -196,6 +196,7 @@ Game.matchmaker = function (who, opts = {}) {
   const mc = ch(G.mcId);
   const self = who.id === G.mcId;
   const opening = !!opts.opening;
+  if (!opening && !canTakeSpouse(who)) return UI.toast(`${who.name} already has a living spouse.`);
   const forHeir = !!opts.forHeir;
   const tier = opening ? 0 : maxPartnerTier();
   const genders = forHeir ? [who.gender === 'man' ? 'woman' : 'man'] : compatibleGenders(who);
@@ -241,11 +242,14 @@ Game.matchmaker = function (who, opts = {}) {
     const love = attraction(who, c) === 0 ? (self ? 'A marriage of duty: no love on your side.' : `Against ${who.name}'s heart: they will resent you.`) : (attraction(who, c) > 1.15 ? `${who.name} is strongly drawn to them.` : null);
     return [kinNote, kids ? h('small', { class: 'bad' }, kids) : null, love ? h('small', { class: attraction(who, c) === 0 ? 'bad' : 'good' }, love) : null];
   };
+  const remarrying = self && isWidowed(who);
   const intro = opening
     ? 'Every House begins with a union. Choose who will be the other parent of your line. Their blood will shape your heirs.'
-    : self
-      ? `A matchmaker presents three suitors. With ${Math.round(G.house.prestige)} prestige and a ${GD.ESTATE[G.house.tier].name}, you can attract tier ${tier} matches.`
-      : `A match for ${who.name} (${GD.GENDERS[who.gender].name}, ${GD.ORIENTATIONS[who.orientation].name}${who.pref !== 'none' ? ', ' + GD.PREFERENCES[who.pref].name.toLowerCase() : ''}).`;
+    : remarrying
+      ? `Widowed, ${who.name} seeks a new spouse. A matchmaker presents three suitors. Prior children remain of the House; a new spouse may bear or adopt further heirs.`
+      : self
+        ? `A matchmaker presents three suitors. With ${Math.round(G.house.prestige)} prestige and a ${GD.ESTATE[G.house.tier].name}, you can attract tier ${tier} matches.`
+        : `A match for ${who.name} (${GD.GENDERS[who.gender].name}, ${GD.ORIENTATIONS[who.orientation].name}${who.pref !== 'none' ? ', ' + GD.PREFERENCES[who.pref].name.toLowerCase() : ''}).`;
   const body = h('div', {},
     opening ? h('p', { class: 'dim small' }, 'Step 7 of 8 · Choose your partner') : null,
     h('p', { class: 'dim' }, intro),
@@ -268,7 +272,7 @@ Game.matchmaker = function (who, opts = {}) {
       !opening ? act('Decline for now', () => done(null)) : null),
     kinMode ? h('p', { class: 'dim small' }, 'Close-kin unions concentrate the blood: children are more likely to be born with conditions, infertile, weaker and plainer.') : null,
   );
-  UI.modal(body, { title: opening ? 'Choose your Partner' : self ? 'Arranged Match' : `A Match for ${who.name}`, wide: true, locked: true });
+  UI.modal(body, { title: opening ? 'Choose your Partner' : remarrying ? 'Seek a New Spouse' : self ? 'Arranged Match' : `A Match for ${who.name}`, wide: true, locked: true });
 };
 Game.choosePartner = function (opening) { this.matchmaker(ch(G.mcId), { opening }); };
 function maxPartnerTier() {
@@ -276,7 +280,11 @@ function maxPartnerTier() {
   GD.PARTNER_TIER_PRESTIGE.forEach((p, i) => { if (G.house.prestige >= p) t = i; });
   return Math.min(t, GD.ESTATE[G.house.tier].partnerTier + 1);
 }
-Game.arrangedMatch = function () { this.choosePartner(false); };
+Game.arrangedMatch = function () {
+  const mc = ch(G.mcId);
+  if (!canTakeSpouse(mc)) return UI.toast(`${mc.name} already has a living spouse.`);
+  this.choosePartner(false);
+};
 
 Game.enterWorld = function (fresh) {
   G.mode = 'world';
@@ -542,6 +550,8 @@ Game.recruit = function (c) {
 };
 Game.court = function (c) {
   const mc = ch(G.mcId);
+  if (!canTakeSpouse(mc)) return UI.toast(`${mc.name} already has a living spouse.`);
+  if (!canTakeSpouse(c)) return UI.toast(`${c.name} is not free to court.`);
   G.house.gold -= 20;
   advanceDays(10);
   const att = attraction(c, mc);
@@ -561,8 +571,11 @@ Game.court = function (c) {
 };
 Game.propose = function (c) {
   const mc = ch(G.mcId);
+  if (!canTakeSpouse(mc)) return UI.toast(`${mc.name} already has a living spouse. Remarriage is only possible after they die.`);
+  if (!canTakeSpouse(c)) return UI.toast(`${c.name} is not free to marry.`);
   if (c.status === 'npc' && householdCount() >= GD.ESTATE[G.house.tier].household) return UI.toast('Your household is full. Improve your estate.');
   if (attraction(c, mc) === 0) return UI.toast(`${c.name} does not feel that way about you.`);
+  const wasWidowed = isWidowed(mc);
   const wasStatus = c.status;
   if (wasStatus !== 'npc') { c.house = G.house.name; marry(mc, c); c.loyalty = Math.max(c.loyalty, 60); }
   else joinHouse(c, mc);
@@ -571,8 +584,36 @@ Game.propose = function (c) {
   recordChoice('love', 1, mc.id);
   if (mc.gender === c.gender) recordChoice('accept', 1, mc.id);
   if (c.birth === 'highborn') G.house.prestige += 5;
-  UI.toast(`${mc.name} and ${c.name} are married.`);
+  UI.toast(wasWidowed ? `${mc.name} remarries ${c.name}.` : `${mc.name} and ${c.name} are married.`);
   this.after();
+};
+/** Open remarriage / seek-spouse panel: suggested prospects + arranged match. */
+Game.seekNewSpouse = function (opts = {}) {
+  const mc = ch(G.mcId);
+  if (!mc) return;
+  if (!canTakeSpouse(mc)) return UI.toast(`${mc.name} already has a living spouse.`);
+  const late = lateSpouseOf(mc);
+  const townIdx = opts.townIdx != null ? opts.townIdx : (tileAt(G.pos.x, G.pos.y).feature === 'town' ? tileAt(G.pos.x, G.pos.y).townIdx : null);
+  let cands = remarriageProspects(mc, { limit: 5, townIdx: townIdx != null ? townIdx : undefined, townOnly: townIdx != null });
+  if (cands.length < 3) {
+    const more = remarriageProspects(mc, { limit: 5 }).filter((c) => !cands.includes(c));
+    cands = cands.concat(more).slice(0, 5);
+  }
+  const widowed = !!late;
+  const intro = widowed
+    ? `${mc.name} is free to remarry since ${late.name} died. Court someone whose heart answers yours, or ask the matchmaker for a new union. Children of the first marriage keep their place in the line.`
+    : `${mc.name} seeks a spouse. Court eligible adults in towns, or arrange a match at the estate.`;
+  UI.showSeekSpouse({ intro, cands, widowed, late, townIdx });
+};
+Game.introduceRemarriageProspect = function (c) {
+  const mc = ch(G.mcId);
+  if (!mc || !c || !canTakeSpouse(mc) || !canTakeSpouse(c)) return null;
+  c.orientKnown = true;
+  c.status = 'npc';
+  if (c.town == null) c.town = randomTownIdx();
+  addBond(c, mc, R.int(8, 16));
+  chron(`${mc.name}, widowed, met ${c.name} — a possible new match.`, 'dim', [mc.id, c.id], 'remarriage');
+  return c;
 };
 // ---- relationships: mend or deepen bonds with your kin and companions
 Game.interact = function (c, kind) {

@@ -282,12 +282,12 @@ TownView.renderButtons = function () {
   const b = (label, fn, opts = {}) => h('button', { class: 'camp-btn' + (opts.cls ? ' ' + opts.cls : ''), disabled: opts.disabled, title: opts.title, onclick: fn }, label);
   if (c) {
     const cost = hireCost(c), req = recruitPrestigeReq(c);
-    const canRomance = isAdult(c) && mc && !spouseOf(mc) && !spouseOf(c);
+    const canRomance = isAdult(c) && mc && canTakeSpouse(mc) && canTakeSpouse(c);
     const kids = !isAdult(c);
     this.btns.replaceChildren(...[
       !kids ? b(`Recruit (${cost}g)`, () => { Game.recruit(c); this.selected = null; this.setSay(`${c.name} joins you.`, c); this.sync(); }, { disabled: G.house.gold < cost || G.house.prestige < req, title: req ? `needs ${req} prestige` : '' }) : null,
       canRomance ? b('Court (20g)', () => { Game.court(c); this.setSay(attraction(c, mc) === 0 ? `${c.name} smiles politely. There is nothing more there.` : bond(c, mc) >= 70 ? `${c.name} lingers close. They would say yes, if you asked.` : `${c.name} enjoys your company.`, c); this.sync(); }, { disabled: G.house.gold < 20 }) : null,
-      canRomance && bond(c, mc) >= 70 ? b('Propose', () => { Game.propose(c); this.selected = null; this.sync(); }, { cls: 'leave' }) : null,
+      canRomance && bond(c, mc) >= 70 ? b(isWidowed(mc) ? 'Propose Remarriage' : 'Propose', () => { Game.propose(c); this.selected = null; this.sync(); }, { cls: 'leave' }) : null,
       b('Ask for news', () => this.askNews(c)),
       !c.lineageKnown ? b(`Research lineage (${Math.max(10, 40 - G.house.up.library * 10)}g)`, () => { Game.research(c); this.setSay(`${c.name}'s past: ${GD.SECRETS[c.secret || 'common'].name.toLowerCase()}.`, c); this.sync(); }, { disabled: G.house.gold < Math.max(10, 40 - G.house.up.library * 10) }) : null,
       b('Details', () => UI.showChar(c)),
@@ -301,6 +301,7 @@ TownView.renderButtons = function () {
     b('Inn (10g)', () => this.use('inn'), { disabled: G.house.gold < 10 }),
     b('Notice Board', () => this.use('hall')),
     b('Buy rumors (15g)', () => this.buyRumors(), { disabled: G.house.gold < 15, title: 'stand a round of drinks' }),
+    mc && canTakeSpouse(mc) ? b(isWidowed(mc) ? 'Seek a new spouse' : 'Seek match', () => { Game.seekNewSpouse({ townIdx: this.idx }); }, { title: 'compatible adults in town' }) : null,
     b('Leave town', () => this.close(), { cls: 'leave' }),
   );
 };
@@ -329,7 +330,9 @@ TownView.line = function (c) {
   if (G.world.era.type === 'famine') lines.push('Bread costs a week\'s wage now. A week!');
   if (this.town.size >= 4) lines.push(`${this.town.name} grows every year. Too fast, if you ask me.`);
   if (this.town.size <= 1) lines.push('Half the houses here stand empty now.');
-  if (attraction(c, mc) > 1.2 && !spouseOf(c) && !spouseOf(mc) && isAdult(c)) lines.push(`I hoped I would see you today, ${mc.name}.`);
+  if (attraction(c, mc) > 1.2 && canTakeSpouse(c) && canTakeSpouse(mc) && isAdult(c)) {
+    lines.push(isWidowed(mc) ? `I heard you were alone again, ${mc.name}. If you ever want company…` : `I hoped I would see you today, ${mc.name}.`);
+  }
   if (!lines.length) lines.push('Good day to you.', 'Fine weather, or near enough.', `Welcome to ${this.town.name}.`);
   return R.pick(lines);
 };
@@ -376,11 +379,16 @@ TownView.rumor = function (apply) {
   // hidden lineages
   const secret = Object.values(G.chars).find((x) => x.alive && x.status === 'npc' && x.town === this.idx && !x.lineageKnown && x.secret && x.secret !== 'common');
   if (secret) opts.push({ w: 2, text: `They say ${secret.name} is not what they seem: ${GD.SECRETS[secret.secret].name.toLowerCase()}.`, fx: () => { secret.lineageKnown = true; const s = GD.SECRETS[secret.secret]; for (const k in s.bonus) secret.bonus[k] += s.bonus[k]; secret.corruption += s.corruption; } });
-  // who has an eye on the head of House
+  // who has an eye on the head of House (including remarriage prospects when widowed)
   const mc = ch(G.mcId);
-  if (mc && !spouseOf(mc)) {
-    const admirer = Object.values(G.chars).find((x) => x.alive && x.status === 'npc' && x.town === this.idx && isAdult(x) && !spouseOf(x) && attraction(x, mc) > 1);
-    if (admirer) opts.push({ w: 2, text: `Between you and me, ${admirer.name} has been asking about you.`, fx: () => { admirer.orientKnown = true; addBond(admirer, mc, 5); } });
+  if (mc && canTakeSpouse(mc)) {
+    const admirer = Object.values(G.chars).find((x) => x.alive && x.status === 'npc' && x.town === this.idx && isAdult(x) && canTakeSpouse(x) && attraction(x, mc) > 1);
+    if (admirer) {
+      const tip = isWidowed(mc)
+        ? `People say ${admirer.name} would make a fine match for a widowed head of House — they've been asking after you.`
+        : `Between you and me, ${admirer.name} has been asking about you.`;
+      opts.push({ w: isWidowed(mc) ? 3 : 2, text: tip, fx: () => { admirer.orientKnown = true; addBond(admirer, mc, isWidowed(mc) ? 8 : 5); } });
+    }
   }
   // technology to come
   const next = (G.world.tech || []).find((x) => !x.got && x.year && x.year - year() < 40);
