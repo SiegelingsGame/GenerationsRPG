@@ -1,5 +1,5 @@
 // Opening cutscene for Random Lineage: a doomed last stand against the Hollow King,
-// then the King seeks the right bloodline — the player's House begins as that thread.
+// then a white spirit seeks the right bloodline — the player's House begins as that thread.
 'use strict';
 
 const OpeningCutscene = {
@@ -280,7 +280,7 @@ OpeningCutscene.approachBeats = function () {
       name: 'belly', dur: 3200,
       cam: { z: 1.35, y: 1.15, x: 0, pitch: 0.06, fov: 0.7 },
       spirit: { z: 0.85, y: 0.95, x: 0 },
-      chapter: 'The Hollow King', line: 'I will seek the right bloodline. This time, I will prevail.', speaker: 'The Hollow King',
+      chapter: 'The White Spirit', line: 'I will seek the right bloodline. This time, I will prevail.', speaker: 'The Spirit',
     },
   ];
 };
@@ -327,8 +327,8 @@ OpeningCutscene.phaseSpiritFlight = function (king) {
   const ease = (t) => t * t * (3 - 2 * t);
   // Map legs end overhead of the town; intimacy stages continue in 2.5D.
   const legs = [
-    { x: spire.x, y: spire.y, alt: 56, dur: 800, chapter: 'The Hollow King', line: 'Denied its ending, the King dwindles to a white spark.', speaker: '' },
-    { x: spire.x - (spire.x - estate.x) * 0.35, y: spire.y - (spire.y - estate.y) * 0.25, alt: 72, dur: 1800, chapter: 'Chronicle', line: 'A spirit of unmaking casts itself across the seas.', speaker: '' },
+    { x: spire.x, y: spire.y, alt: 56, dur: 800, chapter: 'Chronicle', line: 'The Hollow King is broken. From the fracture, a white spirit takes flight.', speaker: '' },
+    { x: spire.x - (spire.x - estate.x) * 0.35, y: spire.y - (spire.y - estate.y) * 0.25, alt: 72, dur: 1800, chapter: 'Chronicle', line: 'The spirit casts itself across the seas, seeking the right bloodline.', speaker: '' },
     { x: estate.x + (town.x - estate.x) * 0.15, y: estate.y + (town.y - estate.y) * 0.1, alt: 48, dur: 1800, chapter: 'The Starting Isle', line: 'It finds the island where a House will one day rise.', speaker: '' },
     { x: town.x, y: town.y, alt: 22, dur: 1600, chapter: 'A Living Town', line: 'Over rooftops and hearths — the tracking shot begins.', speaker: '' },
   ];
@@ -485,7 +485,7 @@ OpeningCutscene.tickApproach = function (now) {
 
       if (i >= beats.length - 1 && u >= 1 && !s.finishing) {
         s.finishing = true;
-        this.setText('Chronicle', 'And so a House is founded — the bloodline the King still hunts.');
+        this.setText('Chronicle', 'And so a House is founded — the bloodline the spirit claimed.');
         this.after(2200, () => this.complete());
       }
       return;

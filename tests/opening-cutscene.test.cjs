@@ -164,6 +164,8 @@ test('Spirit flight multi-stage 2.5D approach: town → neighborhood → house �
           trailApproach: (s.trail || []).filter((t) => t.mode === 'approach').length,
           bodyClass: document.body.classList.contains('oc-approach-active'),
           line: (document.querySelector('#oc-line') || {}).textContent || '',
+          chapter: (document.querySelector('#oc-chapter') || {}).textContent || '',
+          speaker: (document.querySelector('#oc-speaker') || {}).textContent || '',
           active: OpeningCutscene.active,
         };
       });
@@ -199,6 +201,25 @@ test('Spirit flight multi-stage 2.5D approach: town → neighborhood → house �
     assert.ok(hood.cam.z > house.cam.z);
     assert.ok(room.cam.z > belly.cam.z);
     assert.match(belly.line, /bloodline|prevail|House/i);
+    // Seeking / claiming the bloodline is the spirit's voice — not the Hollow King.
+    assert.match(belly.chapter, /spirit/i);
+    assert.match(belly.speaker, /spirit/i);
+    assert.ok(!/hollow\s*king/i.test(belly.speaker || ''));
+
+    // Approach beats should never put bloodline-seeking dialogue in the King's mouth.
+    const seekingCopy = await page.evaluate(() => {
+      const beats = OpeningCutscene.approachBeats();
+      const legs = (OpeningCutscene.spirit && OpeningCutscene.spirit.legs) || [];
+      return {
+        belly: beats.find((b) => b.name === 'belly'),
+        mapSeek: legs.map((l) => `${l.chapter}|${l.line}|${l.speaker || ''}`),
+      };
+    });
+    assert.match(seekingCopy.belly.line, /seek.*bloodline|prevail/i);
+    assert.match(seekingCopy.belly.speaker, /spirit/i);
+    assert.ok(!/hollow\s*king/i.test(seekingCopy.belly.speaker || ''));
+    assert.ok(seekingCopy.mapSeek.some((row) => /spirit.*seek|seek.*bloodline/i.test(row)));
+    assert.ok(!seekingCopy.mapSeek.some((row) => /hollow\s*king.*seek|king.*dwindles/i.test(row)));
 
     // Also keep a mother-belly alias artifact name for continuity with prior PR evidence.
     await page.screenshot({ path: path.join(ART, 'opening-cutscene-spirit-mother-belly.png') });
