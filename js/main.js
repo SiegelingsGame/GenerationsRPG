@@ -398,12 +398,14 @@ Game.battle = function (enemies, opts) {
   UI.targeting = null;
   Living.stop();
   if (TownView.open) TownView.close();
+  if (typeof FxLayer !== 'undefined') FxLayer.playTransition(opts.kind === 'dungeon' ? 'slash-wipe' : 'iris');
   Battle.start({
     enemies, kind: opts.kind, title: opts.title,
     intro: opts.intro,
     tile: opts.tile || tileAt(G.pos.x, G.pos.y),
     onEnd: (res) => {
       UI.refresh();
+      if (typeof FxLayer !== 'undefined') FxLayer.playTransition('pixel-dissolve');
       UI.battleResults(res, () => { if (opts.after) opts.after(res); this.after(); });
     },
   });

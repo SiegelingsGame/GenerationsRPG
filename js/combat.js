@@ -228,6 +228,7 @@ Battle.act = function (action, targetUid, skillKey) {
     t.hp = Math.min(t.maxHp, t.hp + amt);
     this.fx.push({ uid: t.uid, text: '+' + amt, color: '#6fe08a', t0: performance.now() });
     PackArt.emit('heal',t);
+    if (typeof FxLayer !== 'undefined') FxLayer.emitHeal(t);
     this.say(`${u.name} uses a potion on ${t.name}.`);
   } else if (action === 'skill') {
     const id = skillKey || (u.abilities || [])[0];

@@ -11,3 +11,7 @@ This directory contains only sprites used by Generations RPG, extracted from use
 The scenery layout, gameplay, collision and world simulation remain game code. Furniture layouts derive from the world seed and location coordinates so they survive save/load. Decorations do not create invisible movement barriers. Effects are cosmetic and do not change damage, turn costs, target selection, or AI decisions. Motion reduction uses static effect frames when the device requests reduced motion.
 
 Inventory and equipment UI chrome lives in `assets/ui/` (Kasaya's Frames). See that folder's README and LICENSE.
+
+## PixelFX
+
+Runtime VFX from [patch-gg/pixelfx](https://github.com/patch-gg/pixelfx) (MIT). Source under `vendor/pixelfx/`; browser bundle is `js/pixelfx-runtime.js` (rebuild with `node scripts/bundle-pixelfx.mjs` after `npm i esbuild`). Used for weather overlays, scene transitions and battle attack bursts.

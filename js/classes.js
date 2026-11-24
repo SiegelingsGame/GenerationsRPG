@@ -154,7 +154,7 @@ function abilitiesOf(c) {
 
 // ---------------------------------------------------------------- abilities in battle
 Battle.st = function (u, k) { return (u.st && u.st[k] && u.st[k].t > 0) ? u.st[k] : null; };
-Battle.give = function (u, k, turns, v = 0) { u.st = u.st || {}; u.st[k] = { t: turns, v }; if (['shield','guard','riposte'].includes(k)) PackArt.emit('shield',u); else if (['atkUp','bloodlust'].includes(k)) PackArt.emit('buff',u); };
+Battle.give = function (u, k, turns, v = 0) { u.st = u.st || {}; u.st[k] = { t: turns, v }; if (['shield','guard','riposte'].includes(k)) PackArt.emit('shield',u); else if (['atkUp','bloodlust'].includes(k)) PackArt.emit('buff',u); if (k === 'shield' && typeof FxLayer !== 'undefined') FxLayer.emitHeal(u); };
 Battle.maxFocus = function (u) {
   if (!u) return 3;
   const cl = u.cls && GD.CLASSES[u.cls];
@@ -255,6 +255,7 @@ Battle.magic = function (u, t, mult) {
 };
 Battle.healUnit = function (u, t, amt, label) {
   PackArt.emit('heal',t);
+  if (typeof FxLayer !== 'undefined') FxLayer.emitHeal(t);
   amt = Math.round(amt);
   t.hp = Math.min(t.maxHp, t.hp + amt);
   this.fx.push({ uid: t.uid, text: '+' + amt, color: '#6fe08a', t0: performance.now() });

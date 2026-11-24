@@ -96,27 +96,13 @@ Render.init = function (canvas) {
     if (e.key === '+' || e.key === '=') this.setZoom(this.zoomTarget * 1.2);
     if (e.key === '-' || e.key === '_') this.setZoom(this.zoomTarget / 1.2);
   });
-  // on-screen map controls
-  const btn = (label, title, fn) => { const b = document.createElement('button'); b.textContent = label; b.title = title; b.addEventListener('click', fn); return b; };
-  this.ctl = document.createElement('div');
-  this.ctl.className = 'mapctl';
-  this.stopBtn = btn('■', 'Stop travelling (Esc)', () => Living.cancel('You halt on the road.'));
-  this.stopBtn.classList.add('stop-travel');
-  this.stopBtn.hidden = true;
-  this.ctl.append(
-    this.stopBtn,
-    btn('⟲', 'Rotate left (Q)', () => this.rotate(-1)),
-    btn('⟳', 'Rotate right (E)', () => this.rotate(1)),
-    btn('+', 'Zoom in (+ or mouse wheel)', () => this.setZoom(this.zoomTarget * 1.25)),
-    btn('−', 'Zoom out (−)', () => this.setZoom(this.zoomTarget / 1.25)),
-    btn('⌂', 'Reset view', () => { this.rot = 0; this.setZoom(1); }),
-  );
-  canvas.parentElement.append(this.ctl);
+  // Unified world HUD (goal + estate/map/zoom/rotate) lives on document.body via WorldHud.
+  if (typeof WorldHud !== 'undefined') WorldHud.build();
   const loop = (ts) => { this.t = ts; try { this.frame(); } catch (err) { console.error(err); } requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
 };
 Render.updateTravelCtl = function () {
-  if (this.stopBtn) this.stopBtn.hidden = !(Living && Living.moving);
+  if (typeof WorldHud !== 'undefined') WorldHud.sync();
 };
 
 Render.rotate = function (dir) { this.rot = (this.rot + dir + 4) % 4; this.spin = this.t; this.lastHover = null; };
@@ -169,6 +155,8 @@ Render.frame = function () {
   if (approach) this.drawSpiritApproach(OpeningCutscene.spirit);
   else if (Battle.active) this.drawBattle();
   else this.drawWorld();
+  if (!Battle.active && typeof FxLayer !== 'undefined') FxLayer.drawWeather(this);
+  if (typeof WorldHud !== 'undefined') WorldHud.sync();
   LocationPrompt.render();
   if (shaking) c.restore();
 };
@@ -1751,6 +1739,7 @@ Render.drawBattle = function () {
     }
   }
   PackArt.drawBattle(this);
+  if (typeof FxLayer !== 'undefined') FxLayer.drawAttacks(this);
   // fx
   Battle.fx = Battle.fx.filter((f) => now - f.t0 < 1100);
   for (const f of Battle.fx) {
