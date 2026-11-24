@@ -131,7 +131,8 @@ UI.placeLayout = function () {
   const mobile = this.isMobile();
   document.body.classList.toggle('mobile', mobile);
   document.body.classList.toggle('in-battle', mobile && Battle.active);
-  if (!(mobile && Battle.active)) stage.style.bottom = '';
+  // Battle HUD overlays the canvas; never reserve bottom space for the sheet.
+  stage.style.bottom = '';
   if (mobile) {
     if (Battle.active) { if (panel.parentNode !== this.mob.sheet) this.mob.sheet.append(panel); this.closeDrawer(); }
     else {
@@ -548,7 +549,8 @@ UI.battleChanged = function () {
   kids.push(h('label', { class: 'auto' }, h('input', { type: 'checkbox', checked: Battle.auto, onchange: (e) => { Battle.auto = e.target.checked; if (Battle.auto && Battle.waiting) { Battle.waiting = false; Battle.ai(Battle.cur); } } }), ' Auto-battle'));
   kids.push(h('div', { class: 'blog' }, ...Battle.log.map((l) => h('div', {}, l))));
   p.replaceChildren(...kids);
-  if (this.isMobile() && this.mob) $('#stage').style.bottom = this.mob.sheet.offsetHeight + 'px';
+  // Keep the battle canvas full-bleed on phones; the move HUD overlays it.
+  if (this.isMobile() && this.mob) $('#stage').style.bottom = '';
 };
 UI.beginTarget = function (kind) {
   this.targeting = kind;

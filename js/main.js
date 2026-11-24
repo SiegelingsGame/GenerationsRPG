@@ -401,6 +401,7 @@ Game.battle = function (enemies, opts) {
   Battle.start({
     enemies, kind: opts.kind, title: opts.title,
     intro: opts.intro,
+    tile: opts.tile || tileAt(G.pos.x, G.pos.y),
     onEnd: (res) => {
       UI.refresh();
       UI.battleResults(res, () => { if (opts.after) opts.after(res); this.after(); });
@@ -419,7 +420,7 @@ Game.rivalBattle = function (rv) {
 
 Game.delve = function (t) {
   this.battle(buildEncounter(t, { hard: true, count: clamp(G.party.length + R.int(0, 1), 2, 4) }), {
-    kind: 'dungeon', title: 'The Ruins',
+    kind: 'dungeon', title: 'The Ruins', tile: t,
     after: (res) => {
       if (res.outcome !== 'victory') return;
       t.cleared = (t.cleared || 0) + 1;

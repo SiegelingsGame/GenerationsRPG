@@ -1395,8 +1395,229 @@ Render.drawBeast = function (x, y, look, scale, o = {}) {
 const BTW = 110, BTH = 55;
 Render.biso = function (gx, gy) {
   const ox = this.w / 2 - (3.5 - 2.5) * BTW / 2;
-  const oy = this.h / 2 - (3.5 + 2.5) * BTH / 2 + 30;
+  // On phones the move HUD overlays the bottom; keep the arena centered in the open upper band
+  // but large enough that floor and scenery still read through the translucent sheet.
+  const mobileBattle = typeof document !== 'undefined' && document.body.classList.contains('in-battle');
+  const hudLift = mobileBattle ? Math.min(48, this.h * 0.05) : 0;
+  const oy = this.h / 2 - (3.5 + 2.5) * BTH / 2 + 30 - hudLift;
   return { x: (gx - gy) * BTW / 2 + ox, y: (gx + gy) * BTH / 2 + oy };
+};
+// Floor / sky / decor driven by the tile the fight started on.
+Render.battleScene = function () {
+  const biomeKey = Battle.biome || 'grass';
+  const biome = (GD.BIOMES && GD.BIOMES[biomeKey]) || GD.BIOMES.grass;
+  const feat = Battle.feature;
+  const kind = Battle.kind || 'wild';
+  const dungeon = kind === 'dungeon' || feat === 'cave' || feat === 'mine' || feat === 'ruins';
+  const voidish = kind === 'final' || feat === 'spire';
+  const night = kind === 'rival' || feat === 'camp';
+  let sky0 = '#5b7ea8', sky1 = '#c9b48a', haze = 'rgba(255,240,200,0.12)';
+  if (voidish) { sky0 = '#0a0614'; sky1 = '#2a1438'; haze = 'rgba(180,100,255,0.12)'; }
+  else if (dungeon) { sky0 = '#121018'; sky1 = '#2a2430'; haze = 'rgba(120,110,140,0.1)'; }
+  else if (night) { sky0 = '#0c1020'; sky1 = '#2a2438'; haze = 'rgba(180,200,255,0.08)'; }
+  else if (biomeKey === 'snow') { sky0 = '#6a8498'; sky1 = '#d8e4ec'; haze = 'rgba(255,255,255,0.14)'; }
+  else if (biomeKey === 'desert' || biomeKey === 'sand') { sky0 = '#6a90b8'; sky1 = '#e8c888'; haze = 'rgba(255,210,120,0.16)'; }
+  else if (biomeKey === 'swamp') { sky0 = '#3a4a48'; sky1 = '#6a7050'; haze = 'rgba(140,160,120,0.1)'; }
+  else if (biomeKey === 'jungle') { sky0 = '#3a6080'; sky1 = '#7a9a50'; haze = 'rgba(120,180,100,0.1)'; }
+  else if (biomeKey === 'forest') { sky0 = '#4a6a88'; sky1 = '#8aaa60'; haze = 'rgba(160,200,120,0.1)'; }
+  else if (biomeKey === 'mountain' || biomeKey === 'hills') { sky0 = '#5a7088'; sky1 = '#a8b090'; haze = 'rgba(200,210,220,0.1)'; }
+  else if (biomeKey === 'water' || biomeKey === 'deep') { sky0 = '#3a6a98'; sky1 = '#7ab0c8'; haze = 'rgba(140,200,230,0.12)'; }
+  const top = biome.top || '#6fa34a';
+  let floorA = top, floorB = shade(top, -0.08);
+  if (dungeon) { floorA = '#5a5566'; floorB = '#4e4a58'; }
+  if (voidish) { floorA = '#2a1a38'; floorB = '#1a1028'; }
+  if (feat === 'camp') { floorA = shade(top, -0.12); floorB = shade(top, -0.2); }
+  return { biomeKey, biome, feat, kind, dungeon, voidish, night, sky0, sky1, haze, floorA, floorB, top };
+};
+Render.battleNearRiver = function () {
+  const t = Battle.tile;
+  if (!t || typeof LS === 'undefined' || !LS.river || !LS.cellAt) return false;
+  try {
+    const c = LS.cellAt(t.x, t.y);
+    const W = LS.W;
+    for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+      const i = c.i + di, j = c.j + dj;
+      if (i < 0 || j < 0 || i >= W || j >= LS.H) continue;
+      if (LS.river[j * W + i]) return true;
+    }
+  } catch (e) { /* landscape not ready */ }
+  return !!(t.type === 'water' || t.type === 'deep' || t.type === 'sand');
+};
+Render.drawBattleSky = function (scene) {
+  const c = this.ctx, w = this.w, h = this.h;
+  const g = c.createLinearGradient(0, 0, 0, h);
+  g.addColorStop(0, eraTint(scene.sky0));
+  g.addColorStop(0.55, eraTint(shade(scene.sky1, scene.night || scene.dungeon ? -0.15 : 0.05)));
+  g.addColorStop(1, eraTint(shade(scene.floorA, -0.35)));
+  c.fillStyle = g; c.fillRect(0, 0, w, h);
+  // soft sun / moon
+  if (!scene.dungeon) {
+    const cx = w * (scene.night || scene.voidish ? 0.78 : 0.18);
+    const cy = h * (scene.night || scene.voidish ? 0.12 : 0.14);
+    const rad = scene.night || scene.voidish ? 18 : 28;
+    const glow = c.createRadialGradient(cx, cy, 2, cx, cy, rad * 3.2);
+    glow.addColorStop(0, scene.voidish ? 'rgba(190,120,255,0.55)' : scene.night ? 'rgba(230,230,210,0.55)' : 'rgba(255,230,160,0.55)');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = glow; c.fillRect(cx - rad * 3.2, cy - rad * 3.2, rad * 6.4, rad * 6.4);
+    c.fillStyle = scene.voidish ? '#d8b0ff' : scene.night ? '#f4f0d8' : '#ffe7a0';
+    c.beginPath(); c.arc(cx, cy, rad, 0, Math.PI * 2); c.fill();
+    if (scene.night || scene.voidish) {
+      for (let i = 0; i < 28; i++) {
+        const sx = ((i * 97 + 13) % 100) / 100 * w;
+        const sy = ((i * 53 + 7) % 40) / 100 * h;
+        c.fillStyle = `rgba(255,255,240,${0.35 + (i % 5) * 0.1})`;
+        c.fillRect(sx, sy, 1 + (i % 2), 1 + (i % 2));
+      }
+    } else {
+      // drifting cloud banks
+      c.fillStyle = 'rgba(255,255,255,0.14)';
+      for (let i = 0; i < 5; i++) {
+        const cx2 = w * (0.2 + i * 0.16) + Math.sin(this.t / 4000 + i) * 12;
+        const cy2 = h * (0.08 + (i % 3) * 0.04);
+        c.beginPath(); c.ellipse(cx2, cy2, 48 + i * 6, 12 + (i % 2) * 4, 0, 0, Math.PI * 2); c.fill();
+      }
+    }
+  } else {
+    // dungeon vault gloom
+    c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(0, 0, w, h * 0.35);
+    for (let i = 0; i < 6; i++) {
+      c.fillStyle = `rgba(255,180,80,${0.04 + (i % 3) * 0.02})`;
+      c.beginPath(); c.arc(w * (0.15 + i * 0.14), h * 0.18, 10 + i, 0, Math.PI * 2); c.fill();
+    }
+  }
+  // distant horizon silhouette
+  const hz = h * 0.42;
+  c.fillStyle = eraTint(shade(scene.top, scene.dungeon || scene.voidish ? -0.55 : -0.45));
+  c.beginPath(); c.moveTo(0, hz + 40);
+  for (let x = 0; x <= w; x += 16) {
+    let yy = hz;
+    const k = scene.biomeKey;
+    if (scene.dungeon || scene.voidish) yy -= 10 + ((x * 3) % 18);
+    else if (k === 'mountain' || k === 'hills') yy -= Math.abs(Math.sin(x / 90)) * (k === 'mountain' ? 70 : 38) + 8;
+    else if (k === 'forest' || k === 'jungle' || k === 'snow') yy -= ((x * 7) % 5) * 5 + ((x / 16) % 2 ? 18 : 6);
+    else if (k === 'desert' || k === 'sand') yy -= Math.sin(x / 70) * 12 + 6;
+    else if (k === 'swamp') yy -= 6 + ((x * 5) % 4) * 3;
+    else yy -= Math.sin(x / 110) * 8 + 4;
+    c.lineTo(x, yy);
+  }
+  c.lineTo(w, h); c.lineTo(0, h); c.closePath(); c.fill();
+  c.fillStyle = scene.haze; c.fillRect(0, 0, w, h);
+};
+Render.drawBattleScenery = function (scene, layer) {
+  const c = this.ctx;
+  const props = [];
+  const push = (gx, gy, draw, depth) => props.push({ gx, gy, draw, depth: depth != null ? depth : gx + gy });
+  const k = scene.biomeKey;
+  const river = !scene.dungeon && !scene.voidish && this.battleNearRiver();
+  if (river) {
+    // a water ribbon behind the left flank
+    push(-0.4, 1.2, (p) => {
+      c.fillStyle = eraTint('#3b78a8');
+      c.beginPath(); c.moveTo(p.x - 90, p.y - 10); c.quadraticCurveTo(p.x - 20, p.y + 18, p.x + 70, p.y + 6);
+      c.quadraticCurveTo(p.x + 100, p.y + 24, p.x + 40, p.y + 36); c.quadraticCurveTo(p.x - 40, p.y + 40, p.x - 100, p.y + 16); c.closePath(); c.fill();
+      c.strokeStyle = 'rgba(200,230,255,0.4)'; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(p.x - 70, p.y); c.quadraticCurveTo(p.x, p.y + 10, p.x + 50, p.y + 4); c.stroke();
+    }, -2);
+  }
+  if (!scene.dungeon && !scene.voidish) {
+    if (k === 'forest' || k === 'grass' || k === 'hills') {
+      [[-1.0, -0.2, 1.9], [-0.5, 0.6, 1.55], [-0.8, 2.2, 1.7], [-0.3, 3.6, 1.4],
+        [6.8, -0.1, 1.75], [7.3, 1.4, 1.5], [7.1, 3.0, 1.65], [6.7, 4.4, 1.35],
+        [1.2, -0.6, 1.3], [4.5, -0.5, 1.45], [0.4, 4.9, 1.2], [5.5, 4.8, 1.35]].forEach(([gx, gy, s], i) => {
+        if (k === 'grass' && i > 7) return;
+        if (k === 'hills' && i > 9) return;
+        push(gx, gy, (p) => this.drawTree(p.x, p.y, s));
+      });
+    }
+    if (k === 'snow') {
+      [[-0.9, 0.1, 1.7], [-0.4, 2.4, 1.45], [6.9, 0.3, 1.6], [7.2, 2.8, 1.4], [6.8, 4.3, 1.25], [0.5, 4.8, 1.35]].forEach(([gx, gy, s]) => {
+        push(gx, gy, (p) => this.drawTree(p.x, p.y, s, true));
+      });
+    }
+    if (k === 'jungle') {
+      [[-1.0, 0.0], [-0.5, 1.6], [-0.7, 3.2], [6.7, 0.0], [7.3, 1.8], [7.0, 3.6], [6.6, 4.6], [0.2, 4.9]].forEach(([gx, gy], i) => {
+        push(gx, gy, (p) => { for (let n = 0; n < 4; n++) this.drawPalm(p.x - 14 + n * 10, p.y - 2 + (n % 2) * 5, 1.15 + (i % 2) * 0.2); });
+      });
+    }
+    if (k === 'swamp') {
+      [[-0.8, 0.8], [-0.4, 2.6], [6.7, 0.6], [7.1, 2.4], [6.8, 4.0], [1.0, 4.7], [4.8, 4.8]].forEach(([gx, gy]) => {
+        push(gx, gy, (p) => {
+          c.fillStyle = 'rgba(40,60,50,0.62)';
+          c.beginPath(); c.ellipse(p.x, p.y + 4, 30, 12, 0, 0, Math.PI * 2); c.fill();
+          c.strokeStyle = eraTint('#6b7a3a'); c.lineWidth = 2.4;
+          for (let i = 0; i < 6; i++) { c.beginPath(); c.moveTo(p.x - 20 + i * 8, p.y + 10); c.lineTo(p.x - 22 + i * 8, p.y - 16); c.stroke(); }
+        });
+      });
+    }
+    if (k === 'desert' || k === 'sand') {
+      [[-0.8, 0.6], [-0.3, 2.8], [6.8, 0.8], [7.2, 2.6], [6.9, 4.2]].forEach(([gx, gy]) => {
+        push(gx, gy, (p) => {
+          c.fillStyle = eraTint('#cfae63');
+          c.beginPath(); c.ellipse(p.x, p.y + 4, 36, 13, 0, Math.PI, 0); c.fill();
+          c.fillStyle = eraTint('#4f8a3c'); c.fillRect(p.x + 12, p.y - 24, 4, 24); c.fillRect(p.x + 6, p.y - 16, 6, 3);
+        });
+      });
+    }
+    if (k === 'mountain' || k === 'hills') {
+      [[-1.1, -0.4], [-0.6, 1.2], [7.4, -0.3], [7.6, 1.8], [7.3, 3.4]].forEach(([gx, gy], i) => {
+        push(gx, gy, (p) => {
+          const tall = k === 'mountain' ? 1.15 : 0.65;
+          c.fillStyle = eraTint('#9d9a94');
+          c.beginPath(); c.moveTo(p.x - 42 * tall, p.y + 12); c.lineTo(p.x - 4, p.y - 72 * tall); c.lineTo(p.x + 44 * tall, p.y + 12); c.closePath(); c.fill();
+          c.fillStyle = eraTint('#6f6c67');
+          c.beginPath(); c.moveTo(p.x - 4, p.y - 72 * tall); c.lineTo(p.x + 44 * tall, p.y + 12); c.lineTo(p.x + 10, p.y + 14); c.closePath(); c.fill();
+          if (k === 'mountain' || i === 0) {
+            c.fillStyle = '#f4f4f4';
+            c.beginPath(); c.moveTo(p.x - 14, p.y - 42 * tall); c.lineTo(p.x - 4, p.y - 72 * tall); c.lineTo(p.x + 10, p.y - 44 * tall); c.lineTo(p.x - 2, p.y - 48 * tall); c.closePath(); c.fill();
+          }
+        }, -1);
+      });
+      [[-0.3, 3.6], [6.5, 4.1], [0.6, -0.2], [5.8, -0.3], [-0.5, 4.5]].forEach(([gx, gy]) => {
+        push(gx, gy, (p) => {
+          c.fillStyle = eraTint('#7a7872');
+          c.beginPath(); c.ellipse(p.x - 8, p.y, 16, 9, -0.2, 0, Math.PI * 2); c.fill();
+          c.fillStyle = eraTint('#5c5a56');
+          c.beginPath(); c.ellipse(p.x + 10, p.y + 3, 12, 7, 0.3, 0, Math.PI * 2); c.fill();
+        });
+      });
+    }
+  }
+  if (scene.feat === 'camp' || scene.kind === 'rival') {
+    [[-0.6, 1.2], [6.7, 1.2], [7.0, 3.0]].forEach(([gx, gy], i) => {
+      push(gx, gy, (p) => {
+        c.fillStyle = eraTint(i ? '#7a3a2a' : '#6b4a32');
+        c.beginPath(); c.moveTo(p.x - 28, p.y + 10); c.lineTo(p.x, p.y - 36); c.lineTo(p.x + 28, p.y + 10); c.closePath(); c.fill();
+        c.strokeStyle = 'rgba(0,0,0,0.35)'; c.stroke();
+        c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.moveTo(p.x, p.y - 36); c.lineTo(p.x + 28, p.y + 10); c.lineTo(p.x, p.y + 10); c.closePath(); c.fill();
+      });
+    });
+  }
+  if (scene.dungeon || scene.feat === 'ruins') {
+    [[-0.8, 0.3], [-0.3, 2.0], [6.9, 0.2], [7.2, 2.2], [7.0, 4.0], [0.3, 4.7]].forEach(([gx, gy], i) => {
+      push(gx, gy, (p) => {
+        c.fillStyle = eraTint(i % 2 ? '#6a6570' : '#524e58');
+        c.fillRect(p.x - 20, p.y - 30, 18, 36);
+        c.fillStyle = eraTint('#3e3a44');
+        c.fillRect(p.x - 2, p.y - 18, 22, 26);
+        c.fillStyle = 'rgba(0,0,0,0.35)';
+        c.fillRect(p.x - 12, p.y - 10, 8, 14);
+        c.fillStyle = eraTint('#7a757f');
+        c.beginPath(); c.moveTo(p.x - 24, p.y + 8); c.lineTo(p.x - 8, p.y - 6); c.lineTo(p.x + 6, p.y + 10); c.closePath(); c.fill();
+      });
+    });
+  }
+  if (scene.feat === 'shrine') {
+    push(6.7, 1.0, (p) => this.drawShrine(p, !!(Battle.tile && Battle.tile.lit)));
+  }
+  if (scene.voidish || scene.feat === 'spire') {
+    push(6.8, 1.5, (p) => this.drawSpire(p), -1);
+  }
+  props.sort((a, b) => a.depth - b.depth);
+  const wantFar = layer !== 'near';
+  for (const pr of props) {
+    const far = pr.depth < 4.2;
+    if (wantFar ? far : !far) pr.draw(this.biso(pr.gx, pr.gy));
+  }
 };
 // Visual size: enemy defs may set scale (>1) / giant; party chars stay at 1.
 Render.unitScale = function (u) { return (u && u.scale) || 1; };
@@ -1427,21 +1648,32 @@ Render.unitScreen = function (u) {
 
 Render.drawBattle = function () {
   const c = this.ctx;
-  const g = c.createLinearGradient(0, 0, 0, this.h);
-  g.addColorStop(0, eraTint('#1a2433')); g.addColorStop(1, eraTint('#2b2420'));
-  c.fillStyle = g; c.fillRect(0, 0, this.w, this.h);
-  // shrink the arena to fit small screens
-  const bs = this.bscale = Math.min(1, this.w / 820, this.h / 560);
+  const scene = this.battleScene();
+  this.drawBattleSky(scene);
+  // Fit the arena to the full canvas (HUD overlays on phones instead of shrinking the stage).
+  const mobileBattle = typeof document !== 'undefined' && document.body.classList.contains('in-battle');
+  const bs = this.bscale = Math.min(mobileBattle ? 1.2 : 1, this.w / (mobileBattle ? 560 : 780), this.h / (mobileBattle ? 440 : 520));
   const bm = this.mouse ? this.unbattle(this.mouse) : null;
   c.save();
   c.translate(this.w / 2, this.h / 2); c.scale(bs, bs); c.translate(-this.w / 2, -this.h / 2);
-  const ruins = Battle.kind === 'dungeon';
+  // Soft ground skirt so the arena sits in the landscape instead of a floating slab.
+  {
+    const mid = this.biso(3.5, 2.5);
+    const skirt = c.createRadialGradient(mid.x, mid.y, 40, mid.x, mid.y + 20, 340);
+    skirt.addColorStop(0, eraTint(shade(scene.floorA, -0.05)));
+    skirt.addColorStop(0.55, eraTint(shade(scene.floorA, -0.28)));
+    skirt.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = skirt;
+    c.beginPath(); c.ellipse(mid.x, mid.y + 18, 320, 150, 0, 0, Math.PI * 2); c.fill();
+  }
+  // Far props behind the floor, then tiles, then near flank props around the fighters.
+  this.drawBattleScenery(scene, 'far');
   // arena tiles
   for (let s = 0; s <= 7 + 5 - 2; s++) for (let gx = 0; gx < 7; gx++) {
     const gy = s - gx;
     if (gy < 0 || gy >= 5) continue;
     const p = this.biso(gx + 0.5, gy + 0.5);
-    const base = ruins ? '#5a5566' : ((gx + gy) % 2 ? '#6e8f4a' : '#678a45');
+    const base = (gx + gy) % 2 ? scene.floorA : scene.floorB;
     c.fillStyle = eraTint(base);
     c.beginPath(); c.moveTo(p.x, p.y - BTH / 2); c.lineTo(p.x + BTW / 2, p.y); c.lineTo(p.x, p.y + BTH / 2); c.lineTo(p.x - BTW / 2, p.y); c.closePath(); c.fill();
     c.strokeStyle = 'rgba(0,0,0,0.15)'; c.stroke();
@@ -1451,6 +1683,7 @@ Render.drawBattle = function () {
       if (gx === 6) { c.fillStyle = 'rgba(0,0,0,0.35)'; c.beginPath(); c.moveTo(p.x + BTW / 2, p.y); c.lineTo(p.x, p.y + BTH / 2); c.lineTo(p.x, p.y + BTH / 2 + 18); c.lineTo(p.x + BTW / 2, p.y + 18); c.closePath(); c.fill(); }
     }
   }
+  this.drawBattleScenery(scene, 'near');
   // units sorted by depth
   const units = [...Battle.units].sort((a, b) => (a.gx + a.gy) - (b.gx + b.gy));
   const now = this.t;
