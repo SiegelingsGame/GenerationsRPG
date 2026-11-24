@@ -59,20 +59,46 @@ UI.init = function () {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (this.modalStack.length && !this.modalStack[this.modalStack.length - 1].locked) return this.closeModal();
+    if (this.mob && this.mob.camera && this.mob.camera.open) { this.mob.camera.open = false; return; }
+    if (this.mob && this.mob.logPanel && this.mob.logPanel.open) { this.closeLog(); return; }
     if (Living.moving && !Battle.active && !TownView.open && !Campfire.open) Living.cancel('You halt on the road.');
   });
 };
 
 // ---------------------------------------------------------------- phone layout
-// On a phone the map fills the screen. A Menu button opens a drawer holding the location's actions,
-// the party and heir, and the House's stats and buttons. In battle, the battle actions rise as a sheet.
+// Phone: top header (minimap + chip + goal) and bottom dock (Here / Map / Log / House).
+// Map expands camera tools; Log expands recent actions and carried items.
 UI.isMobile = () => window.matchMedia('(max-width: 900px)').matches;
 UI.buildMobile = function () {
+  const mini = h('canvas', { class: 'hud-mini', width: 144, height: 144, role: 'img', 'aria-label': 'North-up world overview' });
+  const compass = h('canvas', { width: 88, height: 88, 'aria-hidden': 'true' });
+  const camera = h('details', { class: 'hud-camera' },
+    h('summary', {}, compass, 'Map'));
+  const goal = h('div', { id: 'mobile-goal' });
+  const logBody = h('div', { class: 'hud-log-body', id: 'hud-log-body' });
+  const logPanel = h('details', { class: 'hud-log' },
+    h('summary', {}, 'Log'),
+    h('div', { class: 'hud-log-panel' },
+      h('div', { class: 'hud-log-tabs', role: 'tablist' },
+        h('button', { type: 'button', class: 'hud-log-tab on', 'data-tab': 'actions', onclick: (e) => { e.preventDefault(); this.setLogTab('actions'); } }, 'Actions'),
+        h('button', { type: 'button', class: 'hud-log-tab', 'data-tab': 'items', onclick: (e) => { e.preventDefault(); this.setLogTab('items'); } }, 'Items')),
+      logBody));
+  camera.addEventListener('toggle', () => { if (camera.open) this.closeLog(); });
+  logPanel.addEventListener('toggle', () => {
+    if (logPanel.open) { camera.open = false; this.renderExpandableLog(); }
+  });
   this.mob = {
+    mini, compass, camera, goal, logPanel, logBody, logTab: 'actions',
     bar: h('div', { id: 'mobilebar' },
-      h('button', { id: 'hudchip', 'aria-label': 'Actions here', onclick: () => this.openHere() }, ''),
-      h('button', { id: 'hereBtn', 'aria-label': 'Actions here', onclick: () => this.openHere() }, 'Here'),
-      h('button', { id: 'menuBtn', 'aria-label': 'Open house menu', onclick: () => this.openDrawer() }, '☰ Menu')),
+      h('div', { class: 'hud-header' },
+        h('div', { class: 'hud-overview' }, mini,
+          h('button', { id: 'hudchip', 'aria-label': 'Actions here', onclick: () => this.openHere() })),
+        goal),
+      h('nav', { class: 'hud-dock', 'aria-label': 'World controls' },
+        h('button', { id: 'hereBtn', 'aria-label': 'Actions here', onclick: () => this.openHere() }, 'Here'),
+        camera, Render.mobileStopBtn,
+        logPanel,
+        h('button', { id: 'menuBtn', 'aria-label': 'Open house menu', onclick: () => this.openDrawer() }, 'House'))),
     backdrop: h('div', { id: 'backdrop', onclick: () => this.closeDrawer() }),
     drawer: h('aside', { id: 'drawer', 'aria-hidden': 'true' },
       h('div', { class: 'drawer-head' }, h('b', {}, 'House menu'), h('button', { class: 'drawer-x', 'aria-label': 'Close menu', onclick: () => this.closeDrawer() }, '×')),
@@ -105,11 +131,22 @@ UI.fixStandalone = function () {
 };
 UI.openDrawer = function () {
   this.closeModalQuiet();
+  if (this.mob.camera) this.mob.camera.open = false;
+  this.closeLog();
   document.body.classList.add('drawer-open');
   this.mob.drawer.setAttribute('aria-hidden', 'false');
   this.placeLayout();
 };
 UI.closeDrawer = function () { document.body.classList.remove('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'true'); };
+UI.closeLog = function () { if (this.mob && this.mob.logPanel) this.mob.logPanel.open = false; };
+UI.setLogTab = function (tab) {
+  if (!this.mob) return;
+  this.mob.logTab = tab === 'items' ? 'items' : 'actions';
+  for (const btn of this.mob.logPanel.querySelectorAll('.hud-log-tab')) {
+    btn.classList.toggle('on', btn.dataset.tab === this.mob.logTab);
+  }
+  this.renderExpandableLog();
+};
 UI.closeModalQuiet = function () {
   // Drop unlocked modals (Here sheet) without triggering a full refresh cascade.
   while (this.modalStack.length && !this.modalStack[this.modalStack.length - 1].locked) {
@@ -131,10 +168,16 @@ UI.placeLayout = function () {
   const mobile = this.isMobile();
   document.body.classList.toggle('mobile', mobile);
   document.body.classList.toggle('in-battle', mobile && Battle.active);
-  if (!(mobile && Battle.active)) stage.style.bottom = '';
+  // Battle HUD overlays the canvas; never reserve bottom space for the sheet.
+  stage.style.bottom = '';
   if (mobile) {
-    if (Battle.active) { if (panel.parentNode !== this.mob.sheet) this.mob.sheet.append(panel); this.closeDrawer(); }
-    else {
+    if (Render.ctl && Render.ctl.parentNode !== this.mob.camera) this.mob.camera.append(Render.ctl);
+    if (Battle.active) {
+      this.mob.camera.open = false;
+      this.closeLog();
+      if (panel.parentNode !== this.mob.sheet) this.mob.sheet.append(panel);
+      this.closeDrawer();
+    } else {
       // Sectioned drawer: Here → Party → House tools
       let here = $('#drawer-here'), partySec = $('#drawer-party'), house = $('#drawer-house');
       if (!here) {
@@ -148,11 +191,16 @@ UI.placeLayout = function () {
       if (topbar.parentNode !== house) house.append(topbar);
     }
   } else {
+    this.mob.camera.open = false;
+    this.closeLog();
+    if (Render.ctl && Render.ctl.parentNode !== stage) stage.append(Render.ctl);
     if (topbar.parentNode !== document.body || topbar.nextElementSibling !== game) document.body.insertBefore(topbar, game);
     if (party.parentNode !== game) game.insertBefore(party, stage);
     if (panel.parentNode !== game) game.append(panel);
     this.closeDrawer();
   }
+  const goal = $('#guide-goal');
+  if (goal) (mobile ? this.mob.goal : document.body).append(goal);
   this.updateChip();
 };
 UI.updateChip = function () {
@@ -161,15 +209,21 @@ UI.updateChip = function () {
   const place = this.placeName();
   const mc = ch(G.mcId);
   $('#hudchip').replaceChildren(
-    h('b', {}, place),
-    h('small', {}, ` · ${seasonName()} ${year()} · ${Math.round(G.house.gold)}g${mc ? ` · ${mc.name} ${Math.round(mc.hp)}/${maxHp(mc)}` : ''}`),
-    h('em', { class: 'chip-hint' }, ' tap for actions'),
+    h('span', { class: 'hud-house' }, `House ${G.house.name}`),
+    h('b', { class: 'hud-place' }, place),
+    h('span', { class: 'hud-date' }, `${seasonName()} ${year()} · ${Math.round(G.house.gold)}g`),
+    mc && h('span', { class: 'hud-health' },
+      h('span', { class: 'hud-hero' }, mc.name),
+      h('span', {}, `${Math.round(mc.hp)}/${maxHp(mc)} HP`),
+      h('meter', { min: 0, max: maxHp(mc), value: mc.hp, 'aria-label': `${mc.name}'s health` })),
   );
 };
 // Compact location action sheet — clearer than digging through the full House menu.
 UI.openHere = function () {
   if (!G || !G.mcId || Battle.active) return;
   this.closeDrawer();
+  if (this.mob.camera) this.mob.camera.open = false;
+  this.closeLog();
   this.closeModalQuiet();
   const place = this.placeName();
   const acts = this.locationActs();
@@ -346,8 +400,52 @@ UI.heirBox = function () {
 UI.renderLog = function () {
   const el = $('#log');
   if (!el || !G) return;
-  el.replaceChildren(...G.log.slice(-40).map((e) => h('div', { class: 'le ' + e.kind }, h('span', { class: 'ly' }, e.year), ' ', e.text)));
+  el.replaceChildren(...this.logEntries());
   el.scrollTop = el.scrollHeight;
+  if (this.mob && this.mob.logPanel && this.mob.logPanel.open) this.renderExpandableLog();
+};
+
+UI.logEntries = function () {
+  if (!G || !G.log) return [];
+  return G.log.slice(-40).map((e) => h('div', { class: 'le ' + e.kind }, h('span', { class: 'ly' }, e.year), ' ', e.text));
+};
+
+UI.renderExpandableLog = function () {
+  if (!this.mob || !this.mob.logBody || !G) return;
+  const body = this.mob.logBody;
+  const setKids = (...kids) => body.replaceChildren(...kids.flat(2).filter(Boolean));
+  if (this.mob.logTab === 'items') {
+    const mc = ch(G.mcId);
+    const worn = mc && mc.equip ? Object.entries(mc.equip).filter(([, it]) => it).map(([slot, it]) =>
+      h('div', { class: 'hud-item-row' },
+        h('span', { class: 'hud-item-slot' }, Equip.slotLabel(mc, slot)),
+        h('span', { class: 'hud-item-name' }, it.name),
+        h('small', { class: 'dim' }, Equip.itemDesc(it)))) : [];
+    const stash = (G.house.stash || []).slice(0, 12).map((it) =>
+      h('div', { class: 'hud-item-row' },
+        h('span', { class: 'hud-item-name' }, it.name),
+        h('small', { class: 'dim' }, Equip.itemDesc(it))));
+    setKids(
+      h('div', { class: 'hud-item-summary' },
+        h('span', {}, `${Math.round(G.house.gold)}g`),
+        h('span', {}, `Potions ${G.house.potions}`),
+        h('span', {}, `Stash ${(G.house.stash || []).length}`)),
+      worn.length && h('h4', { class: 'hud-log-sec' }, mc.name + ' · worn'),
+      worn,
+      stash.length
+        ? h('h4', { class: 'hud-log-sec' }, 'House stash')
+        : h('p', { class: 'dim' }, worn.length ? 'Stash is empty.' : 'No gear yet — visit a market.'),
+      stash,
+      (G.house.stash || []).length > stash.length
+        && h('p', { class: 'dim small' }, `+${G.house.stash.length - stash.length} more in inventory`),
+      mc && act('Open inventory', () => { this.closeLog(); this.showInventory(mc); }, { sub: 'try on / equip' }),
+    );
+    return;
+  }
+  const entries = this.logEntries().reverse();
+  setKids(h('div', { class: 'hud-log-feed' }, entries.length ? entries : h('p', { class: 'dim' }, 'No activity yet.')));
+  const feed = body.querySelector('.hud-log-feed');
+  if (feed) feed.scrollTop = 0;
 };
 
 // ---------------------------------------------------------------- side panel by location
@@ -548,7 +646,8 @@ UI.battleChanged = function () {
   kids.push(h('label', { class: 'auto' }, h('input', { type: 'checkbox', checked: Battle.auto, onchange: (e) => { Battle.auto = e.target.checked; if (Battle.auto && Battle.waiting) { Battle.waiting = false; Battle.ai(Battle.cur); } } }), ' Auto-battle'));
   kids.push(h('div', { class: 'blog' }, ...Battle.log.map((l) => h('div', {}, l))));
   p.replaceChildren(...kids);
-  if (this.isMobile() && this.mob) $('#stage').style.bottom = this.mob.sheet.offsetHeight + 'px';
+  // Keep the battle canvas full-bleed on phones; the move HUD overlays it.
+  if (this.isMobile() && this.mob) $('#stage').style.bottom = '';
 };
 UI.beginTarget = function (kind) {
   this.targeting = kind;

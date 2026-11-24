@@ -43,6 +43,7 @@ const PackArt = {
     if(spell)this.emit(spell[0],target,src,spell[1]);
     else if((src?.cls==='sorcerer'||src?.cls==='warlock')&&!id)this.emit('sparkle',target,src,'dark_proj');
     else this.emit(crit?'critical':'hit',target);
+    if (typeof FxLayer !== 'undefined') FxLayer.emitAttack(src, target, crit);
   },
   frame(ctx,key,x,y,elapsed,size=90,loop=false,angle=0) {
     const info=PACK_EFFECTS[key];if(!info||!this.ready(key)||elapsed<0)return;

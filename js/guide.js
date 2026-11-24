@@ -37,7 +37,7 @@ const Guide = {
   show() {
     const g = this.update(), steps = this.steps();
     UI.modal([
-      h('p', {}, 'Build a House that outlives its founder. Follow these goals in any order; progress is checked as you play. On a phone, open ☰ Menu to find location actions and this guide.'),
+      h('p', {}, 'Build a House that outlives its founder. Follow these goals in any order; progress is checked as you play. On a phone, tap Here for place actions, Log for recent activity, and House for the full menu.'),
       h('p', { class: 'dim' }, `${steps.filter(s => g.done[s[0]]).length} / ${steps.length} goals complete. You can close this guide and keep playing at any time.`),
       ...steps.map(([key, title, text, action, label]) => h('section', { class: 'guide-step' },
         h('h3', {}, `${g.done[key] ? '✓ ' : ''}${title}`), h('p', {}, text),
@@ -53,15 +53,17 @@ const Guide = {
     let banner = document.getElementById('guide-goal');
     if (!banner) {
       banner = h('button', { id: 'guide-goal', onclick: () => this.show(), 'aria-label': 'Current starter goal. Open guide' });
-      document.body.append(banner);
+      (UI.isMobile() && UI.mob && UI.mob.goal ? UI.mob.goal : document.body).append(banner);
     }
-    banner.hidden = false;
-    const steps = this.steps(), next = steps.find(s => !g.done[s[0]]);
-    banner.textContent = next ? `Goal: ${next[1]} · ${steps.filter(s => g.done[s[0]]).length}/${steps.length}` : 'Starter goals complete · Review guide';
+    banner.hidden = Battle.active || (UI.isMobile() && g.hidden);
+    const steps = this.steps(), next = steps.find((s) => !g.done[s[0]]);
+    banner.textContent = next
+      ? `Goal: ${next[1]} · ${steps.filter((s) => g.done[s[0]]).length}/${steps.length}`
+      : 'Starter goals complete · Review guide';
     if (g.hidden || Battle.active) return;
     const card = h('section', { class: 'guide-card', 'aria-label': 'Starter guide' },
       h('b', {}, next ? `Next goal: ${next[1]}` : 'Your House is ready for its next chapter'),
-      h('p', { class: 'small dim' }, `${steps.filter(s => g.done[s[0]]).length}/${steps.length} starter goals complete`),
+      h('p', { class: 'small dim' }, `${steps.filter((s) => g.done[s[0]]).length}/${steps.length} starter goals complete`),
       act(next ? 'Show me how' : 'Review guide', () => this.show()));
     $('#panel').prepend(card);
   },

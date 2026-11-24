@@ -81,6 +81,11 @@ Battle.start = function (opts) {
   this.cinematic = !!opts.cinematic;
   this.noResolve = !!opts.noResolve;
   this.auto = opts.auto != null ? !!opts.auto : this.auto;
+  // Where the fight takes place — drives arena floor, sky and scenery.
+  const tile = opts.tile || (G && G.pos ? tileAt(G.pos.x, G.pos.y) : null);
+  this.tile = tile || null;
+  this.biome = (tile && tile.type) || (this.kind === 'dungeon' ? 'mountain' : 'grass');
+  this.feature = (tile && tile.feature) || null;
   this.units = [];
   if (opts.partyUnits) opts.partyUnits.forEach((u, i) => { u.side = 'party'; u.slot = i; this.units.push(u); });
   else G.party.map(ch).filter((c) => c && c.alive).forEach((c, i) => this.units.push(unitFromChar(c, 'party', i)));
@@ -223,6 +228,7 @@ Battle.act = function (action, targetUid, skillKey) {
     t.hp = Math.min(t.maxHp, t.hp + amt);
     this.fx.push({ uid: t.uid, text: '+' + amt, color: '#6fe08a', t0: performance.now() });
     PackArt.emit('heal',t);
+    if (typeof FxLayer !== 'undefined') FxLayer.emitHeal(t);
     this.say(`${u.name} uses a potion on ${t.name}.`);
   } else if (action === 'skill') {
     const id = skillKey || (u.abilities || [])[0];
