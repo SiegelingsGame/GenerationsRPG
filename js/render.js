@@ -96,13 +96,32 @@ Render.init = function (canvas) {
     if (e.key === '+' || e.key === '=') this.setZoom(this.zoomTarget * 1.2);
     if (e.key === '-' || e.key === '_') this.setZoom(this.zoomTarget / 1.2);
   });
-  // Unified world HUD (goal + estate/map/zoom/rotate) lives on document.body via WorldHud.
-  if (typeof WorldHud !== 'undefined') WorldHud.build();
+  // On-screen map controls (desktop strip; on phones they live inside the Map dock).
+  const btn = (label, title, fn) => { const b = document.createElement('button'); b.textContent = label; b.title = title; b.addEventListener('click', fn); return b; };
+  this.ctl = document.createElement('div');
+  this.ctl.className = 'mapctl';
+  this.stopBtn = btn('■', 'Stop travelling (Esc)', () => Living.cancel('You halt on the road.'));
+  this.stopBtn.classList.add('stop-travel');
+  this.stopBtn.hidden = true;
+  this.mobileStopBtn = btn('Stop', 'Stop travelling (Esc)', () => Living.cancel('You halt on the road.'));
+  this.mobileStopBtn.className = 'hud-stop';
+  this.mobileStopBtn.hidden = true;
+  this.ctl.append(
+    this.stopBtn,
+    btn('⟲', 'Rotate left (Q)', () => this.rotate(-1)),
+    btn('⟳', 'Rotate right (E)', () => this.rotate(1)),
+    btn('+', 'Zoom in (+ or mouse wheel)', () => this.setZoom(this.zoomTarget * 1.25)),
+    btn('−', 'Zoom out (−)', () => this.setZoom(this.zoomTarget / 1.25)),
+    btn('⌂', 'Reset view', () => { this.rot = 0; this.setZoom(1); }),
+  );
+  canvas.parentElement.append(this.ctl);
   const loop = (ts) => { this.t = ts; try { this.frame(); } catch (err) { console.error(err); } requestAnimationFrame(loop); };
   requestAnimationFrame(loop);
 };
 Render.updateTravelCtl = function () {
-  if (typeof WorldHud !== 'undefined') WorldHud.sync();
+  const moving = !!(Living && Living.moving);
+  if (this.stopBtn) this.stopBtn.hidden = !moving;
+  if (this.mobileStopBtn) this.mobileStopBtn.hidden = !moving;
 };
 
 Render.rotate = function (dir) { this.rot = (this.rot + dir + 4) % 4; this.spin = this.t; this.lastHover = null; };
@@ -156,7 +175,6 @@ Render.frame = function () {
   else if (Battle.active) this.drawBattle();
   else this.drawWorld();
   if (!Battle.active && typeof FxLayer !== 'undefined') FxLayer.drawWeather(this);
-  if (typeof WorldHud !== 'undefined') WorldHud.sync();
   LocationPrompt.render();
   if (shaking) c.restore();
 };
@@ -805,9 +823,11 @@ Render.drawWorldTiles = function () {
 };
 
 Render.drawMinimap = function () {
-  const c = this.ctx, map = G.world.map;
-  const size = Math.min(150, this.w * (this.w < 500 ? 0.26 : 0.22)), px = size / map.W;
-  const x0 = 10, y0 = 10;
+  const mini = UI.isMobile() && UI.mob && UI.mob.mini;
+  const c = mini ? mini.getContext('2d') : this.ctx, map = G.world.map;
+  const size = mini ? mini.width : Math.min(150, this.w * (this.w < 500 ? 0.26 : 0.22)), px = size / map.W;
+  const x0 = mini ? 0 : 10, y0 = x0;
+  if (mini) c.clearRect(0, 0, size, size);
   if (!this.mini || this.miniKey !== G.world.towns.length + ':' + Math.floor(G.day / 360) + ':' + this.rot + ':' + (LS.k || '')) {
     const cv = this.mini || document.createElement('canvas');
     cv.width = map.W; cv.height = map.H;
@@ -818,10 +838,10 @@ Render.drawMinimap = function () {
   }
   c.save();
   c.globalAlpha = 0.92;
-  c.fillStyle = 'rgba(15,13,20,0.8)'; c.fillRect(x0 - 3, y0 - 3, size + 6, size + 6);
+  if (!mini) { c.fillStyle = 'rgba(15,13,20,0.8)'; c.fillRect(x0 - 3, y0 - 3, size + 6, size + 6); }
   c.imageSmoothingEnabled = false;
   c.drawImage(this.mini, x0, y0, size, size);
-  const dot = (x, y, col, r) => { c.fillStyle = col; c.beginPath(); c.arc(x0 + (x + 0.5) * px, y0 + (y + 0.5) * px, r, 0, Math.PI * 2); c.fill(); };
+  const dot = (x, y, col, r) => { c.fillStyle = col; c.beginPath(); c.arc(x0 + (x + 0.5) * px, y0 + (y + 0.5) * px, r * (mini ? 1.65 : 1), 0, Math.PI * 2); c.fill(); };
   for (const t of G.world.towns) if (!t.fallen) dot(t.x, t.y, '#f2ead8', 2);
   dot(G.world.spire.x, G.world.spire.y, '#b04aff', 3);
   const q = G.world.doom.quest;
@@ -830,13 +850,19 @@ Render.drawMinimap = function () {
   for (const a of Living.visibleAgents()) dot(a.x, a.y, AGENTS[a.kind].hostile ? '#ff5c5c' : '#e6c06a', 1.8);
   dot(G.ppos ? G.ppos.x : G.pos.x, G.ppos ? G.ppos.y : G.pos.y, '#ffffff', 2.5);
   c.fillStyle = '#a59c8e'; c.font = '10px Georgia, serif'; c.textAlign = 'left';
-  c.fillText('N ↑ (map)', x0, y0 + size + 13);
+  if (!mini) c.fillText('N ↑ (map)', x0, y0 + size + 13);
   c.restore();
 };
 
 Render.drawCompass = function () {
-  const c = this.ctx;
-  const cx = this.w - (this.w < 700 ? 84 : 44), cy = this.w < 700 ? 100 : 44;
+  const compass = UI.isMobile() && UI.mob && UI.mob.compass;
+  const c = compass ? compass.getContext('2d') : this.ctx;
+  const cx = compass ? 22 : this.w - (this.w < 700 ? 84 : 44), cy = compass ? 22 : this.w < 700 ? 100 : 44;
+  c.save();
+  if (compass) {
+    c.clearRect(0, 0, compass.width, compass.height);
+    c.scale(2, 2);
+  }
   const [ax, ay] = this.rotXY(G.world.map.W / 2, 0);
   const [bx, by] = this.rotXY(G.world.map.W / 2, G.world.map.H);
   const vx = ((ax - ay) - (bx - by)) * TW / 2, vy = ((ax + ay) - (bx + by)) * TH / 2;
@@ -846,6 +872,7 @@ Render.drawCompass = function () {
   c.beginPath(); c.moveTo(cx - vx / len * 14, cy - vy / len * 14); c.lineTo(cx + vx / len * 14, cy + vy / len * 14); c.stroke();
   c.fillStyle = '#e6c06a'; c.font = 'bold 11px Georgia, serif'; c.textAlign = 'center';
   c.fillText('N', cx + vx / len * 16, cy + vy / len * 16 + 4);
+  c.restore();
 };
 
 Render.drawEmbers = function () {
