@@ -34,6 +34,7 @@ A 2.5D roguelike, turn-based RPG about a family line. You play the head of a Hou
 | Equipment slots and inventory try-on (armour/robes, helms/crowns, weapons/staves, boots/shoes by class) | `js/equipment.js`, `js/ui.js` |
 | Mobile Here / Menu actions and news popups for births, marriages, deaths and yearly income | `js/ui.js`, `js/model.js` |
 | Static data: races, eras, enemies, estate, gear | `js/data.js` |
+| PixelForge: procedural pixel attack-effect and cutscene generator shared with Siegelings TCG and ANIME VS+ (editor, CLI, runtime player, `cutscene-lineage` preset) | `pixelforge/` (open `pixelforge/index.html`; see `pixelforge/README.md`) |
 
 ## Quick tips
 
