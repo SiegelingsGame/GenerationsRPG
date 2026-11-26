@@ -1,0 +1,432 @@
+{
+ "frames": [
+  {
+   "filename": "fireball 0",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 1",
+   "frame": {
+    "x": 96,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 2",
+   "frame": {
+    "x": 192,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 3",
+   "frame": {
+    "x": 0,
+    "y": 48,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 4",
+   "frame": {
+    "x": 96,
+    "y": 48,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 5",
+   "frame": {
+    "x": 192,
+    "y": 48,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 6",
+   "frame": {
+    "x": 0,
+    "y": 96,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 7",
+   "frame": {
+    "x": 96,
+    "y": 96,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 8",
+   "frame": {
+    "x": 192,
+    "y": 96,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 9",
+   "frame": {
+    "x": 0,
+    "y": 144,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 10",
+   "frame": {
+    "x": 96,
+    "y": 144,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 11",
+   "frame": {
+    "x": 192,
+    "y": 144,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 12",
+   "frame": {
+    "x": 0,
+    "y": 192,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 13",
+   "frame": {
+    "x": 96,
+    "y": 192,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 14",
+   "frame": {
+    "x": 192,
+    "y": 192,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 15",
+   "frame": {
+    "x": 0,
+    "y": 240,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 16",
+   "frame": {
+    "x": 96,
+    "y": 240,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "fireball 17",
+   "frame": {
+    "x": 192,
+    "y": 240,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  }
+ ],
+ "meta": {
+  "app": "PixelForge",
+  "version": "1.1.0",
+  "image": "fireball.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 288,
+   "h": 288
+  },
+  "scale": "1",
+  "frameTags": [
+   {
+    "name": "fireball",
+    "from": 0,
+    "to": 17,
+    "direction": "forward"
+   }
+  ]
+ },
+ "pf": {
+  "name": "fireball",
+  "fw": 96,
+  "fh": 48,
+  "cols": 3,
+  "n": 18,
+  "fps": 16,
+  "loop": false,
+  "px": 84,
+  "py": 24,
+  "hit": 14,
+  "seed": 5
+ }
+}

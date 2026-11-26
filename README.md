@@ -44,3 +44,5 @@ A 2.5D roguelike, turn-based RPG about a family line. You play the head of a Hou
 - Raise **prosperity** to 95 with deeds, cleared ruins and slain rivals to bring about the **Golden Age**.
 
 The game saves to browser storage automatically after most actions.
+
+PixelForge gameplay effects are prebaked into `assets/forge/`. Run `node scripts/bake-game-forge.cjs` after editing presets. Attack skills select element-specific effects; enhancement and protection cues follow existing statuses and shield absorption. Trait sparkles at battle start are cosmetic. The battle camera, reduced-motion preference, and existing VFX fallback remain in control.

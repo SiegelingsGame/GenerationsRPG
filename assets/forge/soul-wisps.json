@@ -1,0 +1,388 @@
+{
+ "frames": [
+  {
+   "filename": "soul-wisps 0",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 1",
+   "frame": {
+    "x": 48,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 2",
+   "frame": {
+    "x": 96,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 3",
+   "frame": {
+    "x": 144,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 4",
+   "frame": {
+    "x": 192,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 5",
+   "frame": {
+    "x": 0,
+    "y": 72,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 6",
+   "frame": {
+    "x": 48,
+    "y": 72,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 7",
+   "frame": {
+    "x": 96,
+    "y": 72,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 8",
+   "frame": {
+    "x": 144,
+    "y": 72,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 9",
+   "frame": {
+    "x": 192,
+    "y": 72,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 10",
+   "frame": {
+    "x": 0,
+    "y": 144,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 11",
+   "frame": {
+    "x": 48,
+    "y": 144,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 12",
+   "frame": {
+    "x": 96,
+    "y": 144,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 13",
+   "frame": {
+    "x": 144,
+    "y": 144,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 14",
+   "frame": {
+    "x": 192,
+    "y": 144,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  },
+  {
+   "filename": "soul-wisps 15",
+   "frame": {
+    "x": 0,
+    "y": 216,
+    "w": 48,
+    "h": 72
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 72
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 72
+   },
+   "duration": 83
+  }
+ ],
+ "meta": {
+  "app": "PixelForge",
+  "version": "1.1.0",
+  "image": "soul-wisps.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 240,
+   "h": 288
+  },
+  "scale": "1",
+  "frameTags": [
+   {
+    "name": "soul-wisps",
+    "from": 0,
+    "to": 15,
+    "direction": "forward"
+   }
+  ]
+ },
+ "pf": {
+  "name": "soul-wisps",
+  "fw": 48,
+  "fh": 72,
+  "cols": 5,
+  "n": 16,
+  "fps": 12,
+  "loop": true,
+  "px": 24,
+  "py": 36,
+  "hit": 4,
+  "seed": 25
+ }
+}

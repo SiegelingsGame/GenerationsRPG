@@ -1,0 +1,388 @@
+{
+ "frames": [
+  {
+   "filename": "flame-pillar 0",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 1",
+   "frame": {
+    "x": 48,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 2",
+   "frame": {
+    "x": 96,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 3",
+   "frame": {
+    "x": 144,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 4",
+   "frame": {
+    "x": 192,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 5",
+   "frame": {
+    "x": 240,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 6",
+   "frame": {
+    "x": 0,
+    "y": 80,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 7",
+   "frame": {
+    "x": 48,
+    "y": 80,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 8",
+   "frame": {
+    "x": 96,
+    "y": 80,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 9",
+   "frame": {
+    "x": 144,
+    "y": 80,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 10",
+   "frame": {
+    "x": 192,
+    "y": 80,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 11",
+   "frame": {
+    "x": 240,
+    "y": 80,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 12",
+   "frame": {
+    "x": 0,
+    "y": 160,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 13",
+   "frame": {
+    "x": 48,
+    "y": 160,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 14",
+   "frame": {
+    "x": 96,
+    "y": 160,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  },
+  {
+   "filename": "flame-pillar 15",
+   "frame": {
+    "x": 144,
+    "y": 160,
+    "w": 48,
+    "h": 80
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 48,
+    "h": 80
+   },
+   "sourceSize": {
+    "w": 48,
+    "h": 80
+   },
+   "duration": 71
+  }
+ ],
+ "meta": {
+  "app": "PixelForge",
+  "version": "1.1.0",
+  "image": "flame-pillar.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 288,
+   "h": 240
+  },
+  "scale": "1",
+  "frameTags": [
+   {
+    "name": "flame-pillar",
+    "from": 0,
+    "to": 15,
+    "direction": "forward"
+   }
+  ]
+ },
+ "pf": {
+  "name": "flame-pillar",
+  "fw": 48,
+  "fh": 80,
+  "cols": 6,
+  "n": 16,
+  "fps": 14,
+  "loop": false,
+  "px": 24,
+  "py": 74,
+  "hit": 3,
+  "seed": 6
+ }
+}

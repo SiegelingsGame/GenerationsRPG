@@ -1,0 +1,344 @@
+{
+ "frames": [
+  {
+   "filename": "arcane-missile 0",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 1",
+   "frame": {
+    "x": 96,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 2",
+   "frame": {
+    "x": 192,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 3",
+   "frame": {
+    "x": 0,
+    "y": 48,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 4",
+   "frame": {
+    "x": 96,
+    "y": 48,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 5",
+   "frame": {
+    "x": 192,
+    "y": 48,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 6",
+   "frame": {
+    "x": 0,
+    "y": 96,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 7",
+   "frame": {
+    "x": 96,
+    "y": 96,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 8",
+   "frame": {
+    "x": 192,
+    "y": 96,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 9",
+   "frame": {
+    "x": 0,
+    "y": 144,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 10",
+   "frame": {
+    "x": 96,
+    "y": 144,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 11",
+   "frame": {
+    "x": 192,
+    "y": 144,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 12",
+   "frame": {
+    "x": 0,
+    "y": 192,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  },
+  {
+   "filename": "arcane-missile 13",
+   "frame": {
+    "x": 96,
+    "y": 192,
+    "w": 96,
+    "h": 48
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 96,
+    "h": 48
+   },
+   "sourceSize": {
+    "w": 96,
+    "h": 48
+   },
+   "duration": 63
+  }
+ ],
+ "meta": {
+  "app": "PixelForge",
+  "version": "1.1.0",
+  "image": "arcane-missile.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 288,
+   "h": 240
+  },
+  "scale": "1",
+  "frameTags": [
+   {
+    "name": "arcane-missile",
+    "from": 0,
+    "to": 13,
+    "direction": "forward"
+   }
+  ]
+ },
+ "pf": {
+  "name": "arcane-missile",
+  "fw": 96,
+  "fh": 48,
+  "cols": 3,
+  "n": 14,
+  "fps": 16,
+  "loop": false,
+  "px": 86,
+  "py": 24,
+  "hit": 10,
+  "seed": 26
+ }
+}

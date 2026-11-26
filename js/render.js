@@ -1766,6 +1766,7 @@ Render.drawBattle = function () {
     }
   }
   PackArt.drawBattle(this);
+  ForgeFX.draw(this);
   if (typeof FxLayer !== 'undefined') FxLayer.drawAttacks(this);
   // fx
   Battle.fx = Battle.fx.filter((f) => now - f.t0 < 1100);

@@ -30,6 +30,8 @@ const PackArt = {
     return { x: +live.gx, y: +live.gy };
   },
   emit(key,target,source=null,projectile=null) {
+    const forgeKey={heal:'heal',shield:'shield-bubble',buff:'enhance'}[key];
+    if(forgeKey&&ForgeFX.emit(forgeKey,target,source))return;
     if (!target || !PACK_EFFECTS[key]) return;
     const to=this.gridPos(target); if (!to || !Number.isFinite(to.x) || !Number.isFinite(to.y)) return;
     const from=source?this.gridPos(source):null;
@@ -38,6 +40,7 @@ const PackArt = {
     if(this.effects.length>40)this.effects.splice(0,this.effects.length-40);
   },
   damage(src,target,crit) {
+    if(ForgeFX.attack(src,target,crit))return;
     const id=src?.vfxSkill;
     const spell={firebolt:['explosion','fire_proj'],frostNova:['sparkle','ice_proj'],smite:['critical','holy_proj'],dissonance:['music','wind_proj'],hexbolt:['sparkle','dark_proj'],soulfire:['explosion','dark_proj'],obliterate:['critical','dark_proj']}[id];
     if(spell)this.emit(spell[0],target,src,spell[1]);

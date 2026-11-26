@@ -1,0 +1,43 @@
+{
+  "w": 48,
+  "h": 64,
+  "frames": 14,
+  "fps": 16,
+  "seed": 17,
+  "pivot": [
+    24,
+    48
+  ],
+  "hit": 3,
+  "layers": [
+    {
+      "type": "icon",
+      "icon": "shield",
+      "x": 24,
+      "y": 32,
+      "scale": 2,
+      "rise": {
+        "from": 4,
+        "to": -12
+      },
+      "ramp": "water"
+    },
+    {
+      "type": "particles",
+      "x": 24,
+      "y": 46,
+      "count": 16,
+      "angle": -90,
+      "spread": 90,
+      "speed": 35,
+      "size": 1,
+      "ramp": "water"
+    }
+  ],
+  "post": [
+    {
+      "type": "outline",
+      "color": "#120a1a"
+    }
+  ]
+}

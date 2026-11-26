@@ -1,0 +1,476 @@
+{
+ "frames": [
+  {
+   "filename": "magic-circle 0",
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 1",
+   "frame": {
+    "x": 64,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 2",
+   "frame": {
+    "x": 128,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 3",
+   "frame": {
+    "x": 192,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 4",
+   "frame": {
+    "x": 0,
+    "y": 40,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 5",
+   "frame": {
+    "x": 64,
+    "y": 40,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 6",
+   "frame": {
+    "x": 128,
+    "y": 40,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 7",
+   "frame": {
+    "x": 192,
+    "y": 40,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 8",
+   "frame": {
+    "x": 0,
+    "y": 80,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 9",
+   "frame": {
+    "x": 64,
+    "y": 80,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 10",
+   "frame": {
+    "x": 128,
+    "y": 80,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 11",
+   "frame": {
+    "x": 192,
+    "y": 80,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 12",
+   "frame": {
+    "x": 0,
+    "y": 120,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 13",
+   "frame": {
+    "x": 64,
+    "y": 120,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 14",
+   "frame": {
+    "x": 128,
+    "y": 120,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 15",
+   "frame": {
+    "x": 192,
+    "y": 120,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 16",
+   "frame": {
+    "x": 0,
+    "y": 160,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 17",
+   "frame": {
+    "x": 64,
+    "y": 160,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 18",
+   "frame": {
+    "x": 128,
+    "y": 160,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  },
+  {
+   "filename": "magic-circle 19",
+   "frame": {
+    "x": 192,
+    "y": 160,
+    "w": 64,
+    "h": 40
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 64,
+    "h": 40
+   },
+   "sourceSize": {
+    "w": 64,
+    "h": 40
+   },
+   "duration": 83
+  }
+ ],
+ "meta": {
+  "app": "PixelForge",
+  "version": "1.1.0",
+  "image": "magic-circle.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 256,
+   "h": 200
+  },
+  "scale": "1",
+  "frameTags": [
+   {
+    "name": "magic-circle",
+    "from": 0,
+    "to": 19,
+    "direction": "forward"
+   }
+  ]
+ },
+ "pf": {
+  "name": "magic-circle",
+  "fw": 64,
+  "fh": 40,
+  "cols": 4,
+  "n": 20,
+  "fps": 12,
+  "loop": true,
+  "px": 32,
+  "py": 20,
+  "hit": 8,
+  "seed": 27
+ }
+}

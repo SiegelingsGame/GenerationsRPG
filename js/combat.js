@@ -73,6 +73,8 @@ function unitPos(u) {
 
 Battle.start = function (opts) {
   PackArt.effects = [];
+  ForgeFX.reset();
+  if(typeof FxLayer!=='undefined') FxLayer.attacks=[];
   this.active = true; this.over = false; this.round = 0; this.fx = []; this.log = [];
   this.traps = [];
   this.kind = opts.kind || 'wild';
@@ -97,6 +99,10 @@ Battle.start = function (opts) {
   });
   this.units.filter((u) => u.side === 'enemy').forEach((u, i) => { u.slot = i; });
   this.units.forEach((u) => Object.assign(u, unitPos(u)));
+  for(const u of this.units){
+    const trait=u.charId?ch(u.charId)?.trait:null;
+    if(trait&&['brave','hardy','wise','loyal','ambitious'].includes(trait))ForgeFX.emit('trait',u);
+  }
   // Noble banner: party starts with +1 focus (warlocks stay capped at 4)
   if (this.units.some((u) => u.side === 'party' && u.alive && u.cls === 'noble')) {
     this.units.filter((u) => u.side === 'party' && u.alive).forEach((u) => this.gainFocus(u, 1));
@@ -172,9 +178,11 @@ Battle.find = function (uid) { return this.units.find((u) => u.uid === uid); };
 
 Battle.damage = function (src, t, dmg, crit, label) {
   PackArt.damage(src, t, crit);
+  if(t.defending || this.st(t,'guard') || this.st(t,'riposte')) ForgeFX.emit('protection',t);
   // an arcane shield soaks damage first
   const sh = t.st && t.st.shield;
   if (sh && sh.v > 0) {
+    ForgeFX.emit('protection',t);
     const soak = Math.min(sh.v, dmg);
     sh.v -= soak; dmg -= soak;
     this.fx.push({ uid: t.uid, text: `(${soak})`, color: '#b48aff', t0: performance.now() + 40, small: true });

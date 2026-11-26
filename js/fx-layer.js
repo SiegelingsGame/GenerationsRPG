@@ -180,6 +180,7 @@ const FxLayer = {
   },
 
   emitHeal(target) {
+    if (ForgeFX.ready('heal')) return; // PackArt already emitted this heal/protection.
     if (!this.ensure() || this.reduced.matches || !target) return;
     const mod = PixelFx.attacks.heal;
     if (!mod) return;
