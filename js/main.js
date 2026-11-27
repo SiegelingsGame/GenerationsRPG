@@ -689,6 +689,45 @@ Game.adopt = function (k) {
   this.after();
 };
 
+// ---- squires: a young fighter sworn to serve the head of the House and learn at their side
+GD.SQUIRE_COST = 50;
+Game.squireCandidates = function () {
+  const key = `${year()}-${seasonName()}`;
+  const pool = G.squirePool && G.squirePool.key === key
+    ? G.squirePool.ids.map(ch).filter((c) => c && c.alive && c.status === 'npc') : [];
+  while (pool.length < 3) {
+    const race = R.chance(0.5) ? ch(G.mcId).race : randomRace();
+    const r = GD.RACES[race];
+    const youthYears = Math.max(1, Math.floor((r.primeEnd - r.maturity) * 0.3) - 1);
+    const a = r.maturity + R.int(0, youthYears);
+    const c = makeChar({ race, born: G.day - a * DAYS_PER_YEAR - R.int(0, 200), birth: R.weighted({ lowborn: 3, highborn: 1 }),
+      level: R.int(1, 2), loyalty: 40, corruption: R.int(0, 8) });
+    c.hp = maxHp(c);
+    pool.push(c);
+  }
+  G.squirePool = { key, ids: pool.map((c) => c.id) };
+  return pool;
+};
+Game.takeSquire = function (c) {
+  const mc = ch(G.mcId);
+  if (G.house.gold < GD.SQUIRE_COST) return UI.toast(`A squire's kit costs ${GD.SQUIRE_COST} gold.`);
+  if (householdCount() >= GD.ESTATE[G.house.tier].household) return UI.toast('Your household is full. Improve your estate first.');
+  G.house.gold -= GD.SQUIRE_COST;
+  c.squireOf = mc.id;
+  if (isAdult(mc) && mc.cls) c.cls = mc.cls; // trained in the master's way
+  c.loyalty = 60; c.corruption = 0;
+  addBond(c, mc, 30);
+  Equip.ensureChar(c);
+  if (!Equip.worn(c).length) Equip.seedStarter(c, 1);
+  c.hp = maxHp(c);
+  if (G.party.length < 4) { c.status = 'party'; G.party.push(c.id); } else c.status = 'household';
+  c.servedHouse = true;
+  if (G.squirePool) G.squirePool.ids = G.squirePool.ids.filter((id) => id !== c.id);
+  recordChoice('martial', 0.5, mc.id);
+  chron(`${c.name} swears to serve ${mc.name} as squire${c.status === 'household' ? ' (waiting at the estate)' : ''}.`, 'good', [c.id, mc.id], 'join');
+  this.after();
+};
+
 Game.research = function (c) {
   const cost = Math.max(10, 40 - G.house.up.library * 10);
   G.house.gold -= cost;

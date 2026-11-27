@@ -101,11 +101,13 @@ UI.buildMobile = function () {
         h('button', { id: 'menuBtn', 'aria-label': 'Open house menu', onclick: () => this.openDrawer() }, 'House'))),
     backdrop: h('div', { id: 'backdrop', onclick: () => this.closeDrawer() }),
     drawer: h('aside', { id: 'drawer', 'aria-hidden': 'true' },
+      h('div', { class: 'grip', 'aria-hidden': 'true' }),
       h('div', { class: 'drawer-head' }, h('b', {}, 'Your House'), h('button', { class: 'drawer-x', 'aria-label': 'Close menu', onclick: () => this.closeDrawer() }, '×')),
       h('div', { id: 'drawer-body' })),
     sheet: h('div', { id: 'sheet' }),
   };
   document.body.append(this.mob.bar, this.mob.backdrop, this.mob.drawer, this.mob.sheet);
+  this.swipeToClose(this.mob.drawer, () => this.closeDrawer());
   window.addEventListener('resize', () => { this.fixStandalone(); this.placeLayout(); });
   window.addEventListener('orientationchange', () => setTimeout(() => this.fixStandalone(), 300));
   this.fixStandalone();
@@ -137,6 +139,77 @@ UI.openDrawer = function () {
   this.mob.drawer.setAttribute('aria-hidden', 'false');
   this.placeLayout();
 };
+// How much gold the House has, kept current by UI.refresh.
+UI.goldPill = function () {
+  return h('div', { class: 'gold-pill', 'aria-live': 'polite' }, h('span', { class: 'coin', 'aria-hidden': 'true' }), h('b', {}, Math.round(G.house.gold)), ' gold');
+};
+UI.syncGold = function () {
+  if (!G || !G.house) return;
+  for (const b of document.querySelectorAll('.gold-pill b')) b.textContent = Math.round(G.house.gold);
+};
+// drag a sheet down to dismiss it
+UI.swipeToClose = function (el, close) {
+  let y0 = null, dy = 0;
+  el.addEventListener('touchstart', (e) => {
+    const scroller = e.target.closest('.modal-body, #drawer-body');
+    y0 = scroller && scroller.scrollTop > 0 ? null : e.touches[0].clientY; dy = 0;
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    if (y0 == null) return;
+    dy = Math.max(0, e.touches[0].clientY - y0);
+    el.style.transform = dy ? `translateY(${dy}px)` : '';
+  }, { passive: true });
+  el.addEventListener('touchend', () => {
+    if (y0 == null) return;
+    el.style.transform = '';
+    if (dy > 90) close();
+    y0 = null; dy = 0;
+  });
+};
+// Take someone in: a ward (a child raised as your own, who can become heir) or a squire (a young
+// fighter who serves the head of the House). One screen, two big choices, three people each.
+UI.showTakeIn = function (kind = 'ward') {
+  const ward = kind === 'ward';
+  let list;
+  if (ward) {
+    // keep the same three children for the season, so switching tabs doesn't reshuffle them
+    const key = `${year()}-${seasonName()}`;
+    list = G.wardPool && G.wardPool.key === key ? G.wardPool.ids.map(ch).filter((c) => c && c.alive && c.status === 'npc' && !isAdult(c)) : [];
+    if (list.length < 3) list = Game.adoptables().slice(0, 3);
+    G.wardPool = { key, ids: list.map((c) => c.id) };
+  } else list = Game.squireCandidates();
+  const cost = ward ? 40 : GD.SQUIRE_COST;
+  const broke = G.house.gold < cost;
+  // what stands out compared with others of their race
+  const best = (c) => { const rb = GD.RACES[c.race].base, edge = (k) => c.base[k] + c.bonus[k] - rb[k] + k.length * 0.001;
+    const k = STATS.reduce((a, b) => (edge(b) > edge(a) ? b : a)); return { str: 'strong', agi: 'quick', int: 'clever', wil: 'steady', vit: 'tough' }[k]; };
+  const card = (c) => h('div', { class: 'takein-card' },
+    portrait(c, 64),
+    h('div', { class: 'takein-info' },
+      h('b', {}, c.name),
+      h('small', {}, `${GD.RACES[c.race].name} · ${ageStr(c)} ${ageStr(c) === 1 ? 'year' : 'years'} old`),
+      h('small', {}, `Naturally ${best(c)}${c.trait ? ' · ' + GD.TRAITS[c.trait].name : ''}`)),
+    h('button', { class: 'takein-go', disabled: broke, onclick: () => { this.closeAll(); ward ? Game.adopt(c) : Game.takeSquire(c); } },
+      ward ? 'Take in' : 'Accept', h('small', {}, `${cost} gold`)));
+  this.replaceOrOpen([
+    h('div', { class: 'takein-tabs', role: 'tablist' },
+      h('button', { class: ward ? 'on' : '', role: 'tab', onclick: () => this.showTakeIn('ward') }, h('span', { 'aria-hidden': 'true' }, '🧒'), ' Ward'),
+      h('button', { class: ward ? '' : 'on', role: 'tab', onclick: () => this.showTakeIn('squire') }, h('span', { 'aria-hidden': 'true' }, '🛡'), ' Squire')),
+    h('p', { class: 'takein-what' }, ward
+      ? 'A child with no family, raised in your home. They take your name and can become your heir.'
+      : `A young fighter who joins your party and learns from ${ch(G.mcId).name}. Young people level up faster.`),
+    broke ? h('p', { class: 'bad' }, `You need ${cost} gold.`) : null,
+    ...list.map(card),
+  ], { title: 'Ward or squire', sheet: true, takein: true });
+};
+// re-open a screen in place when switching its tabs
+UI.replaceOrOpen = function (content, opts) {
+  const top = this.modalStack[this.modalStack.length - 1];
+  if (top && top.takein) { top.el.remove(); this.modalStack.pop(); }
+  const w = this.modal(content, opts);
+  this.modalStack[this.modalStack.length - 1].takein = opts.takein;
+  return w;
+};
 // A plain-language House menu for phones: who is in the family, how the House is doing, and a few
 // big buttons. Everything else is one tap deeper.
 UI.renderDrawer = function () {
@@ -156,7 +229,7 @@ UI.renderDrawer = function () {
     h('div', { class: 'dm-house' }, Heraldry.canvas(hs.heraldry, 44),
       h('div', {}, h('b', {}, `House ${hs.name}`), h('small', {}, `${seasonName()} ${year()} · Generation ${hs.generation}`))),
     h('div', { class: 'dm-stats' },
-      h('span', {}, h('b', { class: 'gold' }, Math.round(hs.gold)), ' gold'),
+      h('span', { class: 'dm-gold' }, h('b', { class: 'gold' }, Math.round(hs.gold)), ' gold'),
       h('span', {}, h('b', {}, hs.potions), ' potions'),
       h('span', {}, h('b', {}, Math.round(hs.prestige)), ' fame')),
     h('h4', { class: 'dm-title' }, 'Your family'),
@@ -172,10 +245,12 @@ UI.renderDrawer = function () {
     h('div', { class: 'dm-grid' },
       tile('👪', 'Family', 'children, marriage, heir', () => this.showHousehold()),
       tile('🎒', 'Gear', 'weapons and armour', () => this.showInventory(ch(G.mcId))),
+      tile('🛡', 'Ward or squire', 'take a young one in', () => this.showTakeIn('ward')),
       tile('🌳', 'Family tree', 'everyone, past and present', () => this.showTree()),
       tile('📜', 'Story so far', 'what has happened', () => this.showChronicle()),
       tile('🗺', 'World', 'towns, eras, the prophecy', () => this.showWorld()),
       tile('⚙', 'Save & help', 'save, how to play', () => this.showMenu())),
+    h('button', { class: 'sheet-close', onclick: () => this.closeDrawer() }, 'Close'),
   ].filter(Boolean));
 };
 UI.closeDrawer = function () { document.body.classList.remove('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'true'); };
@@ -247,7 +322,7 @@ UI.updateChip = function () {
   $('#hudchip').replaceChildren(
     h('span', { class: 'hud-house' }, `House ${G.house.name}`),
     h('b', { class: 'hud-place' }, place),
-    h('span', { class: 'hud-date' }, `${seasonName()} ${year()} · ${Math.round(G.house.gold)}g`),
+    h('span', { class: 'hud-date' }, `${seasonName()} ${year()} · `, h('b', { class: 'hud-gold' }, `${Math.round(G.house.gold)} gold`)),
     mc && h('span', { class: 'hud-health' },
       h('span', { class: 'hud-hero' }, mc.name),
       h('span', {}, `${Math.round(mc.hp)}/${maxHp(mc)} HP`),
@@ -273,18 +348,28 @@ UI.openHere = function () {
     button.addEventListener('click', () => this.closeModalQuiet(), { capture: true, once: true });
   }
   this.modal(body, {
-    title: place || 'Here',
+    title: place || 'Here', sheet: true,
     onclose: () => { this.closeDrawer(); },
   });
 };
 
 // ---------------------------------------------------------------- modal
 UI.modal = function (content, opts = {}) {
-  const wrap = h('div', { class: 'modal-wrap' },
+  const sheet = opts.sheet && this.isMobile();
+  const body = h('div', { class: 'modal-body' }, content);
+  const wrap = h('div', { class: 'modal-wrap' + (sheet ? ' sheet-wrap' : '') },
     h('div', { class: 'modal ' + (opts.wide ? 'wide' : '') },
+      sheet ? h('div', { class: 'grip', 'aria-hidden': 'true' }) : null,
       opts.title ? h('h2', {}, opts.title) : null,
       !opts.locked ? h('button', { class: 'close', title: 'Close', onclick: () => this.closeModal() }, '×') : null,
-      h('div', { class: 'modal-body' }, content)));
+      body,
+      sheet && !opts.locked ? h('button', { class: 'sheet-close', onclick: () => this.closeModal() }, 'Close') : null));
+  // any screen that asks for money shows how much the House has
+  if (G && G.mcId && /\d\s?g\b|\bgold\b/.test(body.textContent)) wrap.firstChild.insertBefore(this.goldPill(), body);
+  if (sheet && !opts.locked) {
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) this.closeModal(); });
+    this.swipeToClose(wrap.firstChild, () => { if (this.modalStack.length && this.modalStack[this.modalStack.length - 1].el === wrap) this.closeModal(); });
+  }
   document.body.append(wrap);
   this.modalStack.push({ el: wrap, onclose: opts.onclose, locked: opts.locked });
   return wrap;
@@ -368,6 +453,7 @@ UI.refresh = function () {
   if (!Battle.active) this.renderPanel();
   this.renderLog();
   Guide.render();
+  this.syncGold();
 };
 
 UI.renderTop = function () {
@@ -548,7 +634,7 @@ UI.estatePanel = function () {
       act('Household & Heir', () => this.showHousehold(), { sub: 'party, children, succession' }),
       act('Armory & Inventory', () => this.showInventory(ch(G.mcId)), { sub: 'try on armour, robes, helms, weapons' }),
       freeToMarry ? act(widowed ? 'Seek a new spouse' : 'Arranged Match', () => Game.seekNewSpouse(), { sub: widowed ? 'court again, or arrange a remarriage' : 'choose 1 of 3 partners', cls: 'hl' }) : null,
-      act('Adopt a Child', () => this.showAdoption(), { sub: 'give an orphan a family and a name' }),
+      act('Take in a ward or squire', () => this.showTakeIn('ward'), { sub: 'a child to raise, or a young fighter to train' }),
       act('Family Tree', () => this.showTree()),
     ),
   ];
