@@ -139,6 +139,47 @@ UI.openDrawer = function () {
   this.mob.drawer.setAttribute('aria-hidden', 'false');
   this.placeLayout();
 };
+// ---- multi-class: learned classes, training and mentors
+UI.learnedBox = function (c) {
+  const ls = learnedClasses(c);
+  if (!ls.length) return null;
+  return h('div', { class: 'classbox learned' },
+    h('small', { class: 'dim' }, `Also trained (${ls.length}/${GD.MAX_LEARNED})`),
+    ...ls.map((k) => h('div', {}, h('b', {}, `${GD.CLASSES[k].icon} ${GD.CLASSES[k].name}`),
+      h('ul', { class: 'abil' }, GD.CLASSES[k].skills.slice(0, 2).map((id) => h('li', {}, h('b', {}, GD.ABILITIES[id].name), ` (${GD.ABILITIES[id].cost} focus): ${GD.ABILITIES[id].desc}`))))));
+};
+UI.trainingBox = function (c) {
+  const t = c.training;
+  if (t) {
+    const m = ch(t.mentor), need = trainDays(c);
+    return h('div', { class: 'classbox training' },
+      h('b', {}, `Learning: ${GD.CLASSES[t.cls].icon} ${GD.CLASSES[t.cls].name}`),
+      h('small', { class: 'dim' }, `${c.squireOf === t.mentor ? 'Squire to' : 'Taught by'} ${m ? m.name : 'their mentor'} · about ${Math.max(1, Math.ceil((need - t.days) / 30))} more months together`),
+      bar(t.days, need, 'xp'),
+      c.alive ? act('Change mentor', () => this.showMentors(c), { sub: 'start learning something else instead' }) : null);
+  }
+  if (!c.alive || learnedClasses(c).length >= GD.MAX_LEARNED) return null;
+  return act('Learn a new class', () => this.showMentors(c), { cls: 'hl', sub: `train with a mentor from your court or party · ${learnedClasses(c).length}/${GD.MAX_LEARNED} learned` });
+};
+UI.showMentors = function (c) {
+  const list = mentorsFor(c);
+  const months = Math.round(trainDays(c) / 30);
+  this.modal([
+    h('p', { class: 'takein-what' }, `${c.name} keeps being a ${isAdult(c) ? classOf(c).name : 'child of the House'} and learns a second calling on top. Pick a teacher; they must stay with your party or at the estate. It takes about ${months} months${months < 12 ? ' (the young learn faster)' : ''}.`),
+    list.length ? null : h('p', { class: 'dim' }, 'Nobody in your court or party knows a class they could teach. Recruit people in towns, or take in a squire.'),
+    ...list.map(({ m, k }) => h('div', { class: 'takein-card' },
+      portrait(m, 56),
+      h('div', { class: 'takein-info' },
+        h('b', {}, `${GD.CLASSES[k].icon} ${GD.CLASSES[k].name}`),
+        h('small', {}, `taught by ${m.name}${m.id === G.mcId ? ' (you)' : ''}`),
+        h('small', {}, `Gains: ${GD.CLASSES[k].skills.slice(0, 2).map((id) => GD.ABILITIES[id].name).join(', ')}`)),
+      h('button', { class: 'takein-go', onclick: () => {
+        startTraining(c, m, k);
+        Log.add(`${c.name} begins training as a ${GD.CLASSES[k].name} under ${m.name}.`, 'good', [c.id, m.id]);
+        saveGame(); this.closeAll(); this.toast(`${c.name} starts learning ${GD.CLASSES[k].name}.`); this.refresh();
+      } }, 'Train', h('small', {}, 'free')))),
+  ], { title: `Teach ${c.name}`, sheet: true });
+};
 // How much gold the House has, kept current by UI.refresh.
 UI.goldPill = function () {
   return h('div', { class: 'gold-pill', 'aria-live': 'polite' }, h('span', { class: 'coin', 'aria-hidden': 'true' }), h('b', {}, Math.round(G.house.gold)), ' gold');
@@ -188,7 +229,9 @@ UI.showTakeIn = function (kind = 'ward') {
     h('div', { class: 'takein-info' },
       h('b', {}, c.name),
       h('small', {}, `${GD.RACES[c.race].name} · ${ageStr(c)} ${ageStr(c) === 1 ? 'year' : 'years'} old`),
-      h('small', {}, `Naturally ${best(c)}${c.trait ? ' · ' + GD.TRAITS[c.trait].name : ''}`)),
+      h('small', {}, `Naturally ${best(c)}${c.trait ? ' · ' + GD.TRAITS[c.trait].name : ''}`),
+      ward ? null : h('small', { class: 'takein-cls' }, (() => { const own = classFor(c), lc = classFor(ch(G.mcId));
+        return own === lc ? `A born ${GD.CLASSES[own].name}, like you` : `${GD.CLASSES[own].name} · will learn ${GD.CLASSES[lc].name} from you`; })())),
     h('button', { class: 'takein-go', disabled: broke, onclick: () => { this.closeAll(); ward ? Game.adopt(c) : Game.takeSquire(c); } },
       ward ? 'Take in' : 'Accept', h('small', {}, `${cost} gold`)));
   this.replaceOrOpen([
@@ -197,7 +240,7 @@ UI.showTakeIn = function (kind = 'ward') {
       h('button', { class: ward ? '' : 'on', role: 'tab', onclick: () => this.showTakeIn('squire') }, h('span', { 'aria-hidden': 'true' }, '🛡'), ' Squire')),
     h('p', { class: 'takein-what' }, ward
       ? 'A child with no family, raised in your home. They take your name and can become your heir.'
-      : `A young fighter who joins your party and learns from ${ch(G.mcId).name}. Young people level up faster.`),
+      : `A young fighter who joins your party. They keep their own class and learn ${ch(G.mcId).name}'s ${classOf(ch(G.mcId)).name} class on top. Young people level up faster.`),
     broke ? h('p', { class: 'bad' }, `You need ${cost} gold.`) : null,
     ...list.map(card),
   ], { title: 'Ward or squire', sheet: true, takein: true });
@@ -236,7 +279,8 @@ UI.renderDrawer = function () {
     h('div', { class: 'dm-family' }, party.map((c) => h('button', { class: 'dm-person' + (c.id === G.mcId ? ' mc' : ''), onclick: () => { this.closeDrawer(); this.showChar(c); } },
       portrait(c, 48),
       h('b', {}, c.id === G.mcId ? '♛ ' + c.name : c.name),
-      h('small', {}, `${isAdult(c) ? classOf(c).name : GD.STAGES[stageKey(c)].name} · ${ageStr(c)} yrs`),
+      h('small', {}, `${isAdult(c) ? classOf(c).name + (learnedClasses(c).length ? ' +' + learnedClasses(c).length : '') : GD.STAGES[stageKey(c)].name} · ${ageStr(c)} yrs`),
+      c.training ? h('small', { class: 'dm-training' }, `learning ${GD.CLASSES[c.training.cls].name}`) : null,
       bar(c.hp, maxHp(c), 'hp')))),
     heirLine,
     q ? h('button', { class: 'dm-goal', onclick: () => { this.closeDrawer(); this.showWorld(); } },
@@ -481,8 +525,8 @@ UI.renderTop = function () {
 
 UI.charLine = function (c) {
   const st = GD.STAGES[stageKey(c)].name;
-  const cl = isAdult(c) ? classOf(c) : null;
-  return `${GD.GENDERS[c.gender || 'man'].sym} ${GD.RACES[c.race].name}${cl ? ' ' + cl.name : ''} · ${ageStr(c)} yrs · ${st}`;
+  const cl = isAdult(c) ? classNames(c).replace(/ · /g, '/') : null;
+  return `${GD.GENDERS[c.gender || 'man'].sym} ${GD.RACES[c.race].name}${cl ? ' ' + cl : ''} · ${ageStr(c)} yrs · ${st}`;
 };
 
 UI.renderParty = function () {
@@ -900,6 +944,8 @@ UI.charBody = function (c) {
         h('small', { class: 'good' }, classOf(c).passive),
         h('ul', { class: 'abil' }, classOf(c).skills.map((id, i) => h('li', { class: i === 2 && c.level < 5 ? 'dim' : '' }, h('b', {}, GD.ABILITIES[id].name), ` (${GD.ABILITIES[id].cost} focus${i === 2 && c.level < 5 ? ', unlocks at level 5' : ''}): ${GD.ABILITIES[id].desc}`)),
           c.extraSkill && GD.LEGACY_SKILL[c.extraSkill] && !classOf(c).skills.includes(GD.LEGACY_SKILL[c.extraSkill]) ? h('li', {}, h('b', {}, GD.ABILITIES[GD.LEGACY_SKILL[c.extraSkill]].name), ` (learned): ${GD.ABILITIES[GD.LEGACY_SKILL[c.extraSkill]].desc}`) : null)),
+      isAdult(c) ? this.learnedBox(c) : null,
+      c.training || (c.alive && c.house === G.house.name) || c.squireOf ? this.trainingBox(c) : null,
       (c.injuries || []).length ? h('div', { class: 'tags' }, c.injuries.map((k) => h('span', { class: 'tag ' + (GD.INJURIES[k].good ? 'good' : 'bad'), title: Object.entries(GD.INJURIES[k].mods).map(([s2, v]) => `${STAT_NAMES[s2]} ${v > 0 ? '+' : ''}${v}`).join(', ') }, GD.INJURIES[k].name))) : null,
       c.alive ? h('div', {}, bar(c.xp, xpNeed(c.level), 'xp'), h('small', { class: 'dim' }, `XP ${Math.round(c.xp)}/${xpNeed(c.level)}`)) : null,
       h('table', { class: 'stats' }, statRows),

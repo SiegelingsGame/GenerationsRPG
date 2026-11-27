@@ -143,10 +143,85 @@ function classFor(c) {
   return (c.cls = pick);
 }
 function classOf(c) { return GD.CLASSES[classFor(c)]; }
-function classGrowth(c, k) { return (classOf(c).growth[k] || 0) * (c.level - 1); }
+
+// ---------------------------------------------------------------- multi-class
+// Everyone has one natural class (their aptitude: passive, stats, weapon). On top of it they can hold
+// up to MAX_LEARNED learned classes, each adding its first two abilities and half its stat growth.
+// Children of the House inherit their parents' classes; squires learn their liege's; anyone can be
+// taught by a mentor from the court or party.
+GD.MAX_LEARNED = 2;
+GD.TRAIN_DAYS = 360;
+function learnedClasses(c) {
+  if (!c.learned) c.learned = [];
+  // born of the House: when they come of age, a parent's calling has been taught at the hearth
+  if (!c.learnedInit && isAdult(c)) {
+    c.learnedInit = true;
+    if ((c.parents || []).length && c.house) {
+      const own = classFor(c);
+      for (const p of c.parents.map(ch)) {
+        const pc = p && (p.cls || (isAdult(p) ? classFor(p) : null));
+        if (pc && GD.CLASSES[pc] && pc !== own && !c.learned.includes(pc) && c.learned.length < GD.MAX_LEARNED) c.learned.push(pc);
+      }
+    }
+  }
+  return c.learned.filter((k) => GD.CLASSES[k] && k !== c.cls);
+}
+function knowsClass(c, k) { return (isAdult(c) ? classFor(c) : c.cls) === k || learnedClasses(c).includes(k); }
+function classNames(c) { return [classOf(c).name, ...learnedClasses(c).map((k) => GD.CLASSES[k].name)].join(' · '); }
+function canLearnClass(c, k) { return GD.CLASSES[k] && !knowsClass(c, k) && learnedClasses(c).length < GD.MAX_LEARNED; }
+function trainDays(c) { return Math.round(GD.TRAIN_DAYS / (stageKey(c) === 'child' || stageKey(c) === 'youth' ? 1.5 : 1)); }
+function learnClass(c, k, why) {
+  if (!canLearnClass(c, k)) return false;
+  learnedClasses(c); c.learned.push(k);
+  if (typeof chron === 'function') chron(`${c.name} has learned the ways of the ${GD.CLASSES[k].name}${why ? ' ' + why : ''}.`, 'good', [c.id], 'learn');
+  return true;
+}
+// who in the court or party can teach this person something new
+function mentorsFor(c) {
+  const out = [];
+  for (const m of Object.values(G.chars)) {
+    if (!m.alive || m.id === c.id || !isAdult(m) || !(m.status === 'party' || m.status === 'household')) continue;
+    for (const k of [classFor(m), ...learnedClasses(m)]) if (canLearnClass(c, k)) out.push({ m, k });
+  }
+  // one teacher per class: a natural of that class first, then the head of the House, then the party
+  const score = (o) => (classFor(o.m) === o.k ? 4 : 0) + (o.m.id === G.mcId ? 2 : 0) + (o.m.status === 'party' ? 1 : 0) + o.m.level * 0.01;
+  out.sort((a, b) => score(b) - score(a));
+  return out.filter((o, i) => out.findIndex((x) => x.k === o.k) === i);
+}
+function startTraining(c, mentor, k) {
+  if (!canLearnClass(c, k)) return false;
+  c.training = { cls: k, mentor: mentor.id, days: 0 };
+  return true;
+}
+// called as time passes: a student near their mentor makes progress
+function tickTraining(days) {
+  if (!G || !G.chars) return;
+  // travel moves time in tiny steps: settle training every few days, not every frame
+  G._trainAcc = (G._trainAcc || 0) + days;
+  if (G._trainAcc < 3) return;
+  days = G._trainAcc; G._trainAcc = 0;
+  for (const c of Object.values(G.chars)) {
+    const t = c.training;
+    if (!t || !c.alive) continue;
+    const m = ch(t.mentor);
+    if (!m || !m.alive || !(m.status === 'party' || m.status === 'household') || !canLearnClass(c, t.cls)) {
+      if (!m || !m.alive) { if (typeof chron === 'function') chron(`${c.name}'s training as a ${GD.CLASSES[t.cls].name} ends: the mentor is gone.`, 'bad', [c.id], 'learn'); c.training = null; }
+      continue;
+    }
+    if (!(c.status === 'party' || c.status === 'household')) continue;
+    t.days += days;
+    if (t.days >= trainDays(c)) { c.training = null; learnClass(c, t.cls, `under ${m.name}`); }
+  }
+}
+function classGrowth(c, k) {
+  let g = classOf(c).growth[k] || 0;
+  for (const lk of learnedClasses(c)) g += (GD.CLASSES[lk].growth[k] || 0) * 0.5;
+  return g * (c.level - 1);
+}
 function abilitiesOf(c) {
   const cl = classOf(c);
   const out = cl.skills.slice(0, c.level >= 5 ? 3 : 2);
+  for (const k of learnedClasses(c)) for (const id of GD.CLASSES[k].skills.slice(0, 2)) if (!out.includes(id)) out.push(id);
   const extra = c.extraSkill && GD.LEGACY_SKILL[c.extraSkill];
   if (extra && !out.includes(extra)) out.push(extra);
   return out;

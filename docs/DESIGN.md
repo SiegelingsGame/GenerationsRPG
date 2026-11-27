@@ -273,6 +273,12 @@ Every character has a class. You choose yours at founding. Others take theirs fr
 | Noble | Commander / focus | Banner: allies begin battle with +1 focus | Basic: Strategize (command an ally to strike) · Synchronize Attack (ally strikes, then you follow up) · Muster (+2 focus to all) · Coordinated Strike (every other ally hits one foe) |
 | Warlock | High-focus caster | Dark pact: max and starting focus is **4** (others cap at 3) | Basic: strong pact-bolt · Hexbolt (1 focus, 280% magic, marks) · Soulfire (2, AoE 150%, expose) · Obliterate (3, 420%+ magic nuke) |
 
+**Multi-class.** Everyone has one *natural* class from their aptitude; it sets their passive, stat modifiers and weapon. On top of it they can hold up to two *learned* classes. Each learned class adds its first two abilities and half its stat growth.
+- **Heirs and all children of the House** inherit their parents' classes when they come of age: any parent class that differs from the child's own natural class is learned.
+- **Squires** keep their natural class and train in their liege's class.
+- **Mentors:** anyone in the family can be taught by a mentor from the court or party. On a character sheet, choose *Learn a new class* and pick a teacher (one per class, natural-born teachers first).
+- **Training time:** a year of game time, or about 8 months for children and youths. Teacher and student must both stay with the party or at the estate. If the mentor dies, the training ends.
+
 Status effects (inspired, bloodlust, guarded, shielded, exposed, slowed, venom, marked, riposte) show as markers over each fighter. The battle AI picks abilities by role: heal the wounded, shield or guard, buff, rally / muster, command, mark, lay traps, then area or single-target damage. Focus is normally capped at 3; warlocks hold 4.
 
 Mid-battle, opening a party character sheet shows **combat info only** (ATK/DEF/MAG, focus, potions on your turn, enemy knowledge). Estate social actions, equipment try-on, courtship and household management stay out of battle.

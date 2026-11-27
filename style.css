@@ -960,3 +960,8 @@ body.oc-approach-active .compass { display: none; }
 .takein-go { flex: none; min-width: 92px; min-height: 56px; border-radius: 12px; border: 1px solid #b8913a; background: #4a3c1a; color: #fff3cf; font: inherit; font-size: 16px; font-weight: bold; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .takein-go small { font-weight: normal; font-size: 12px; color: #f3d98a; }
 .takein-go:disabled { opacity: .45; }
+.classbox.learned { border-color: #5c4f80; }
+.classbox.training { border-color: #b8913a; display: flex; flex-direction: column; gap: 4px; }
+.classbox.training .bar { margin: 4px 0; }
+.dm-training { color: #f3d98a !important; }
+.takein-cls { color: #c9b4ff !important; }

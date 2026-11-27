@@ -714,7 +714,10 @@ Game.takeSquire = function (c) {
   if (householdCount() >= GD.ESTATE[G.house.tier].household) return UI.toast('Your household is full. Improve your estate first.');
   G.house.gold -= GD.SQUIRE_COST;
   c.squireOf = mc.id;
-  if (isAdult(mc) && mc.cls) c.cls = mc.cls; // trained in the master's way
+  // the squire keeps their natural calling and trains in their liege's
+  classFor(c);
+  const liegeCls = classFor(mc);
+  if (canLearnClass(c, liegeCls)) startTraining(c, mc, liegeCls);
   c.loyalty = 60; c.corruption = 0;
   addBond(c, mc, 30);
   Equip.ensureChar(c);
