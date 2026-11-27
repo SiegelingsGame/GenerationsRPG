@@ -101,7 +101,7 @@ UI.buildMobile = function () {
         h('button', { id: 'menuBtn', 'aria-label': 'Open house menu', onclick: () => this.openDrawer() }, 'House'))),
     backdrop: h('div', { id: 'backdrop', onclick: () => this.closeDrawer() }),
     drawer: h('aside', { id: 'drawer', 'aria-hidden': 'true' },
-      h('div', { class: 'drawer-head' }, h('b', {}, 'House menu'), h('button', { class: 'drawer-x', 'aria-label': 'Close menu', onclick: () => this.closeDrawer() }, '×')),
+      h('div', { class: 'drawer-head' }, h('b', {}, 'Your House'), h('button', { class: 'drawer-x', 'aria-label': 'Close menu', onclick: () => this.closeDrawer() }, '×')),
       h('div', { id: 'drawer-body' })),
     sheet: h('div', { id: 'sheet' }),
   };
@@ -136,6 +136,47 @@ UI.openDrawer = function () {
   document.body.classList.add('drawer-open');
   this.mob.drawer.setAttribute('aria-hidden', 'false');
   this.placeLayout();
+};
+// A plain-language House menu for phones: who is in the family, how the House is doing, and a few
+// big buttons. Everything else is one tap deeper.
+UI.renderDrawer = function () {
+  if (!this.mob || !G || !G.mcId) return;
+  const hs = G.house, d = G.world.doom, q = d.quest;
+  const party = G.party.map(ch).filter(Boolean);
+  const heir = ch(G.heirId);
+  const tile = (icon, label, hint, fn, cls = '') => h('button', { class: 'dm-tile ' + cls, onclick: () => { this.closeDrawer(); fn(); } },
+    h('span', { class: 'dm-icon', 'aria-hidden': 'true' }, icon), h('b', {}, label), h('small', {}, hint));
+  const heirLine = heir && heir.alive
+    ? h('button', { class: 'dm-heir ok', onclick: () => { this.closeDrawer(); this.showChar(heir); } }, portrait(heir, 32),
+      h('span', {}, h('small', {}, 'Next in line'), h('b', {}, heir.name)))
+    : h('button', { class: 'dm-heir warn', onclick: () => { this.closeDrawer(); this.showHousehold(); } },
+      h('span', { class: 'dm-icon', 'aria-hidden': 'true' }, '⚠'),
+      h('span', {}, h('b', {}, 'Choose who carries on'), h('small', {}, 'No heir yet. Tap to pick one.')));
+  $('#drawer-body').replaceChildren(...[
+    h('div', { class: 'dm-house' }, Heraldry.canvas(hs.heraldry, 44),
+      h('div', {}, h('b', {}, `House ${hs.name}`), h('small', {}, `${seasonName()} ${year()} · Generation ${hs.generation}`))),
+    h('div', { class: 'dm-stats' },
+      h('span', {}, h('b', { class: 'gold' }, Math.round(hs.gold)), ' gold'),
+      h('span', {}, h('b', {}, hs.potions), ' potions'),
+      h('span', {}, h('b', {}, Math.round(hs.prestige)), ' fame')),
+    h('h4', { class: 'dm-title' }, 'Your family'),
+    h('div', { class: 'dm-family' }, party.map((c) => h('button', { class: 'dm-person' + (c.id === G.mcId ? ' mc' : ''), onclick: () => { this.closeDrawer(); this.showChar(c); } },
+      portrait(c, 48),
+      h('b', {}, c.id === G.mcId ? '♛ ' + c.name : c.name),
+      h('small', {}, `${isAdult(c) ? classOf(c).name : GD.STAGES[stageKey(c)].name} · ${ageStr(c)} yrs`),
+      bar(c.hp, maxHp(c), 'hp')))),
+    heirLine,
+    q ? h('button', { class: 'dm-goal', onclick: () => { this.closeDrawer(); this.showWorld(); } },
+      h('small', {}, 'Main quest'), h('b', {}, q.title), h('span', {}, q.desc)) : null,
+    h('h4', { class: 'dm-title' }, 'What would you like to do?'),
+    h('div', { class: 'dm-grid' },
+      tile('👪', 'Family', 'children, marriage, heir', () => this.showHousehold()),
+      tile('🎒', 'Gear', 'weapons and armour', () => this.showInventory(ch(G.mcId))),
+      tile('🌳', 'Family tree', 'everyone, past and present', () => this.showTree()),
+      tile('📜', 'Story so far', 'what has happened', () => this.showChronicle()),
+      tile('🗺', 'World', 'towns, eras, the prophecy', () => this.showWorld()),
+      tile('⚙', 'Save & help', 'save, how to play', () => this.showMenu())),
+  ].filter(Boolean));
 };
 UI.closeDrawer = function () { document.body.classList.remove('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'true'); };
 UI.closeLog = function () { if (this.mob && this.mob.logPanel) this.mob.logPanel.open = false; };
@@ -178,17 +219,12 @@ UI.placeLayout = function () {
       if (panel.parentNode !== this.mob.sheet) this.mob.sheet.append(panel);
       this.closeDrawer();
     } else {
-      // Sectioned drawer: Here → Party → House tools
-      let here = $('#drawer-here'), partySec = $('#drawer-party'), house = $('#drawer-house');
-      if (!here) {
-        here = h('section', { id: 'drawer-here', class: 'drawer-sec' }, h('h4', { class: 'drawer-sec-title' }, 'Here'));
-        partySec = h('section', { id: 'drawer-party', class: 'drawer-sec' }, h('h4', { class: 'drawer-sec-title' }, 'Party'));
-        house = h('section', { id: 'drawer-house', class: 'drawer-sec' }, h('h4', { class: 'drawer-sec-title' }, 'House'));
-        body.replaceChildren(here, partySec, house);
-      }
-      if (panel.parentNode !== here) here.append(panel);
-      if (party.parentNode !== partySec) partySec.append(party);
-      if (topbar.parentNode !== house) house.append(topbar);
+      // The phone House menu is its own simple page (renderDrawer). The desktop panels wait offstage;
+      // place actions live behind the Here button.
+      let stash = $('#mob-stash');
+      if (!stash) { stash = h('div', { id: 'mob-stash' }); document.body.append(stash); }
+      for (const el of [panel, party, topbar]) if (el.parentNode !== stash) stash.append(el);
+      if (document.body.classList.contains('drawer-open')) this.renderDrawer();
     }
   } else {
     this.mob.camera.open = false;
