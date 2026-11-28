@@ -402,10 +402,11 @@ Game.battle = function (enemies, opts) {
   Living.stop();
   if (TownView.open) TownView.close();
   if (ChurchView.open) ChurchView.close();
-  if (typeof FxLayer !== 'undefined') FxLayer.playTransition(opts.kind === 'dungeon' ? 'slash-wipe' : 'iris');
+  // the battle waits for its transition: no one acts, and the menu stays hidden, until the screen is clear
+  document.body.classList.add('battle-intro');
   Battle.start({
     enemies, kind: opts.kind, title: opts.title,
-    intro: opts.intro,
+    intro: opts.intro, hold: true,
     tile: opts.tile || tileAt(G.pos.x, G.pos.y),
     onEnd: (res) => {
       UI.refresh();
@@ -414,6 +415,10 @@ Game.battle = function (enemies, opts) {
     },
   });
   UI.battleChanged();
+  let begun = false;
+  const go = () => { if (!begun) { begun = true; Battle.begin(250); } };
+  if (typeof FxLayer !== 'undefined') FxLayer.playTransition(opts.kind === 'dungeon' ? 'slash-wipe' : 'iris', { onDone: go });
+  setTimeout(go, 2500); // never hang if a transition is skipped or fails
 };
 
 Game.rivalBattle = function (rv) {

@@ -1542,9 +1542,17 @@ Render.drawBattleSky = function (scene) {
   } else {
     // dungeon vault gloom
     c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(0, 0, w, h * 0.35);
-    for (let i = 0; i < 6; i++) {
-      c.fillStyle = `rgba(255,180,80,${0.04 + (i % 3) * 0.02})`;
-      c.beginPath(); c.arc(w * (0.15 + i * 0.14), h * 0.18, 10 + i, 0, Math.PI * 2); c.fill();
+    // a few lanterns hanging on chains from the vault, flickering
+    for (let i = 0; i < 3; i++) {
+      const lx = w * (0.22 + i * 0.28), ly = h * (0.12 + (i % 2) * 0.05);
+      c.strokeStyle = 'rgba(20,16,12,0.8)'; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(lx, 0); c.lineTo(lx, ly - 8); c.stroke();
+      const f = 0.75 + Math.sin(this.t / 180 + i * 2) * 0.15;
+      const glow = c.createRadialGradient(lx, ly, 1, lx, ly, 46);
+      glow.addColorStop(0, `rgba(255,190,100,${0.35 * f})`); glow.addColorStop(1, 'rgba(255,170,80,0)');
+      c.fillStyle = glow; c.fillRect(lx - 46, ly - 46, 92, 92);
+      c.fillStyle = '#2a2018'; c.fillRect(lx - 5, ly - 8, 10, 3); c.fillRect(lx - 4, ly + 6, 8, 3);
+      c.fillStyle = `rgba(255,214,140,${f})`; c.fillRect(lx - 3.5, ly - 5, 7, 11);
     }
   }
   // distant horizon silhouette
@@ -1714,7 +1722,11 @@ Render.drawBattle = function () {
   this.drawBattleSky(scene);
   // Fit the arena to the full canvas (HUD overlays on phones instead of shrinking the stage).
   const mobileBattle = typeof document !== 'undefined' && document.body.classList.contains('in-battle');
-  const bs = this.bscale = Math.min(mobileBattle ? 1.2 : 1, this.w / (mobileBattle ? 560 : 780), this.h / (mobileBattle ? 440 : 520));
+  // phones: fit the arena into the space above the action menu, not behind it
+  const inset = mobileBattle && !Battle.cinematic ? (this.battleInset || 0) : 0;
+  const availH = this.h - inset;
+  const bs = this.bscale = Math.min(mobileBattle ? 1.2 : 1, this.w / (mobileBattle ? 560 : 780), availH / (mobileBattle ? 360 : 520));
+  const cy = inset ? Math.max(availH / 2 + 12, availH * 0.55) : this.h / 2;
   const bm = this.mouse ? this.unbattle(this.mouse) : null;
   c.save();
   // Cutscene camera: eases its zoom and focus toward Render.cine's targets. Normal battles never move.
@@ -1725,7 +1737,8 @@ Render.drawBattle = function () {
     const f = this.biso(k.gx, k.gy);
     fx = f.x; fy = f.y - 40; cz = k.z;
   }
-  c.translate(this.w / 2, this.h / 2); c.scale(bs * cz, bs * cz); c.translate(-fx, -fy);
+  c.translate(this.w / 2, cy); c.scale(bs * cz, bs * cz); c.translate(-fx, -fy);
+  this.bview = { cx: this.w / 2, cy, s: bs * cz, fx, fy };
   // Soft ground skirt so the arena sits in the landscape instead of a floating slab.
   {
     const mid = this.biso(3.5, 2.5);
@@ -1858,8 +1871,8 @@ Render.cineAim = function (target, zoom = 1.3, ease = 0.05) {
   Object.assign(this.cine, { zt: zoom, tgx: t.gx, tgy: t.gy, ease });
 };
 Render.unbattle = function (p) {
-  const bs = this.bscale || 1;
-  return { x: (p.x - this.w / 2) / bs + this.w / 2, y: (p.y - this.h / 2) / bs + this.h / 2 };
+  const v = this.bview || { cx: this.w / 2, cy: this.h / 2, s: this.bscale || 1, fx: this.w / 2, fy: this.h / 2 };
+  return { x: (p.x - v.cx) / v.s + v.fx, y: (p.y - v.cy) / v.s + v.fy };
 };
 
 Render.pickUnit = function (p0) {

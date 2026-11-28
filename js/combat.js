@@ -112,8 +112,17 @@ Battle.start = function (opts) {
   this.queue = [];
   this.waiting = false;
   this.say(opts.intro || 'Enemies approach!');
-  if (opts.hold) return; // cinematic scripts drive turns themselves
-  setTimeout(() => this.next(), 500);
+  this.begun = false;
+  if (opts.hold) return; // cinematic scripts (and Battle.begin after a transition) drive the first turn
+  this.begin();
+};
+// The first turn: called once the screen transition has finished, so nobody acts unseen.
+Battle.begin = function (delay = 500) {
+  if (!this.active || this.over || this.begun) return;
+  this.begun = true;
+  document.body.classList.remove('battle-intro');
+  UI.battleChanged();
+  setTimeout(() => this.next(), delay);
 };
 
 Battle.say = function (t) { this.log.push(t); if (this.log.length > 6) this.log.shift(); UI.battleChanged(); };

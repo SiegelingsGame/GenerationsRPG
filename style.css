@@ -1230,3 +1230,25 @@ body.scene-open #backdrop { z-index: 31; }
 body.scene-open #drawer { z-index: 32; }
 body.scene-open .modal-wrap { z-index: 33; }
 body.scene-open .toast { z-index: 34; }
+
+/* ---- battle: compact action menu; the arena sits in the space above it ---- */
+.bt-head { display: flex; align-items: center; gap: 10px; margin: 4px 0; }
+.bt-head > div, .bt-head > p { flex: 1; min-width: 0; margin: 0; }
+.bt-head b { font-size: 15px; }
+.bt-head .auto { margin: 0; white-space: nowrap; font-size: 13px; color: var(--dim); }
+.bt-focus { display: inline-flex; gap: 3px; }
+.bt-focus i { width: 9px; height: 9px; border-radius: 50%; border: 1px solid #8fd3ff; }
+.bt-focus i.on { background: #8fd3ff; }
+.bt-hint { margin: 0 0 4px; font-size: 13px; }
+@media (max-width: 900px) {
+  body.in-battle #sheet { max-height: 56vh; }
+  #sheet #panel { gap: 6px; padding: 6px 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
+  #sheet .bt-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  #sheet .bt-acts button.act { margin: 0; min-height: 52px; padding: 7px 10px; text-align: left; font-size: 15px; }
+  #sheet .bt-acts button.act small { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.25; }
+  #sheet .bt-acts button.bt-back { grid-column: 1 / -1; min-height: 44px; }
+  #sheet .blog { max-height: 44px; font-size: 12px; }
+  #sheet .lore-tags { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  body.battle-intro #sheet { visibility: hidden; }
+}
+@media (max-width: 900px) { #sheet .blog div:not(:nth-last-child(-n+2)) { display: none; } #sheet .blog { overflow: hidden; } }

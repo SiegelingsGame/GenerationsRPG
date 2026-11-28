@@ -1067,45 +1067,54 @@ UI.battleChanged = function () {
   if ((Battle.traps || []).some((t) => t.side === 'party')) {
     kids.push(h('p', { class: 'dim small' }, 'A snare is armed — it springs at the start of the next round.'));
   }
+  const auto = h('label', { class: 'auto' }, h('input', { type: 'checkbox', checked: Battle.auto, onchange: (e) => { Battle.auto = e.target.checked; if (Battle.auto && Battle.waiting) { Battle.waiting = false; Battle.ai(Battle.cur); } } }), ' Auto');
   if (Battle.waiting && u && u.side === 'party') {
     const cl = GD.CLASSES[u.cls];
     const st = Object.keys(u.st || {}).filter((k) => Battle.st(u, k)).map((k) => ({ atkUp: 'inspired', bloodlust: 'bloodlust', guard: 'guarded', defDown: 'exposed', slow: 'slowed', poison: 'venom', mark: 'marked', shield: `shield ${u.st.shield && u.st.shield.v}`, riposte: 'riposte' }[k])).filter(Boolean);
     const focusMax = Battle.maxFocus(u);
-    kids.push(h('p', {}, h('b', {}, `${u.name}'s turn`), h('br'), h('small', { class: 'dim' }, `${cl ? cl.icon + ' ' + cl.name + ' · ' : ''}Focus ${u.focus}/${focusMax}${st.length ? ' · ' + st.join(', ') : ''}`)));
+    // one line: whose turn, their class, focus as pips, and the auto toggle
+    kids.push(h('div', { class: 'bt-head' },
+      h('div', {}, h('b', {}, `${u.name}'s turn`), h('small', { class: 'dim' }, ` ${cl ? cl.icon + ' ' + cl.name : ''}${st.length ? ' · ' + st.join(', ') : ''}`)),
+      h('span', { class: 'bt-focus', title: `Focus ${u.focus}/${focusMax}` }, Array.from({ length: focusMax }, (_, i) => h('i', { class: i < u.focus ? 'on' : '' }))),
+      auto));
+    const grid = h('div', { class: 'bt-acts' });
     if (this.targeting) {
       const targetingLabel = this.targeting === 'skill'
         ? GD.ABILITIES[this.targetSkill].name
         : (this.targeting === 'attack' && u.cls === 'noble' ? 'Strategize' : this.targeting);
-      kids.push(h('p', { class: 'dim' }, `Choose a target for ${targetingLabel}: tap the field or below.`));
+      kids.push(h('p', { class: 'dim bt-hint' }, `${targetingLabel[0].toUpperCase() + targetingLabel.slice(1)}: tap a target on the field or below.`));
       const targets = Battle.units.filter((x) => this.validTarget(x));
-      kids.push(...targets.map((x) => act(`${x.name} (${x.hp}/${x.maxHp})`, () => this.chooseTarget(x))));
-      kids.push(act('Back', () => { this.targeting = null; this.battleChanged(); }));
+      grid.append(...targets.map((x) => act(x.name, () => this.chooseTarget(x), { sub: `${Math.round(x.hp)}/${x.maxHp} HP` })));
+      grid.append(act('Back', () => { this.targeting = null; this.battleChanged(); }, { cls: 'bt-back' }));
     } else {
       const attackLabel = u.cls === 'sorcerer' ? 'Arcane Bolt' : u.cls === 'warlock' ? 'Pact Bolt' : u.cls === 'noble' ? 'Strategize' : 'Attack';
-      const attackSub = u.cls === 'sorcerer' ? 'magic that slips past armour'
+      const attackSub = u.cls === 'sorcerer' ? 'magic past armour'
         : u.cls === 'warlock' ? 'a strong pact-bolt'
-        : u.cls === 'noble' ? 'command an ally to strike' : null;
-      kids.push(act(attackLabel, () => this.beginTarget('attack'), { sub: attackSub }));
+        : u.cls === 'noble' ? 'an ally strikes' : 'a basic strike';
+      grid.append(act(attackLabel, () => this.beginTarget('attack'), { sub: attackSub }));
       for (const id of u.abilities || []) {
         const A = GD.ABILITIES[id];
         if (!A) continue;
-        kids.push(act(A.name, () => {
+        const btn = act(A.name, () => {
           if (A.target === 'enemy' || A.target === 'ally') { this.targetSkill = id; this.beginTarget('skill'); }
           else Battle.act('skill', null, id);
-        }, { disabled: u.focus < A.cost, sub: `${A.cost} focus · ${A.desc}`, cls: 'ability' }));
+        }, { disabled: u.focus < A.cost, sub: `${A.cost} focus · ${A.desc}`, cls: 'ability' });
+        btn.title = A.desc;
+        grid.append(btn);
       }
-      kids.push(act('Defend', () => Battle.act('defend'), { sub: 'halve damage, +1 focus' }));
-      kids.push(act(`Potion (${G.house.potions})`, () => this.beginTarget('potion'), { disabled: G.house.potions <= 0 }));
-      if (Battle.kind === 'wild') kids.push(act('Flee', () => Battle.act('flee'), { cls: 'danger' }));
+      grid.append(act('Defend', () => Battle.act('defend'), { sub: 'halve damage, +1 focus' }));
+      grid.append(act(`Potion (${G.house.potions})`, () => this.beginTarget('potion'), { disabled: G.house.potions <= 0, sub: 'heal ~45%' }));
+      if (Battle.kind === 'wild') grid.append(act('Flee', () => Battle.act('flee'), { cls: 'danger', sub: 'try to escape' }));
     }
+    kids.push(grid);
   } else {
-    kids.push(h('p', { class: 'dim' }, u ? `${u.name} is acting…` : '…'));
+    kids.push(h('div', { class: 'bt-head' }, h('p', { class: 'dim' }, u ? `${u.name} is acting…` : '…'), auto));
   }
-  kids.push(h('label', { class: 'auto' }, h('input', { type: 'checkbox', checked: Battle.auto, onchange: (e) => { Battle.auto = e.target.checked; if (Battle.auto && Battle.waiting) { Battle.waiting = false; Battle.ai(Battle.cur); } } }), ' Auto-battle'));
   kids.push(h('div', { class: 'blog' }, ...Battle.log.map((l) => h('div', {}, l))));
   p.replaceChildren(...kids);
-  // Keep the battle canvas full-bleed on phones; the move HUD overlays it.
-  if (this.isMobile() && this.mob) $('#stage').style.bottom = '';
+  // Keep the battle canvas full-bleed on phones; the arena is fitted into the space above the menu.
+  if (this.isMobile() && this.mob) { $('#stage').style.bottom = ''; Render.battleInset = this.mob.sheet.offsetHeight || 0; }
+  else Render.battleInset = 0;
 };
 UI.beginTarget = function (kind) {
   this.targeting = kind;
