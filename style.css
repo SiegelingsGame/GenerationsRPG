@@ -1212,3 +1212,10 @@ body.opening-cutscene-active #guide-goal { visibility: hidden !important; }
 .takein-go.plain { background: #2a2636; border-color: var(--line); color: var(--text); }
 .takein-go.plain small { color: var(--dim); }
 .churchview .camp-say { border-color: #7a5fa8; }
+.tip { margin: -4px 0 10px; }
+.tip-btn { background: none; border: none; padding: 6px 0; color: var(--gold); font: inherit; font-size: 14px; cursor: pointer; }
+.tip-body { margin-top: 4px; padding: 10px 12px; border-radius: 12px; background: #2a2416; border: 1px solid #6d5a33; font-size: 13px; line-height: 1.4; }
+.tip-body p { margin: 0 0 6px; }
+.tip-body p:last-child { margin-bottom: 0; }
+.tip-body ul { margin: 0 0 6px; padding-left: 18px; color: var(--dim); }
+.takein-none { margin: 4px 0; }

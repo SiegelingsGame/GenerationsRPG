@@ -241,11 +241,21 @@ UI.showTakeIn = function (kind = 'ward') {
       ward ? 'Take in' : 'Accept', h('small', {}, ward ? 'their parent agrees' : `${cost} gold`)));
   const church = typeof Church !== 'undefined' ? Church.nearest() : null;
   const churchHint = church ? `The nearest orphanage is at the ${Church.nameFor(church)}${G.world.towns[church.churchTown] ? ' by ' + G.world.towns[church.churchTown].name : ''}.` : 'Churches keep orphanages.';
-  const empty = ward
-    ? [h('p', { class: 'dim' }, 'None of your companions or court have young children who could come to you.'),
-      h('p', { class: 'takein-what' }, `For a child with no one, visit a church orphanage. ${churchHint}`)]
-    : [h('p', { class: 'dim' }, 'No young adult among your people’s children is free to serve.'),
-      h('p', { class: 'takein-what' }, 'Squires come from the children of your House, your Guard and your court once they come of age. Recruit companions with families, and raise children of your own.')];
+  // ⓘ who qualifies: a tap-to-open tip (hover alone does nothing on a phone). Opens by itself when nobody does.
+  const why = Game.takeInWhy(kind);
+  const rule = ward
+    ? 'Wards are young children, born or adopted, of someone in your House, your Guard or your court, including those who died in your service. Strangers are never offered.'
+    : 'Squires are the sons and daughters, born or adopted, of your House, your Guard or your court, once they come of age and while still young. Strangers are never offered.';
+  const tipBody = h('div', { class: 'tip-body', id: `tip-${kind}`, hidden: !!list.length, role: 'note' },
+    h('p', {}, rule),
+    !list.length && why.reasons.length ? h('ul', {}, why.reasons.map((r) => h('li', {}, r))) : null,
+    !list.length && why.soon.length ? h('p', { class: 'good' }, 'Coming of age soon: ', why.soon.map((x) => `${x.c.name} in ${x.yrs} yr${x.yrs === 1 ? '' : 's'}`).join(', '), '.') : null,
+    ward ? h('p', {}, `Orphans with no one at all are cared for by the churches. ${churchHint}`)
+      : h('p', {}, 'To have more: recruit companions who have families, take in wards, and raise children of your own.'));
+  const tipBtn = h('button', { class: 'tip-btn', type: 'button', 'aria-expanded': list.length ? 'false' : 'true', 'aria-controls': `tip-${kind}`,
+    onclick: () => { tipBody.hidden = !tipBody.hidden; tipBtn.setAttribute('aria-expanded', tipBody.hidden ? 'false' : 'true'); } },
+  'ⓘ ', list.length ? `Who can be a ${ward ? 'ward' : 'squire'}?` : `Why is no one here?`);
+  const empty = [h('p', { class: 'dim takein-none' }, ward ? 'No child of your people can come to you right now.' : 'No one of your people can serve as a squire right now.')];
   this.replaceOrOpen([
     h('div', { class: 'takein-tabs', role: 'tablist' },
       h('button', { class: ward ? 'on' : '', role: 'tab', onclick: () => this.showTakeIn('ward') }, h('span', { 'aria-hidden': 'true' }, '🧒'), ' Ward'),
@@ -253,6 +263,7 @@ UI.showTakeIn = function (kind = 'ward') {
     h('p', { class: 'takein-what' }, ward
       ? 'A child of your court raised in your home. They take your name and can become your heir.'
       : `A son or daughter of your people who joins your party. They keep their own class and learn ${mc.name}'s ${classOf(mc).name} class on top.`),
+    h('div', { class: 'tip' }, tipBtn, tipBody),
     broke && list.length ? h('p', { class: 'bad' }, `You need ${cost} gold.`) : null,
     ...(list.length ? list.slice(0, 4).map(card) : empty),
     list.length > 4 ? h('p', { class: 'dim' }, `+${list.length - 4} more.`) : null,

@@ -700,6 +700,35 @@ Game.courtWards = function () {
   return Object.values(G.chars).filter((c) => c.alive && !isAdult(c) && !c.evil && c.status === 'npc' && c.house !== G.house.name
     && this.parentsOf(c).some((p) => this.isCourtPerson(p))).sort((a, b) => a.born - b.born);
 };
+// Why nobody (or few) can be taken in right now, in plain words, plus who is getting close.
+Game.takeInWhy = function (kind) {
+  const ward = kind === 'ward';
+  const people = Object.values(G.chars).filter((p) => this.isCourtPerson(p));
+  const kids = [...new Set(people.flatMap((p) => p.children || []))].map(ch).filter((c) => c && c.alive && c.id !== G.mcId);
+  const out = { reasons: [], soon: [] };
+  if (!kids.length) {
+    const n = people.filter((p) => p.alive).length;
+    out.reasons.push(`Nobody in your House, Guard or court has children yet (${n} ${n === 1 ? 'person' : 'people'} counted).`);
+    return out;
+  }
+  if (ward) {
+    const own = kids.filter((c) => c.house === G.house.name).length;
+    const grown = kids.filter((c) => c.house !== G.house.name && isAdult(c)).length;
+    if (own) out.reasons.push(`${own} ${own === 1 ? 'child is' : 'children are'} already of your House.`);
+    if (grown) out.reasons.push(`${grown} ${grown === 1 ? 'is' : 'are'} grown up: too old to be a ward (they may suit as a squire).`);
+    const taken = kids.filter((c) => !isAdult(c) && c.house !== G.house.name && c.status !== 'npc').length;
+    if (taken) out.reasons.push(`${taken} already ${taken === 1 ? 'lives' : 'live'} with your party or estate.`);
+  } else {
+    const young = kids.filter((c) => !isAdult(c));
+    const old = kids.filter((c) => isAdult(c) && stageKey(c) !== 'youth');
+    const serving = kids.filter((c) => isAdult(c) && c.squireOf);
+    if (young.length) out.reasons.push(`${young.length} ${young.length === 1 ? 'is' : 'are'} still a child. Squires must have come of age.`);
+    if (old.length) out.reasons.push(`${old.length} ${old.length === 1 ? 'is' : 'are'} past their youth: too old to start as a squire.`);
+    if (serving.length) out.reasons.push(`${serving.length} already ${serving.length === 1 ? 'serves' : 'serve'} as a squire.`);
+    out.soon = young.map((c) => ({ c, yrs: Math.max(1, Math.ceil(GD.RACES[c.race].maturity - age(c))) })).sort((a, b) => a.yrs - b.yrs).slice(0, 3);
+  }
+  return out;
+};
 GD.SQUIRE_COST = 50;
 // young adults whose parents are of your House, party or court, and who serve no one yet
 Game.squireCandidates = function () {
