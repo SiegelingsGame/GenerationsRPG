@@ -314,6 +314,11 @@ function kill(c, cause) {
   c.died = G.day;
   c.cause = cause;
   const wasStatus = c.status;
+  // those who die in the House's service wait for a burial, and their loss weighs on everyone
+  if (c.house === G.house.name || wasStatus === 'party' || wasStatus === 'household') {
+    c.diedServing = true;
+    if (typeof addMorale === 'function') addMorale(wasStatus === 'party' || c.id === G.mcId ? -12 : -6);
+  }
   c.status = 'dead';
   G.party = G.party.filter((id) => id !== c.id);
   if (c.id === G.mcId) G.pendingSuccession = true;
@@ -595,7 +600,10 @@ function yearTickInner() {
   const E = era();
   const y = year();
   // income
-  const income = Math.round(GD.ESTATE[h.tier].income * E.income + h.up.livestock * 40);
+  let income = Math.round(GD.ESTATE[h.tier].income * E.income + h.up.livestock * 40);
+  // Aurel's blessing: one rich harvest, then it is spent
+  if (typeof blessed === 'function' && blessed('harvest')) { income = Math.round(income * 1.5); delete h.blessings.harvest; }
+  if (typeof Church !== 'undefined') Church.yearTick();
   h.gold += income;
   addProsperity(E.drift + (G.world.era.type === 'golden' ? 0 : 0));
 
@@ -788,6 +796,7 @@ function birthOdds(a, b) {
     notes.push(bd >= 60 ? { t: `Deep bond (${Math.round(bd)})`, v: 1 } : bd < 20 ? { t: `Distant (bond ${Math.round(bd)})`, v: -1 } : { t: `Fond of each other (bond ${Math.round(bd)})`, v: 0 });
     if (recentlyClose(a, b)) { p *= 1.3; notes.push({ t: 'Spent time together this year', v: 1 }); }
     else notes.push({ t: 'Spend time together to raise the odds', v: 0 });
+    if (typeof blessed === 'function' && blessed('fertility')) { p *= 1.4; notes.push({ t: 'Blessed by Mirya, the Tide-Mother', v: 1 }); }
   }
   const shown = clamp(p, 0, 0.9);
   return { p: a.infertile || b.infertile ? 0 : shown, shown, why: null, notes };

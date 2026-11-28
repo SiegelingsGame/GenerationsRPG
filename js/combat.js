@@ -27,6 +27,8 @@ function unitFromChar(c, side, slot, boss) {
   // the class shapes how this person fights
   const m = GD.CLASSES[u.cls].mods;
   u.atk *= m.atk; u.def *= m.def; u.mag *= m.mag; u.heal *= m.heal; u.spd *= m.spd;
+  // your Guard fights with the House's spirit: morale (±10%) and the Iron Warden's blessing
+  if (side === 'party' && !boss && typeof battleSpirit === 'function') { const k = battleSpirit(); u.atk *= k; u.mag *= k; }
   // warlocks begin battle with their full pact (4 focus)
   if (u.cls === 'warlock') u.focus = Battle.maxFocus(u);
 

@@ -303,6 +303,7 @@ Game.enterWorld = function (fresh) {
   Equip.loadUi();
   Equip.ensureHouse();
   Guide.init();
+  Church.ensure();
   UI.refresh();
   saveGame();
   if (fresh) Guide.welcome();
@@ -400,6 +401,7 @@ Game.battle = function (enemies, opts) {
   UI.targeting = null;
   Living.stop();
   if (TownView.open) TownView.close();
+  if (ChurchView.open) ChurchView.close();
   if (typeof FxLayer !== 'undefined') FxLayer.playTransition(opts.kind === 'dungeon' ? 'slash-wipe' : 'iris');
   Battle.start({
     enemies, kind: opts.kind, title: opts.title,
@@ -664,23 +666,12 @@ Game.interact = function (c, kind) {
   this.after(true);
 };
 
-// ---- adoption: an orphan of the realm becomes a child of the House
-Game.adoptables = function () {
-  let list = Object.values(G.chars).filter((c) => c.alive && c.status === 'npc' && !isAdult(c) && (c.orphaned || c.parents.every((p) => !ch(p) || !ch(p).alive)));
-  if (list.length < 3) {
-    for (let i = list.length; i < 3; i++) {
-      const race = randomRace();
-      const k = makeChar({ race, born: G.day - R.int(0, Math.max(1, GD.RACES[race].maturity - 2)) * DAYS_PER_YEAR, birth: 'lowborn', lineageKnown: false, secret: R.weighted({ noble: 1, warrior: 1, common: 4, tainted: 0.6 }), corruption: 0 });
-      k.orphaned = true; k.foundling = true;
-      list.push(k);
-    }
-  }
-  return list.slice(0, 6);
-};
-Game.adopt = function (k) {
+// ---- adoption: a child becomes a ward of the House, can carry its name and be named heir
+Game.adopt = function (k, cost = 0) {
   const mc = ch(G.mcId);
   const sp = spouseOf(mc);
-  G.house.gold -= 40;
+  G.house.gold -= cost;
+  const from = [...k.parents, ...(k.adoptedBy || [])].map(ch).find((p) => this.isCourtPerson(p));
   k.house = G.house.name;
   k.status = 'household';
   k.adoptedBy = [mc.id, sp ? sp.id : null].filter(Boolean);
@@ -693,47 +684,49 @@ Game.adopt = function (k) {
   if (sp) addBond(k, sp, 20);
   if (!G.heirId) G.heirId = k.id;
   recordChoice('open', 1, mc.id);
-  chron(`${mc.name}${sp ? ' and ' + sp.name : ''} adopted ${k.name}${k.foundling ? ', a foundling' : ', an orphan'}, into House ${G.house.name}.`, 'birth', [k.id, mc.id], 'adopt');
+  if (from && from.alive) addBond(from, mc, 10); // a parent honoured that the House takes their child in
+  chron(`${mc.name}${sp ? ' and ' + sp.name : ''} took in ${k.name}${from ? `, child of ${from.name},` : k.foundling ? ', a foundling,' : ', an orphan,'} as a ward of House ${G.house.name}.`, 'good', [k.id, mc.id], 'adopt');
   this.after();
 };
 
-// ---- squires: a young fighter sworn to serve the head of the House and learn at their side
+// ---- wards and squires come from your own people: the children (born or adopted) of your House,
+// your party and your court, including those who fell in your service. Orphans are found at churches.
+Game.isCourtPerson = function (p) {
+  return !!p && (p.house === G.house.name || p.status === 'party' || p.status === 'household' || (!p.alive && (p.diedServing || p.servedHouse)));
+};
+Game.parentsOf = function (c) { return [...(c.parents || []), ...(c.adoptedBy || [])].map(ch).filter(Boolean); };
+// children of your companions and court who are not yet of your House
+Game.courtWards = function () {
+  return Object.values(G.chars).filter((c) => c.alive && !isAdult(c) && !c.evil && c.status === 'npc' && c.house !== G.house.name
+    && this.parentsOf(c).some((p) => this.isCourtPerson(p))).sort((a, b) => a.born - b.born);
+};
 GD.SQUIRE_COST = 50;
+// young adults whose parents are of your House, party or court, and who serve no one yet
 Game.squireCandidates = function () {
-  const key = `${year()}-${seasonName()}`;
-  const pool = G.squirePool && G.squirePool.key === key
-    ? G.squirePool.ids.map(ch).filter((c) => c && c.alive && c.status === 'npc') : [];
-  while (pool.length < 3) {
-    const race = R.chance(0.5) ? ch(G.mcId).race : randomRace();
-    const r = GD.RACES[race];
-    const youthYears = Math.max(1, Math.floor((r.primeEnd - r.maturity) * 0.3) - 1);
-    const a = r.maturity + R.int(0, youthYears);
-    const c = makeChar({ race, born: G.day - a * DAYS_PER_YEAR - R.int(0, 200), birth: R.weighted({ lowborn: 3, highborn: 1 }),
-      level: R.int(1, 2), loyalty: 40, corruption: R.int(0, 8) });
-    c.hp = maxHp(c);
-    pool.push(c);
-  }
-  G.squirePool = { key, ids: pool.map((c) => c.id) };
-  return pool;
+  const mc = ch(G.mcId);
+  return Object.values(G.chars).filter((c) => c.alive && c.id !== G.mcId && !c.evil && c.status !== 'rival' && !c.squireOf
+    && isAdult(c) && stageKey(c) === 'youth' && (!mc || c.id !== mc.spouse)
+    && this.parentsOf(c).some((p) => p.id !== c.id && this.isCourtPerson(p)))
+    .sort((a, b) => (b.house === G.house.name) - (a.house === G.house.name) || b.level - a.level);
 };
 Game.takeSquire = function (c) {
   const mc = ch(G.mcId);
   if (G.house.gold < GD.SQUIRE_COST) return UI.toast(`A squire's kit costs ${GD.SQUIRE_COST} gold.`);
-  if (householdCount() >= GD.ESTATE[G.house.tier].household) return UI.toast('Your household is full. Improve your estate first.');
+  const joining = c.status !== 'party' && c.status !== 'household';
+  if (joining && householdCount() >= GD.ESTATE[G.house.tier].household) return UI.toast('Your household is full. Improve your estate first.');
   G.house.gold -= GD.SQUIRE_COST;
   c.squireOf = mc.id;
   // the squire keeps their natural calling and trains in their liege's
   classFor(c);
   const liegeCls = classFor(mc);
   if (canLearnClass(c, liegeCls)) startTraining(c, mc, liegeCls);
-  c.loyalty = 60; c.corruption = 0;
-  addBond(c, mc, 30);
+  c.loyalty = Math.max(c.loyalty, 60); c.corruption = 0;
+  addBond(c, mc, c.house === G.house.name ? 15 : 30);
   Equip.ensureChar(c);
   if (!Equip.worn(c).length) Equip.seedStarter(c, 1);
   c.hp = maxHp(c);
-  if (G.party.length < 4) { c.status = 'party'; G.party.push(c.id); } else c.status = 'household';
+  if (c.status !== 'party') { if (G.party.length < 4) { c.status = 'party'; G.party.push(c.id); } else c.status = 'household'; }
   c.servedHouse = true;
-  if (G.squirePool) G.squirePool.ids = G.squirePool.ids.filter((id) => id !== c.id);
   recordChoice('martial', 0.5, mc.id);
   chron(`${c.name} swears to serve ${mc.name} as squire${c.status === 'household' ? ' (waiting at the estate)' : ''}.`, 'good', [c.id, mc.id], 'join');
   this.after();
@@ -819,7 +812,7 @@ Game.hireRetinue = function (cost) { G.house.gold -= cost; G.house.retinue++; Lo
 
 // ---------------------------------------------------------------- after every action
 Game.after = function (quiet) {
-  if (TownView.open && (G.pendingSuccession || G.pendingVictory || G.pendingSaved || G.pendingWorldEnd || G.pendingDoom)) TownView.close();
+  if (G.pendingSuccession || G.pendingVictory || G.pendingSaved || G.pendingWorldEnd || G.pendingDoom) { if (TownView.open) TownView.close(); if (ChurchView.open) ChurchView.close(); }
   if (G.pendingVictory) {
     G.pendingVictory = false;
     UI.closeAll();
@@ -853,6 +846,7 @@ Game.after = function (quiet) {
     return;
   }
   TownView.sync();
+  ChurchView.sync();
   if (G.pendingSuccession) {
     G.newsQueue = []; // succession timeline covers the same events
     return this.succession();

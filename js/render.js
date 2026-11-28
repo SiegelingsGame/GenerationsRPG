@@ -242,7 +242,7 @@ Render.drawRoute = function (path, opts = {}) {
 Render.refreshHoverRoute = function () {
   this.hoverRoute = null; this.hoverDest = null; this.hoverDays = 0; this.hoverOk = true;
   if (!this.mouse || Living.moving || this.move || !LS.ready || !G || G.mode !== 'world') return;
-  if (Battle.active || TownView.open || Campfire.open || (UI.modalStack && UI.modalStack.length)) return;
+  if (Battle.active || TownView.open || ChurchView.open || Campfire.open || (UI.modalStack && UI.modalStack.length)) return;
   const wp = this.screenToWorld(this.mouse);
   const key = `${wp.x.toFixed(1)},${wp.y.toFixed(1)},${G.ppos.x.toFixed(1)},${G.ppos.y.toFixed(1)}`;
   if (key === this._hoverKey && this._hoverCache) {
@@ -390,14 +390,14 @@ Render.drawLandscape = function () {
     if (!t.feature) continue;
     const p = this.iso(t.x, t.y, 0);
     if (!view(p.x, p.y)) continue;
-    if (t.feature === 'estate' || t.feature === 'town' || t.feature === 'ruins' || t.feature === 'shrine') {
+    if (t.feature === 'estate' || t.feature === 'town' || t.feature === 'ruins' || t.feature === 'shrine' || t.feature === 'church') {
       c.fillStyle = t.feature === 'estate' ? 'rgba(255, 215, 120, 0.14)' : 'rgba(200, 190, 160, 0.1)';
       c.beginPath(); c.ellipse(p.x, p.y + 4, 22, 11, 0, 0, Math.PI * 2); c.fill();
     }
     // nearby place owns this spot as a live nametag chip
     if (typeof LocationPrompt !== 'undefined' && LocationPrompt.hidesLabel(t)) continue;
     const town = t.feature === 'town' ? G.world.towns[t.townIdx] : null;
-    const label = town ? `${town.name}${town.size >= 4 ? ' ★' : ''}` : t.feature === 'estate' ? `House ${G.house.name}`
+    const label = town ? `${town.name}${town.size >= 4 ? ' ★' : ''}` : t.feature === 'estate' ? `House ${G.house.name}` : t.feature === 'church' ? Church.nameFor(t)
       : Events.label(t) ? Events.label(t) : t.feature === 'spire' ? 'The Black Spire' : t.feature === 'shrine' ? (t.lit ? 'Beacon (lit)' : 'Beacon Shrine')
         : `${t.ruinOf ? 'Ruins of ' + t.ruinOf : 'Ruins'}${t.cleared ? ' (cleared)' : ''}`;
     const w = c.measureText(label).width + 10;
@@ -838,7 +838,7 @@ Render.drawWorldTiles = function () {
     const zx = (p.x - this.w / 2) * this.zoom + this.w / 2, zy = (p.y - this.h / 2) * this.zoom + this.h / 2;
     if (zx < -60 || zx > this.w + 60 || zy < -60 || zy > this.h + 100) continue;
     const town = t.feature === 'town' ? G.world.towns[t.townIdx] : null;
-    const label = town ? `${town.name}${town.size >= 4 ? ' ★' : ''}` : t.feature === 'estate' ? `House ${G.house.name}`
+    const label = town ? `${town.name}${town.size >= 4 ? ' ★' : ''}` : t.feature === 'estate' ? `House ${G.house.name}` : t.feature === 'church' ? Church.nameFor(t)
       : Events.label(t) ? Events.label(t) : t.feature === 'spire' ? 'The Black Spire' : t.feature === 'shrine' ? (t.lit ? 'Beacon (lit)' : 'Beacon Shrine')
         : `${t.ruinOf ? 'Ruins of ' + t.ruinOf : 'Ruins'}${t.cleared ? ' (cleared)' : ''}`;
     c.fillStyle = 'rgba(0,0,0,0.55)';
@@ -1019,6 +1019,7 @@ Render.drawFeature = function (t) {
   if (t.feature === 'ruins') this.drawRuins(p, t.cleared);
   if (t.feature === 'spire') this.drawSpire(p);
   if (t.feature === 'shrine') this.drawShrine(p, t.lit);
+  if (t.feature === 'church') this.drawChurch(p, t);
   if (t.feature === 'camp' || t.feature === 'cave' || t.feature === 'mine') Events.drawFeature(this, t, p);
 };
 

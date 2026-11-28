@@ -1195,3 +1195,20 @@ body.opening-cutscene-active #guide-goal { visibility: hidden !important; }
 .opening-cutscene .oc-flashfx { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen; }
 .opening-cutscene .oc-flashfx.go { animation: oc-flash 0.7s ease-out; }
 @keyframes oc-flash { 0% { opacity: var(--oc-flash, .5); } 100% { opacity: 0; } }
+
+/* ---- morale, churches ---- */
+.hv-morale { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 10px; padding: 8px 10px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); font-size: 13px; }
+.hv-morale b { color: var(--text); }
+.hv-morale small { grid-column: 1 / -1; font-size: 11px; }
+.takein-kin { color: var(--gold) !important; }
+.ch-god { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 8px; }
+.ch-god > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ch-god b { color: var(--gold); font-size: 16px; }
+.ch-god small { color: var(--dim); }
+.ch-god p { margin: 6px 0 0; font-size: 13px; line-height: 1.4; }
+.ch-glass { flex: none; border-radius: 8px; background: #17131b; }
+.ch-rites { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.ch-rites .takein-go { min-height: 44px; min-width: 84px; }
+.takein-go.plain { background: #2a2636; border-color: var(--line); color: var(--text); }
+.takein-go.plain small { color: var(--dim); }
+.churchview .camp-say { border-color: #7a5fa8; }

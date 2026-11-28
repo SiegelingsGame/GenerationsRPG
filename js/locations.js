@@ -23,13 +23,13 @@ const LocationPrompt = {
   },
 
   name(t) {
-    return t.feature === 'town' ? G.world.towns[t.townIdx].name : t.feature === 'estate' ? `House ${G.house.name}` :
+    return t.feature === 'town' ? G.world.towns[t.townIdx].name : t.feature === 'estate' ? `House ${G.house.name}` : t.feature === 'church' ? Church.nameFor(t) :
       Events.label(t) || ({ ruins: 'Ruins', spire: 'The Black Spire', shrine: 'Beacon Shrine' }[t.feature]) || t.feature;
   },
 
   // glyph that blooms out of the nametag when you are close enough to act
   icon(t) {
-    return ({ town: '⌂', estate: '♛', ruins: '†', shrine: '✦', spire: '▲', camp: '▲', cave: '◈', mine: '◈' }[t.feature]) || '·';
+    return ({ town: '⌂', estate: '♛', ruins: '†', shrine: '✦', church: '✝', spire: '▲', camp: '▲', cave: '◈', mine: '◈' }[t.feature]) || '·';
   },
 
   // skip the painted canvas label for the active nearby place so the DOM chip owns that spot
@@ -61,9 +61,10 @@ const LocationPrompt = {
   open(t, mode) {
     Living.stop(); UI.closeDrawer();
     if (mode === 'enter' && t.feature === 'town') return TownView.start(t);
+    if (mode === 'enter' && t.feature === 'church') return ChurchView.start(t);
     const rows = t.feature === 'town' ? UI.townPanel(t).filter((e, i) => i !== 2) :
       t.feature === 'estate' ? UI.estatePanel() : t.feature === 'ruins' ? UI.ruinsPanel(t) :
-      t.feature === 'spire' ? UI.spirePanel() : Events.panel(t) || [h('p', {}, t.lit ? 'The beacon burns again.' : 'Reach a beacon marked by your current quest to rekindle it.')];
+      t.feature === 'spire' ? UI.spirePanel() : t.feature === 'church' ? UI.churchPanel(t) : Events.panel(t) || [h('p', {}, t.lit ? 'The beacon burns again.' : 'Reach a beacon marked by your current quest to rekindle it.')];
     const body = h('div', { class: 'here-sheet' },
       h('p', { class: 'dim' }, 'Pick a clear task, or keep moving.'),
       ...rows.filter(Boolean));
@@ -129,7 +130,7 @@ const LocationPrompt = {
   render() {
     this.ensure();
     const t = this.nearby();
-    const blocked = !t || Battle.active || TownView.open || Campfire.open || UI.modalStack.length > 0 || Game.busy || Living.moving;
+    const blocked = !t || Battle.active || TownView.open || ChurchView.open || Campfire.open || UI.modalStack.length > 0 || Game.busy || Living.moving;
     if (blocked) {
       if (this.lastKey) { this.collapse(); this.lastKey = null; }
       this.tile = null;
@@ -154,7 +155,7 @@ const LocationPrompt = {
     this.el.dataset.feature = t.feature || '';
     this.iconEl.textContent = this.icon(t);
     this.title.textContent = this.name(t);
-    this.enter.textContent = t.feature === 'town' ? 'Enter' : 'Explore';
+    this.enter.textContent = t.feature === 'town' || t.feature === 'church' ? 'Enter' : 'Explore';
     this.pass.textContent = 'Pass through';
 
     // pin the chip exactly where the painted nametag sat

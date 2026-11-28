@@ -61,7 +61,7 @@ UI.init = function () {
     if (this.modalStack.length && !this.modalStack[this.modalStack.length - 1].locked) return this.closeModal();
     if (this.mob && this.mob.camera && this.mob.camera.open) { this.mob.camera.open = false; return; }
     if (this.mob && this.mob.logPanel && this.mob.logPanel.open) { this.closeLog(); return; }
-    if (Living.moving && !Battle.active && !TownView.open && !Campfire.open) Living.cancel('You halt on the road.');
+    if (Living.moving && !Battle.active && !TownView.open && !ChurchView.open && !Campfire.open) Living.cancel('You halt on the road.');
   });
 };
 
@@ -208,41 +208,55 @@ UI.swipeToClose = function (el, close) {
   });
 };
 // Take someone in: a ward (a child raised as your own, who can become heir) or a squire (a young
-// fighter who serves the head of the House). One screen, two big choices, three people each.
+// fighter who serves the head of the House). Only your own people's children: those of your House,
+// party and court. Orphans are found at church orphanages.
 UI.showTakeIn = function (kind = 'ward') {
   const ward = kind === 'ward';
-  let list;
-  if (ward) {
-    // keep the same three children for the season, so switching tabs doesn't reshuffle them
-    const key = `${year()}-${seasonName()}`;
-    list = G.wardPool && G.wardPool.key === key ? G.wardPool.ids.map(ch).filter((c) => c && c.alive && c.status === 'npc' && !isAdult(c)) : [];
-    if (list.length < 3) list = Game.adoptables().slice(0, 3);
-    G.wardPool = { key, ids: list.map((c) => c.id) };
-  } else list = Game.squireCandidates();
-  const cost = ward ? 40 : GD.SQUIRE_COST;
+  const mc = ch(G.mcId);
+  const list = ward ? Game.courtWards() : Game.squireCandidates();
+  const cost = ward ? 0 : GD.SQUIRE_COST;
   const broke = G.house.gold < cost;
   // what stands out compared with others of their race
   const best = (c) => { const rb = GD.RACES[c.race].base, edge = (k) => c.base[k] + c.bonus[k] - rb[k] + k.length * 0.001;
     const k = STATS.reduce((a, b) => (edge(b) > edge(a) ? b : a)); return { str: 'strong', agi: 'quick', int: 'clever', wil: 'steady', vit: 'tough' }[k]; };
+  // whose child they are, in a few words
+  const kinOf = (c) => {
+    const ps = Game.parentsOf(c).filter((p) => Game.isCourtPerson(p));
+    const p = ps[0];
+    if (!p) return '';
+    const rel = p.id === G.mcId ? 'your' : `${p.name}'s`;
+    const kid = c.gender === 'woman' ? 'daughter' : 'son';
+    const who = p.id === G.mcId ? '' : p.house === G.house.name ? ' (your kin)' : p.status === 'party' ? ' (in your Guard)' : p.alive ? ' (of your court)' : ', who fell in your service';
+    return `${rel[0].toUpperCase() + rel.slice(1)} ${(c.adoptedBy || []).includes(p.id) ? 'adopted ' : ''}${kid}${who}`;
+  };
   const card = (c) => h('div', { class: 'takein-card' },
     portrait(c, 64),
     h('div', { class: 'takein-info' },
       h('b', {}, c.name),
-      h('small', {}, `${GD.RACES[c.race].name} · ${ageStr(c)} ${ageStr(c) === 1 ? 'year' : 'years'} old`),
-      h('small', {}, `Naturally ${best(c)}${c.trait ? ' · ' + GD.TRAITS[c.trait].name : ''}`),
-      ward ? null : h('small', { class: 'takein-cls' }, (() => { const own = classFor(c), lc = classFor(ch(G.mcId));
+      h('small', { class: 'takein-kin' }, kinOf(c)),
+      h('small', {}, `${GD.RACES[c.race].name} · ${ageStr(c)} yrs · naturally ${best(c)}${c.trait ? ' · ' + GD.TRAITS[c.trait].name : ''}`),
+      ward ? null : h('small', { class: 'takein-cls' }, (() => { const own = classFor(c), lc = classFor(mc);
         return own === lc ? `A born ${GD.CLASSES[own].name}, like you` : `${GD.CLASSES[own].name} · will learn ${GD.CLASSES[lc].name} from you`; })())),
-    h('button', { class: 'takein-go', disabled: broke, onclick: () => { this.closeAll(); ward ? Game.adopt(c) : Game.takeSquire(c); } },
-      ward ? 'Take in' : 'Accept', h('small', {}, `${cost} gold`)));
+    h('button', { class: 'takein-go', disabled: broke, onclick: () => { this.closeAll(); ward ? Game.adopt(c, 0) : Game.takeSquire(c); } },
+      ward ? 'Take in' : 'Accept', h('small', {}, ward ? 'their parent agrees' : `${cost} gold`)));
+  const church = typeof Church !== 'undefined' ? Church.nearest() : null;
+  const churchHint = church ? `The nearest orphanage is at the ${Church.nameFor(church)}${G.world.towns[church.churchTown] ? ' by ' + G.world.towns[church.churchTown].name : ''}.` : 'Churches keep orphanages.';
+  const empty = ward
+    ? [h('p', { class: 'dim' }, 'None of your companions or court have young children who could come to you.'),
+      h('p', { class: 'takein-what' }, `For a child with no one, visit a church orphanage. ${churchHint}`)]
+    : [h('p', { class: 'dim' }, 'No young adult among your people’s children is free to serve.'),
+      h('p', { class: 'takein-what' }, 'Squires come from the children of your House, your Guard and your court once they come of age. Recruit companions with families, and raise children of your own.')];
   this.replaceOrOpen([
     h('div', { class: 'takein-tabs', role: 'tablist' },
       h('button', { class: ward ? 'on' : '', role: 'tab', onclick: () => this.showTakeIn('ward') }, h('span', { 'aria-hidden': 'true' }, '🧒'), ' Ward'),
       h('button', { class: ward ? '' : 'on', role: 'tab', onclick: () => this.showTakeIn('squire') }, h('span', { 'aria-hidden': 'true' }, '🛡'), ' Squire')),
     h('p', { class: 'takein-what' }, ward
-      ? 'A child with no family, raised in your home. They take your name and can become your heir.'
-      : `A young fighter who joins your party. They keep their own class and learn ${ch(G.mcId).name}'s ${classOf(ch(G.mcId)).name} class on top. Young people level up faster.`),
-    broke ? h('p', { class: 'bad' }, `You need ${cost} gold.`) : null,
-    ...list.map(card),
+      ? 'A child of your court raised in your home. They take your name and can become your heir.'
+      : `A son or daughter of your people who joins your party. They keep their own class and learn ${mc.name}'s ${classOf(mc).name} class on top.`),
+    broke && list.length ? h('p', { class: 'bad' }, `You need ${cost} gold.`) : null,
+    ...(list.length ? list.slice(0, 4).map(card) : empty),
+    list.length > 4 ? h('p', { class: 'dim' }, `+${list.length - 4} more.`) : null,
+    ward && list.length ? h('p', { class: 'dim small' }, `Orphans: ${churchHint}`) : null,
   ], { title: 'Ward or squire', sheet: true, takein: true });
 };
 // re-open a screen in place when switching its tabs
@@ -413,6 +427,10 @@ UI.houseGuard = function () {
       h('div', { class: 'hv-strip' }, waiting.length ? waiting.map((c) => h('button', { class: 'hv-chip r-' + this.roleOf(c).k, onclick: this.fromHouse(() => this.showChar(c)) },
         portrait(c, 40), h('b', {}, c.name), h('small', {}, `${classOf(c).name} · L${c.level}`)))
         : h('small', { class: 'dim hv-none' }, 'Nobody waiting at home.'))),
+    h('div', { class: 'hv-morale' },
+      h('span', {}, 'Morale ', h('b', {}, Math.round(houseMorale())), ` · ${moraleName()}`),
+      bar(houseMorale(), 100, houseMorale() >= 50 ? 'hp' : 'xp'),
+      h('small', {}, `${battleSpirit() >= 1 ? '+' : ''}${Math.round((battleSpirit() - 1) * 100)}% in battle${blessed('valour') ? ' (blessed by Kethran)' : ''}${Church.unburied().length ? ` · ${Church.unburied().length} dead wait for burial` : ''}`)),
     h('div', { class: 'hv-guard-foot' },
       h('span', {}, h('b', {}, G.house.retinue), ` sworn soldier${G.house.retinue === 1 ? '' : 's'} volley each round`),
       h('span', {}, h('b', {}, G.house.potions), ' potions')));
@@ -442,7 +460,7 @@ UI.houseHeir = function () {
     sp
       ? option('♥', `Time with ${sp.name}`, odds.why || `${this.closeness(bond(sp, mc))} · ~${Math.round(odds.shown * 100)}% chance of a child this year`, this.fromHouse(() => this.showPartner()), 'love')
       : option('⚭', isWidowed(mc) ? 'Seek a new spouse' : 'Find a spouse', 'a marriage brings children, and a partner at your side', this.fromHouse(() => Game.seekNewSpouse()), 'love'),
-    option('❦', 'Adopt a ward', `40 gold · an orphan raised as your own${G.heirId ? '' : ', named heir at once'}`, this.fromHouse(() => this.showTakeIn('ward'))),
+    option('❦', 'Take in a ward', `a child of your court, or an orphan from a church${G.heirId ? '' : ' · named heir at once'}`, this.fromHouse(() => this.showTakeIn('ward'))),
     blood.length ? option('★', named ? 'Change heir' : 'Name an heir', `${blood.length} of your line can inherit`, this.fromHouse(() => this.showNameHeir())) : null,
     h('h4', { class: 'hv-sub' }, 'Line of succession'),
     st.cands.length
@@ -520,7 +538,7 @@ UI.partnerBody = function () {
       act('Spend a week together', () => { Game.interact(sp, 'time'); redo(); }, { cls: 'hl', sub: `7 days · bond up${odds.why ? '' : ' · a child likelier this year'}` }),
       act('Give a gift', () => { Game.interact(sp, 'gift'); redo(); }, { sub: '30 gold · bond up', disabled: G.house.gold < 30 }),
       b < 0 ? act('Heart-to-heart', () => { Game.interact(sp, 'talk'); redo(); }, { sub: '14 days · may heal old wounds, or open them' }) : null,
-      odds.why ? act('Adopt a ward', () => { this.closeAll(); this.showTakeIn('ward'); }, { sub: '40 gold · raise a child together' }) : null));
+      odds.why ? act('Take in a ward', () => { this.closeAll(); this.showTakeIn('ward'); }, { sub: 'a child of your court, or an orphan from a church' }) : null));
 };
 UI.showPartner = function () {
   const mc = ch(G.mcId);
@@ -568,7 +586,7 @@ UI.placeName = function () {
   if (!G || !G.world || !G.world.map) return '';
   const t = this.hereTile ? this.hereTile() : tileAt(G.pos.x, G.pos.y);
   return t.feature === 'town' ? G.world.towns[t.townIdx].name : t.feature === 'estate' ? 'Your estate' : t.feature === 'ruins' ? 'Ruins'
-    : t.feature === 'spire' ? 'The Black Spire' : t.feature === 'shrine' ? 'Beacon Shrine'
+    : t.feature === 'spire' ? 'The Black Spire' : t.feature === 'shrine' ? 'Beacon Shrine' : t.feature === 'church' ? Church.nameFor(t)
     : (Events.label && Events.label(t)) || (isWater(t) ? 'At sea' : GD.BIOMES[t.type].name);
 };
 UI.placeLayout = function () {
@@ -884,6 +902,7 @@ UI.locationActs = function () {
   else if (t.feature === 'town') body.push(...this.townPanel(t));
   else if (t.feature === 'ruins') body.push(...this.ruinsPanel(t));
   else if (t.feature === 'spire') body.push(...this.spirePanel());
+  else if (t.feature === 'church') body.push(...this.churchPanel(t));
   else if (Events.panel(t)) body.push(...Events.panel(t));
   else if (t.feature === 'shrine') body.push(h('h3', {}, 'Beacon Shrine'), h('p', { class: 'dim' }, t.lit ? 'The beacon burns again, a ward against the dark.' : 'A cold beacon from an older age.'));
   else body.push(h('h3', {}, isWater(t) ? 'At Sea' : GD.BIOMES[t.type].name), h('p', { class: 'dim' }, isWater(t) ? 'Your boat rides the waves.' : 'Click land or roads to travel. A gold path previews your route; red means no way through. Time passes only while you move.'));
@@ -1588,18 +1607,6 @@ UI.showInventory = function (c, tryId) {
   };
 
   this.modal(this._invBody(c, tryId), { title: `${c.name} — Inventory`, wide: true });
-};
-
-UI.showAdoption = function () {
-  const list = Game.adoptables();
-  this.modal([
-    h('p', { class: 'dim' }, 'Orphans and foundlings of the realm. An adopted child carries your House name, can be named heir, and inherits the House legacy, but not your blood.'),
-    h('div', { class: 'grid' }, list.map((k) => this.miniCard(k, () => { }, [
-      h('small', {}, `${bodyText(k)}${k.condition ? ' · ' + GD.CONDITIONS[k.condition].name : ''}`),
-      k.foundling ? h('small', { class: 'dim' }, 'A foundling: lineage unknown') : null,
-      act('Adopt (40g)', () => { this.closeAll(); Game.adopt(k); }, { disabled: G.house.gold < 40 }),
-    ]))),
-  ], { title: 'Adopt a Child', wide: true });
 };
 
 // ---------------------------------------------------------------- estate screens
