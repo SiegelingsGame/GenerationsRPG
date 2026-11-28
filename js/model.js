@@ -688,12 +688,7 @@ function yearTickInner() {
       }
       continue;
     }
-    let p = 0.24 * ((GD.RACES[a.race].fertility + GD.RACES[b.race].fertility) / 2) * E.births;
-    if (a.orientation === 'ace' || b.orientation === 'ace') p *= 0.35;
-    if (a.forced || b.forced) p *= 0.6;
-    if (a.trait === 'fertile' || b.trait === 'fertile') p *= 1.5;
-    if (kids >= 4) p *= 0.25;
-    if ((a.id === G.mcId || b.id === G.mcId) && kids === 0) p = Math.max(p, 0.55);
+    let p = birthOdds(a, b).p;
     if (!relevant(a) && !relevant(b)) p *= clamp(110 / living.length, 0.15, 1.3); // the land feeds only so many
     if (R.chance(p)) haveChild(a, b);
   }
@@ -755,6 +750,49 @@ function yearTickInner() {
   Log.add(yearLine, 'year');
   queueNews({ year: y, day: G.day, text: `Year ${y} · Estate income +${income}g (${GD.ERAS[G.world.era.type].short}).`, kind: 'year', ids: [], type: 'income', income });
 }
+// The yearly chance a married couple has a child, with the reasons in plain words. For a House
+// couple, a warm bond and time spent together recently make a child likelier.
+// `p` is the real chance; `shown` hides infertility nobody has discovered yet.
+const CLOSE_DAYS = DAYS_PER_YEAR; // time together counts for about a year
+function recentlyClose(a, b) {
+  return [a.closeDay, b.closeDay].some((d) => d != null && G.day - d <= CLOSE_DAYS && a.closeWith === b.id);
+}
+function birthOdds(a, b) {
+  if (!a || !b) return { p: 0, shown: 0, why: 'No partner.', notes: [] };
+  if (a.gender === b.gender) return { p: 0, shown: 0, why: 'They cannot have children together. A ward can still carry the House on.', notes: [] };
+  const old = [a, b].find((x) => ['elder', 'venerable'].includes(stageKey(x)));
+  if (old) return { p: 0, shown: 0, why: `${old.name} is too old to have children.`, notes: [] };
+  const young = [a, b].find((x) => !isAdult(x));
+  if (young) return { p: 0, shown: 0, why: `${young.name} is not yet of age.`, notes: [] };
+  const known = [a, b].filter((x) => x.infertile && x.infertileKnown);
+  if (known.length) return { p: 0, shown: 0, why: `${known.map((x) => x.name).join(' and ')} cannot have children.`, notes: [] };
+  const E = era();
+  const notes = [];
+  const kids = a.children.filter((k) => b.children.includes(k)).length;
+  const fert = (GD.RACES[a.race].fertility + GD.RACES[b.race].fertility) / 2;
+  let p = 0.24 * fert * E.births;
+  if (fert < 0.8) notes.push({ t: `${GD.RACES[a.race].fertility <= GD.RACES[b.race].fertility ? GD.RACES[a.race].name : GD.RACES[b.race].name} blood: few children`, v: -1 });
+  else if (fert > 1.15) notes.push({ t: 'A fertile people', v: 1 });
+  if (E.births < 0.95) notes.push({ t: `${E.name}: hard times for children`, v: -1 });
+  else if (E.births > 1.05) notes.push({ t: `${E.name}: a time of many births`, v: 1 });
+  if (a.orientation === 'ace' || b.orientation === 'ace') { p *= 0.35; notes.push({ t: 'Little desire between them', v: -1 }); }
+  if (a.forced || b.forced) { p *= 0.6; notes.push({ t: 'A forced marriage', v: -1 }); }
+  if (a.trait === 'fertile' || b.trait === 'fertile') { p *= 1.5; notes.push({ t: 'Fertile', v: 1 }); }
+  if (kids >= 4) { p *= 0.25; notes.push({ t: `Already ${kids} children`, v: -1 }); }
+  const head = a.id === G.mcId || b.id === G.mcId;
+  if (head && kids === 0) { p = Math.max(p, 0.55); notes.push({ t: 'Eager for a first child', v: 1 }); }
+  if (a.house === G.house.name || b.house === G.house.name) {
+    const bd = clamp((bond(a, b) + bond(b, a)) / 2, -100, 100);
+    // bond 0 → ×0.8, bond 100 → ×1.3; a cold marriage (below 0) drops further
+    p *= bd < 0 ? clamp(0.8 + bd / 250, 0.4, 0.8) : 0.8 + bd / 200;
+    notes.push(bd >= 60 ? { t: `Deep bond (${Math.round(bd)})`, v: 1 } : bd < 20 ? { t: `Distant (bond ${Math.round(bd)})`, v: -1 } : { t: `Fond of each other (bond ${Math.round(bd)})`, v: 0 });
+    if (recentlyClose(a, b)) { p *= 1.3; notes.push({ t: 'Spent time together this year', v: 1 }); }
+    else notes.push({ t: 'Spend time together to raise the odds', v: 0 });
+  }
+  const shown = clamp(p, 0, 0.9);
+  return { p: a.infertile || b.infertile ? 0 : shown, shown, why: null, notes };
+}
+
 function siblings(a, b) { return a.parents.length && a.parents.some((p) => b.parents.includes(p)); }
 
 function turnEvil(c) {
@@ -770,9 +808,10 @@ function turnEvil(c) {
 }
 
 // ---------------------------------------------------------------- succession
-function heirCandidates() {
+// `exclude`: leave someone out, e.g. the living head when asking "who would inherit today?"
+function heirCandidates(exclude = null) {
   const mc = ch(G.mcId);
-  const living = Object.values(G.chars).filter((c) => c.alive && c.house === G.house.name && !c.evil);
+  const living = Object.values(G.chars).filter((c) => c.alive && c.house === G.house.name && !c.evil && c.id !== exclude);
   const founder = G.founderId;
   const out = [];
   const add = (c, why) => { if (!out.find((o) => o.c.id === c.id)) out.push({ c, why }); };
@@ -784,7 +823,7 @@ function heirCandidates() {
   if (!out.length) {
     const sp = mc ? mc.spouse : null;
     // last resort: a sworn companion may be adopted into the House
-    Object.values(G.chars).filter((c) => c.alive && !c.evil && isAdult(c) && (c.status === 'party' || c.status === 'household') && c.loyalty >= 30 && c.id !== sp)
+    Object.values(G.chars).filter((c) => c.alive && !c.evil && isAdult(c) && (c.status === 'party' || c.status === 'household') && c.loyalty >= 30 && c.id !== sp && c.id !== exclude)
       .sort((a, b) => b.loyalty - a.loyalty).slice(0, 3).forEach((c) => add(c, 'Adopted companion'));
   }
   return out;

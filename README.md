@@ -32,6 +32,7 @@ A 2.5D roguelike, turn-based RPG about a family line. You play the head of a Hou
 | Continuous landscape: height field, rivers, roads, bridges and fords, painted terrain, fine navigation grid and free-movement paths | `js/landscape.js` |
 | Classes (Warrior, Berserker, Sorcerer, Priest, Bard, Ranger, Knight, Thief, Noble, Warlock), multi-class (inherited, squire and mentor training), abilities, status effects and the battle AI that uses them | `js/classes.js` |
 | Equipment slots and inventory try-on (armour/robes, helms/crowns, weapons/staves, boots/shoes by class) | `js/equipment.js`, `js/ui.js` |
+| Phone House screen in tabs (Court: head, spouse, heir, blood, adopted, court · Guard · Heir · Quest · More), partner page with child odds, tabbed character sheet | `js/ui.js` (`renderDrawer`, `showPartner`, `charBody`), `js/model.js` (`birthOdds`) |
 | Mobile Here / Menu actions and news popups for births, marriages, deaths and yearly income | `js/ui.js`, `js/model.js` |
 | Static data: races, eras, enemies, estate, gear | `js/data.js` |
 | PixelForge: procedural pixel attack-effect and cutscene generator shared with Siegelings TCG and ANIME VS+ (editor, CLI, runtime player, `cutscene-lineage` preset) | `pixelforge/` (open `pixelforge/index.html`; see `pixelforge/README.md`) |

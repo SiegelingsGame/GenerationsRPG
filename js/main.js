@@ -626,6 +626,12 @@ Game.interact = function (c, kind) {
     advanceDays(7);
     gain = R.int(3, 8) + (mc.trait === 'charming' ? 2 : 0) + (!isAdult(c) ? 3 : 0);
     text = !isAdult(c) ? `${mc.name} spends a week with young ${c.name}.` : `${mc.name} and ${c.name} spend time together.`;
+    if (spouseOf(mc) === c) {
+      // time together counts toward a child for about a year (see birthOdds)
+      mc.closeDay = c.closeDay = G.day; mc.closeWith = c.id; c.closeWith = mc.id;
+      gain += 2;
+      text = `${mc.name} and ${c.name} spend a quiet week together, just the two of them.`;
+    }
   } else if (kind === 'gift') {
     G.house.gold -= 30;
     gain = R.int(5, 11);

@@ -102,7 +102,7 @@ UI.buildMobile = function () {
     backdrop: h('div', { id: 'backdrop', onclick: () => this.closeDrawer() }),
     drawer: h('aside', { id: 'drawer', 'aria-hidden': 'true' },
       h('div', { class: 'grip', 'aria-hidden': 'true' }),
-      h('div', { class: 'drawer-head' }, h('b', {}, 'Your House'), h('button', { class: 'drawer-x', 'aria-label': 'Close menu', onclick: () => this.closeDrawer() }, '×')),
+      h('div', { class: 'drawer-head' }, h('div', { id: 'drawer-crest' }, h('b', {}, 'Your House')), h('button', { class: 'drawer-x', 'aria-label': 'Close menu', onclick: () => this.closeDrawer() }, '×')),
       h('div', { id: 'drawer-body' })),
     sheet: h('div', { id: 'sheet' }),
   };
@@ -253,49 +253,298 @@ UI.replaceOrOpen = function (content, opts) {
   this.modalStack[this.modalStack.length - 1].takein = opts.takein;
   return w;
 };
-// A plain-language House menu for phones: who is in the family, how the House is doing, and a few
-// big buttons. Everything else is one tap deeper.
+// Tabs that keep every panel in the page and only show one, so a screen never needs to scroll.
+// tabs: [{ k, label, icon?, badge?, body }]. Returns { nav, panes, set }.
+UI.tabSet = function (tabs, key, opts = {}) {
+  tabs = tabs.filter(Boolean);
+  const cur = tabs.some((t) => t.k === key) ? key : tabs[0].k;
+  const nav = h('div', { class: 'tabset-nav ' + (opts.cls || ''), role: 'tablist' });
+  const panes = h('div', { class: 'tabset-panes' });
+  const set = (k) => {
+    for (const b of nav.children) { const on = b.dataset.k === k; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); }
+    for (const pn of panes.children) pn.hidden = pn.dataset.k !== k;
+    if (opts.onChange) opts.onChange(k);
+  };
+  for (const t of tabs) {
+    nav.append(h('button', { type: 'button', role: 'tab', 'data-k': t.k, onclick: () => set(t.k) },
+      t.icon ? h('span', { class: 'tab-icon', 'aria-hidden': 'true' }, t.icon) : null,
+      h('span', { class: 'tab-label' }, t.label),
+      t.badge ? h('span', { class: 'tab-badge' }, t.badge) : null));
+    panes.append(h('div', { class: 'tabset-pane', role: 'tabpanel', 'data-k': t.k }, t.body));
+  }
+  set(cur);
+  return { nav, panes, set };
+};
+
+// Where someone stands in the House, as the House screen and character sheet show it.
+UI.roleOf = function (c) {
+  const mc = ch(G.mcId);
+  if (!c) return null;
+  if (c.id === G.mcId) return { k: 'head', icon: '♛', label: 'Head of House' };
+  if (mc && spouseOf(mc) === c) return { k: 'spouse', icon: '⚭', label: 'Spouse' };
+  if (c.id === G.heirId) return { k: 'heir', icon: '★', label: 'Heir' };
+  if (c.adoptedBy && c.adoptedBy.length) return { k: 'ward', icon: '❦', label: 'Adopted' };
+  if (c.squireOf) return { k: 'squire', icon: '🛡', label: 'Squire' };
+  if (c.house === G.house.name) {
+    const k = mc ? kinship(mc, c) : null;
+    return { k: 'kin', icon: '⚜', label: k && k.rel ? k.rel[0].toUpperCase() + k.rel.slice(1) : 'Kin' };
+  }
+  return { k: 'court', icon: '⚑', label: 'Companion' };
+};
+UI.closeness = function (b) {
+  return b >= 80 ? 'Devoted' : b >= 60 ? 'In love' : b >= 30 ? 'Fond' : b >= 0 ? 'Cordial' : b >= -40 ? 'Cold' : 'Estranged';
+};
+// what happens to the House if the head died today
+UI.successionState = function () {
+  const mc = ch(G.mcId), heir = ch(G.heirId), cands = heirCandidates(G.mcId);
+  if (heir && heir.alive) return { ok: true, heir, cands };
+  const next = cands[0];
+  if (!next) return { ok: false, level: 'end', cands, text: `If ${mc.name} dies now, House ${G.house.name} ends.`,
+    sub: 'Nobody can carry the name. A child, a ward, or a loyal companion of long service would save it.' };
+  if (next.why === 'Adopted companion') return { ok: false, level: 'thin', cands, text: 'No heir of the House.',
+    sub: `If ${mc.name} dies, ${next.c.name}, a loyal companion, would be taken in to lead. Better to raise one of your own.` };
+  return { ok: false, level: 'unnamed', cands, text: 'No heir named.', sub: `By custom, ${next.c.name} (${next.why.toLowerCase()}) would inherit.` };
+};
+
+// ---- The House screen (phones): a crest header, five tabs along the bottom, and never a scroll.
+// Court: who is head, spouse and heir, and who is blood, adopted or sworn. Guard: the party.
+// Heir: what happens to the line and how to secure it. Quest: the prophecy. More: everything else.
 UI.renderDrawer = function () {
   if (!this.mob || !G || !G.mcId) return;
-  const hs = G.house, d = G.world.doom, q = d.quest;
+  const hs = G.house;
+  $('#drawer-crest').replaceChildren(
+    Heraldry.canvas(hs.heraldry, 40),
+    h('div', { class: 'hv-name' }, h('b', {}, `House ${hs.name}`), h('small', {}, `${seasonName()} ${year()} · Gen ${hs.generation} · ${GD.ESTATE[hs.tier].name}`)),
+    h('div', { class: 'hv-stats' },
+      h('span', { class: 'hv-gold', title: 'Gold' }, h('span', { class: 'coin', 'aria-hidden': 'true' }), h('b', {}, Math.round(hs.gold))),
+      h('span', { title: 'Potions' }, '⚗', h('b', {}, hs.potions)),
+      h('span', { title: 'Fame' }, '✦', h('b', {}, Math.round(hs.prestige)))));
+  const st = this.successionState();
+  const tabs = this.tabSet([
+    { k: 'court', icon: '♛', label: 'Court', body: this.houseCourt() },
+    { k: 'guard', icon: '⚔', label: 'Guard', badge: `${G.party.length}/4`, body: this.houseGuard() },
+    { k: 'heir', icon: '★', label: 'Heir', badge: st.ok ? null : '!', body: this.houseHeir() },
+    { k: 'quest', icon: '📜', label: 'Quest', body: this.houseQuest() },
+    { k: 'more', icon: '☰', label: 'More', body: this.houseMore() },
+  ], this.houseTab || 'court', { cls: 'hv-tabs', onChange: (k) => { this.houseTab = k; } });
+  $('#drawer-body').replaceChildren(h('div', { class: 'hv' }, tabs.panes, tabs.nav));
+  this.houseTabs = tabs;
+};
+UI.goHouseTab = function (k) { if (this.houseTabs) this.houseTabs.set(k); };
+UI.fromHouse = function (fn) { return () => { this.closeDrawer(); fn(); }; };
+
+UI.houseCourt = function () {
+  const mc = ch(G.mcId), sp = spouseOf(mc), heir = ch(G.heirId);
+  const open = (c) => this.fromHouse(() => this.showChar(c));
+  const inGuard = (c) => G.party.includes(c.id);
+  const others = Object.values(G.chars).filter((c) => c.alive && (c.status === 'party' || c.status === 'household')
+    && c.id !== mc.id && c !== sp && c.id !== G.heirId)
+    .sort((a, b) => inGuard(b) - inGuard(a) || a.born - b.born);
+  const kin = others.filter((c) => c.house === G.house.name && !(c.adoptedBy && c.adoptedBy.length));
+  const wards = others.filter((c) => c.adoptedBy && c.adoptedBy.length);
+  const court = others.filter((c) => c.house !== G.house.name);
+  const chip = (c) => {
+    const r = this.roleOf(c);
+    return h('button', { class: `hv-chip r-${r.k}` + (inGuard(c) ? ' guard' : ''), onclick: open(c) },
+      inGuard(c) ? h('span', { class: 'hv-guardmark', title: 'In your Guard' }, '⚔') : null,
+      portrait(c, 40),
+      h('b', {}, c.name),
+      h('small', {}, isAdult(c) ? (r.k === 'court' ? classOf(c).name : r.label) : `${r.k === 'ward' ? 'Ward' : r.label} · ${ageStr(c)}`));
+  };
+  const row = (title, list, empty) => h('div', { class: 'hv-row' },
+    h('div', { class: 'hv-row-head' }, h('b', {}, title), h('small', {}, list.length || '')),
+    h('div', { class: 'hv-strip' }, list.length ? list.map(chip) : empty));
+  const ghost = (icon, text, fn) => h('button', { class: 'hv-chip ghost', onclick: fn }, h('span', { class: 'hv-ghost-icon' }, icon), h('small', {}, text));
+  const odds = sp ? birthOdds(mc, sp) : null;
+  return h('div', { class: 'hv-court' },
+    h('div', { class: 'hv-seat' },
+      h('button', { class: 'hv-throne', onclick: open(mc) },
+        h('span', { class: 'hv-crown', 'aria-hidden': 'true' }, '♛'),
+        portrait(mc, 72),
+        h('small', { class: 'hv-role' }, 'Head of House'),
+        h('b', {}, mc.name),
+        h('small', {}, `${classOf(mc).name} · L${mc.level} · ${ageStr(mc)} yrs`),
+        bar(mc.hp, maxHp(mc), 'hp')),
+      h('span', { class: 'hv-knot', 'aria-hidden': 'true' }, sp ? '⚭' : ''),
+      sp ? h('button', { class: 'hv-consort', onclick: this.fromHouse(() => this.showPartner()) },
+        portrait(sp, 56),
+        h('small', { class: 'hv-role' }, 'Spouse'),
+        h('b', {}, sp.name),
+        h('small', { class: 'hv-heart' }, `♥ ${this.closeness(bond(sp, mc))} · ${Math.round(bond(sp, mc))}`),
+        odds && !odds.why ? h('small', {}, `Child this year ~${Math.round(odds.shown * 100)}%`) : h('small', {}, odds ? 'No children together' : ''))
+        : h('button', { class: 'hv-consort ghost', onclick: this.fromHouse(() => Game.seekNewSpouse()) },
+          h('span', { class: 'hv-ghost-icon' }, '⚭'),
+          h('b', {}, isWidowed(mc) ? 'Widowed' : 'Unmarried'),
+          h('small', {}, 'Find a spouse'))),
+    heir && heir.alive
+      ? h('button', { class: 'hv-heirline', onclick: () => this.goHouseTab('heir') }, portrait(heir, 36),
+        h('span', {}, h('small', {}, '★ Heir'), h('b', {}, heir.name)),
+        h('small', { class: 'hv-heirwhy' }, isAdult(heir) ? `${classOf(heir).name} · ${ageStr(heir)} yrs` : `${ageStr(heir)} yrs · of age in ${Math.ceil(GD.RACES[heir.race].maturity - age(heir))}`))
+      : h('button', { class: 'hv-heirline warn', onclick: () => this.goHouseTab('heir') },
+        h('span', { class: 'hv-ghost-icon' }, '⚠'),
+        h('span', {}, h('b', {}, 'No heir'), h('small', {}, this.successionState().text)), h('small', { class: 'hv-heirwhy' }, 'What it means ›')),
+    row('Family', kin, ghost('✦', sp ? 'Children come with time' : 'Marry to found a line', this.fromHouse(() => this.showPartner()))),
+    row('Adopted', wards, ghost('❦', 'Take in a ward', this.fromHouse(() => this.showTakeIn('ward')))),
+    row('Court', court, ghost('⚑', 'Recruit at a tavern or take a squire', this.fromHouse(() => this.showTakeIn('squire')))),
+    h('p', { class: 'hv-legend' }, '♛ head · ⚭ spouse · ★ heir · ❦ adopted · ⚔ in your Guard'));
+};
+
+UI.houseGuard = function () {
+  const atEstate = tileAt(G.pos.x, G.pos.y).feature === 'estate';
   const party = G.party.map(ch).filter(Boolean);
-  const heir = ch(G.heirId);
-  const tile = (icon, label, hint, fn, cls = '') => h('button', { class: 'dm-tile ' + cls, onclick: () => { this.closeDrawer(); fn(); } },
+  const slot = (c) => {
+    if (!c) return h('div', { class: 'hv-slot empty' }, h('span', { class: 'hv-ghost-icon' }, '+'), h('b', {}, 'Open place'), h('small', {}, 'recruit in a tavern, take a squire, or bring someone from the estate'));
+    const r = this.roleOf(c);
+    return h('button', { class: `hv-slot r-${r.k}`, onclick: this.fromHouse(() => this.showChar(c)) },
+      h('span', { class: 'hv-badge' }, `${r.icon} ${r.label}`),
+      portrait(c, 52),
+      h('b', {}, c.name),
+      h('small', {}, isAdult(c) ? `${classOf(c).name}${learnedClasses(c).length ? ' +' + learnedClasses(c).length : ''} · L${c.level}` : `${GD.STAGES[stageKey(c)].name} · ${ageStr(c)}`),
+      bar(c.hp, maxHp(c), 'hp'),
+      h('small', { class: 'hv-slot-meta' }, `HP ${Math.round(c.hp)}/${maxHp(c)} · Power ${power(c)}`),
+      c.training ? h('small', { class: 'dm-training' }, `learning ${GD.CLASSES[c.training.cls].name}`) : null);
+  };
+  const waiting = Object.values(G.chars).filter((c) => c.alive && c.status === 'household' && isAdult(c));
+  return h('div', { class: 'hv-guard' },
+    h('p', { class: 'hv-lead' }, 'Your Guard travels with you and fights at your side. Four places.'),
+    h('div', { class: 'hv-slots' }, [0, 1, 2, 3].map((i) => slot(party[i]))),
+    h('div', { class: 'hv-row' },
+      h('div', { class: 'hv-row-head' }, h('b', {}, 'At the estate'), h('small', {}, atEstate ? 'tap someone to bring them' : 'go home to change your Guard')),
+      h('div', { class: 'hv-strip' }, waiting.length ? waiting.map((c) => h('button', { class: 'hv-chip r-' + this.roleOf(c).k, onclick: this.fromHouse(() => this.showChar(c)) },
+        portrait(c, 40), h('b', {}, c.name), h('small', {}, `${classOf(c).name} · L${c.level}`)))
+        : h('small', { class: 'dim hv-none' }, 'Nobody waiting at home.'))),
+    h('div', { class: 'hv-guard-foot' },
+      h('span', {}, h('b', {}, G.house.retinue), ` sworn soldier${G.house.retinue === 1 ? '' : 's'} volley each round`),
+      h('span', {}, h('b', {}, G.house.potions), ' potions')));
+};
+
+UI.houseHeir = function () {
+  const mc = ch(G.mcId), sp = spouseOf(mc);
+  const st = this.successionState();
+  const option = (icon, title, sub, fn, cls = '') => h('button', { class: 'hv-option ' + cls, onclick: fn },
+    h('span', { class: 'hv-opt-icon', 'aria-hidden': 'true' }, icon), h('span', {}, h('b', {}, title), h('small', {}, sub)), h('span', { class: 'hv-chev', 'aria-hidden': 'true' }, '›'));
+  const odds = sp ? birthOdds(mc, sp) : null;
+  const named = st.ok ? st.heir : null;
+  const blood = heirCandidates(G.mcId).filter((x) => x.why !== 'Adopted companion' && isDescendantOf(x.c, mc.id));
+  return h('div', { class: 'hv-heir' },
+    named
+      ? h('button', { class: 'hv-heircard', onclick: this.fromHouse(() => this.showChar(named)) },
+        h('span', { class: 'hv-crown', 'aria-hidden': 'true' }, '★'),
+        portrait(named, 64),
+        h('span', {},
+          h('small', {}, 'Next in line'), h('b', {}, named.name),
+          h('small', {}, `${named.adoptedBy && named.adoptedBy.length ? 'Adopted · ' : ''}${isAdult(named) ? classOf(named).name + ' · ' : ''}${ageStr(named)} yrs`),
+          h('small', { class: 'good' }, isAdult(named) ? `Rules when ${mc.name} dies.` : `Comes of age in ${Math.ceil(GD.RACES[named.race].maturity - age(named))} years.`)))
+      : h('div', { class: 'hv-alarm lvl-' + st.level },
+        h('span', { class: 'hv-opt-icon', 'aria-hidden': 'true' }, st.level === 'end' ? '☠' : '⚠'),
+        h('span', {}, h('b', {}, st.text), h('small', {}, st.sub))),
+    h('h4', { class: 'hv-sub' }, named ? 'Strengthen the line' : 'How to secure the line'),
+    sp
+      ? option('♥', `Time with ${sp.name}`, odds.why || `${this.closeness(bond(sp, mc))} · ~${Math.round(odds.shown * 100)}% chance of a child this year`, this.fromHouse(() => this.showPartner()), 'love')
+      : option('⚭', isWidowed(mc) ? 'Seek a new spouse' : 'Find a spouse', 'a marriage brings children, and a partner at your side', this.fromHouse(() => Game.seekNewSpouse()), 'love'),
+    option('❦', 'Adopt a ward', `40 gold · an orphan raised as your own${G.heirId ? '' : ', named heir at once'}`, this.fromHouse(() => this.showTakeIn('ward'))),
+    blood.length ? option('★', named ? 'Change heir' : 'Name an heir', `${blood.length} of your line can inherit`, this.fromHouse(() => this.showNameHeir())) : null,
+    h('h4', { class: 'hv-sub' }, 'Line of succession'),
+    st.cands.length
+      ? h('ol', { class: 'hv-line' }, this.successionOrder(st.cands).slice(0, 3).map((x) => h('li', {}, portrait(x.c, 28), h('b', {}, x.c.name),
+        h('small', {}, `${x.c.id === G.heirId ? '★ Named heir' : x.c.adoptedBy && x.c.adoptedBy.length ? 'Adopted' : x.why} · ${ageStr(x.c)}`))))
+      : h('p', { class: 'bad hv-none' }, 'No one can inherit.'));
+};
+
+// the order the House would actually pass on in: the named heir first, then custom
+UI.successionOrder = function (cands) {
+  return cands.slice().sort((a, b) => (b.c.id === G.heirId) - (a.c.id === G.heirId));
+};
+UI.houseQuest = function () {
+  const d = G.world.doom, q = d.quest, w = G.world, E = era();
+  const span = GD.DOOM_YEARS, now = year() - START_YEAR;
+  return h('div', { class: 'hv-quest' },
+    q ? h('button', { class: 'hv-questcard', onclick: this.fromHouse(() => this.showWorld('prophecy')) },
+      h('small', {}, 'Main quest'), h('b', {}, q.title), h('span', {}, q.desc),
+      q.type === 'rally' ? h('small', {}, `${q.progress.length}/${q.count} towns rallied`) : null,
+      q.x != null ? h('small', {}, `Marked on your map with a gold ◆${!reachable(tileAt(q.x, q.y)) ? ' · needs boats' : ''}`) : null)
+      : h('div', { class: 'hv-questcard' }, h('small', {}, 'Main quest'), h('b', {}, 'No task yet'), h('span', {}, 'A new task appears as the years pass.')),
+    h('div', { class: 'hv-doom' },
+      h('div', { class: 'hv-doom-head' }, h('b', {}, GD.VILLAIN.name), h('small', { class: doomYearsLeft() < 100 ? 'bad' : '' }, `rises in ${d.year} · ${Math.max(0, doomYearsLeft())} years left`)),
+      h('div', { class: 'doomline' }, h('div', { class: 'dl-fill', style: `width:${clamp(now / span * 100, 0, 100)}%` }),
+        d.done.map((wd) => h('span', { class: 'dl-ward', style: `left:${(wd.year - START_YEAR) / span * 100}%` }))),
+      h('div', { class: 'hv-wards' }, h('small', {}, 'Wards raised'),
+        h('span', { class: 'hv-pips' }, Array.from({ length: GD.WARDS_NEEDED }, (_, i) => h('i', { class: i < d.wards ? 'on' : '' }))),
+        h('small', {}, `${d.wards}/${GD.WARDS_NEEDED}`)),
+      h('small', { class: 'dim' }, `Now around level ${villainLevel()}. Each ward takes 3 levels from it.`)),
+    h('div', { class: 'hv-doom' },
+      h('div', { class: 'hv-doom-head' }, h('b', { style: `color:${E.color}` }, E.name), h('small', {}, w.era.type === 'golden' ? 'a Golden Age' : `${Math.max(0, w.era.end - year())} years left`)),
+      h('small', {}, `Prosperity ${Math.round(w.prosperity)} / 95 for a Golden Age`), bar(w.prosperity, 100, 'pros')),
+    h('div', { class: 'hv-two' },
+      option2('📖', 'The prophecy', this.fromHouse(() => this.showWorld('prophecy'))),
+      option2('📜', 'Story so far', this.fromHouse(() => this.showChronicle()))));
+  function option2(icon, label, fn) { return h('button', { class: 'hv-mini', onclick: fn }, h('span', { 'aria-hidden': 'true' }, icon), h('b', {}, label)); }
+};
+
+UI.houseMore = function () {
+  const tile = (icon, label, hint, fn) => h('button', { class: 'dm-tile', onclick: this.fromHouse(fn) },
     h('span', { class: 'dm-icon', 'aria-hidden': 'true' }, icon), h('b', {}, label), h('small', {}, hint));
-  const heirLine = heir && heir.alive
-    ? h('button', { class: 'dm-heir ok', onclick: () => { this.closeDrawer(); this.showChar(heir); } }, portrait(heir, 32),
-      h('span', {}, h('small', {}, 'Next in line'), h('b', {}, heir.name)))
-    : h('button', { class: 'dm-heir warn', onclick: () => { this.closeDrawer(); this.showHousehold(); } },
-      h('span', { class: 'dm-icon', 'aria-hidden': 'true' }, '⚠'),
-      h('span', {}, h('b', {}, 'Choose who carries on'), h('small', {}, 'No heir yet. Tap to pick one.')));
-  $('#drawer-body').replaceChildren(...[
-    h('div', { class: 'dm-house' }, Heraldry.canvas(hs.heraldry, 44),
-      h('div', {}, h('b', {}, `House ${hs.name}`), h('small', {}, `${seasonName()} ${year()} · Generation ${hs.generation}`))),
-    h('div', { class: 'dm-stats' },
-      h('span', { class: 'dm-gold' }, h('b', { class: 'gold' }, Math.round(hs.gold)), ' gold'),
-      h('span', {}, h('b', {}, hs.potions), ' potions'),
-      h('span', {}, h('b', {}, Math.round(hs.prestige)), ' fame')),
-    h('h4', { class: 'dm-title' }, 'Your family'),
-    h('div', { class: 'dm-family' }, party.map((c) => h('button', { class: 'dm-person' + (c.id === G.mcId ? ' mc' : ''), onclick: () => { this.closeDrawer(); this.showChar(c); } },
-      portrait(c, 48),
-      h('b', {}, c.id === G.mcId ? '♛ ' + c.name : c.name),
-      h('small', {}, `${isAdult(c) ? classOf(c).name + (learnedClasses(c).length ? ' +' + learnedClasses(c).length : '') : GD.STAGES[stageKey(c)].name} · ${ageStr(c)} yrs`),
-      c.training ? h('small', { class: 'dm-training' }, `learning ${GD.CLASSES[c.training.cls].name}`) : null,
-      bar(c.hp, maxHp(c), 'hp')))),
-    heirLine,
-    q ? h('button', { class: 'dm-goal', onclick: () => { this.closeDrawer(); this.showWorld(); } },
-      h('small', {}, 'Main quest'), h('b', {}, q.title), h('span', {}, q.desc)) : null,
-    h('h4', { class: 'dm-title' }, 'What would you like to do?'),
-    h('div', { class: 'dm-grid' },
-      tile('👪', 'Family', 'children, marriage, heir', () => this.showHousehold()),
-      tile('🎒', 'Gear', 'weapons and armour', () => this.showInventory(ch(G.mcId))),
-      tile('🛡', 'Ward or squire', 'take a young one in', () => this.showTakeIn('ward')),
-      tile('🌳', 'Family tree', 'everyone, past and present', () => this.showTree()),
-      tile('📜', 'Story so far', 'what has happened', () => this.showChronicle()),
-      tile('🗺', 'World', 'towns, eras, the prophecy', () => this.showWorld()),
-      tile('⚙', 'Save & help', 'save, how to play', () => this.showMenu())),
-    h('button', { class: 'sheet-close', onclick: () => this.closeDrawer() }, 'Close'),
-  ].filter(Boolean));
+  return h('div', { class: 'dm-grid hv-more' },
+    tile('🎒', 'Gear', 'weapons and armour', () => this.showInventory(ch(G.mcId))),
+    tile('🛡', 'Ward or squire', 'take a young one in', () => this.showTakeIn('ward')),
+    tile('🌳', 'Family tree', 'everyone, past and present', () => this.showTree()),
+    tile('📜', 'Story so far', 'what has happened', () => this.showChronicle()),
+    tile('🗺', 'World', 'towns, eras, the prophecy', () => this.showWorld()),
+    tile('👪', 'Household list', 'everyone at once', () => this.showHousehold()),
+    tile('⚙', 'Save & help', 'save, how to play', () => this.showMenu()));
+};
+
+// ---- Partner: the head and their spouse. A warm bond and time together make a child likelier.
+UI.partnerBody = function () {
+  const mc = ch(G.mcId), sp = spouseOf(mc);
+  if (!sp) return h('p', { class: 'dim' }, `${mc.name} has no spouse.`);
+  const odds = birthOdds(mc, sp);
+  const b = Math.round(bond(sp, mc));
+  const kids = mc.children.filter((k) => sp.children.includes(k)).map(ch).filter(Boolean);
+  const redo = () => this.replaceModal(this.partnerBody(), { title: 'Your partner', sheet: true });
+  const close = recentlyClose(mc, sp);
+  return h('div', { class: 'pt' },
+    h('div', { class: 'pt-couple' },
+      h('div', { class: 'pt-person' }, portrait(mc, 72), h('b', {}, mc.name), h('small', {}, '♛ Head')),
+      h('div', { class: 'pt-heart' + (b >= 60 ? ' warm' : b < 0 ? ' cold' : '') }, h('span', { 'aria-hidden': 'true' }, b < 0 ? '♡' : '♥'), h('b', {}, b), h('small', {}, this.closeness(b))),
+      h('button', { class: 'pt-person', onclick: () => this.modal(this.charBody(sp), { title: sp.name, wide: true }) }, portrait(sp, 72), h('b', {}, sp.name), h('small', {}, `⚭ ${GD.RACES[sp.race].name} · ${ageStr(sp)}`))),
+    h('div', { class: 'pt-bond' }, h('small', {}, 'Bond'), bar(Math.max(0, b), 100, 'xp'), h('small', {}, close ? 'close this year' : 'not much time together lately')),
+    h('div', { class: 'pt-odds' },
+      odds.why
+        ? [h('b', {}, 'No children together'), h('small', {}, odds.why)]
+        : [h('div', { class: 'pt-pct' }, h('b', {}, `~${Math.round(odds.shown * 100)}%`), h('small', {}, 'chance of a child this year')),
+          h('ul', {}, odds.notes.map((n) => h('li', { class: n.v > 0 ? 'good' : n.v < 0 ? 'bad' : 'dim' }, (n.v > 0 ? '▲ ' : n.v < 0 ? '▼ ' : '• ') + n.t)))],
+      kids.length ? h('small', { class: 'dim' }, `Children together: ${kids.map((k) => k.name + (k.alive ? '' : ' †')).join(', ')}`) : null),
+    h('div', { class: 'pt-acts' },
+      act('Spend a week together', () => { Game.interact(sp, 'time'); redo(); }, { cls: 'hl', sub: `7 days · bond up${odds.why ? '' : ' · a child likelier this year'}` }),
+      act('Give a gift', () => { Game.interact(sp, 'gift'); redo(); }, { sub: '30 gold · bond up', disabled: G.house.gold < 30 }),
+      b < 0 ? act('Heart-to-heart', () => { Game.interact(sp, 'talk'); redo(); }, { sub: '14 days · may heal old wounds, or open them' }) : null,
+      odds.why ? act('Adopt a ward', () => { this.closeAll(); this.showTakeIn('ward'); }, { sub: '40 gold · raise a child together' }) : null));
+};
+UI.showPartner = function () {
+  const mc = ch(G.mcId);
+  if (!spouseOf(mc)) return Game.seekNewSpouse();
+  this.modal(this.partnerBody(), { title: 'Your partner', sheet: true });
+};
+
+// ---- Name an heir from the head's line (children, grandchildren, adopted wards)
+UI.showNameHeir = function () {
+  const mc = ch(G.mcId);
+  const list = heirCandidates(G.mcId).filter((x) => isDescendantOf(x.c, mc.id));
+  this.modal([
+    h('p', { class: 'takein-what' }, `When ${mc.name} dies, the heir becomes head of the House and you play as them. A child heir waits for the years to pass.`),
+    ...list.map(({ c, why }) => h('div', { class: 'takein-card' + (c.id === G.heirId ? ' on' : '') },
+      portrait(c, 56),
+      h('div', { class: 'takein-info' },
+        h('b', {}, c.name),
+        h('small', {}, `${c.adoptedBy && c.adoptedBy.length ? 'Adopted' : why} · ${ageStr(c)} yrs${isAdult(c) ? ' · ' + classOf(c).name + ' L' + c.level : ''}`),
+        h('small', {}, `${GD.RACES[c.race].name}${c.trait ? ' · ' + GD.TRAITS[c.trait].name : ''} · Power ${power(c)}`)),
+      c.id === G.heirId ? h('span', { class: 'good takein-named' }, '★ Heir')
+        : h('button', { class: 'takein-go', onclick: () => {
+          G.heirId = c.id; chron(`${c.name} is named heir of House ${G.house.name}.`, 'good', [c.id], 'heir');
+          saveGame(); this.closeAll(); this.toast(`${c.name} is now your heir.`); this.refresh();
+        } }, 'Name', h('small', {}, 'as heir')))),
+  ], { title: 'Name an heir', sheet: true });
 };
 UI.closeDrawer = function () { document.body.classList.remove('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'true'); };
 UI.closeLog = function () { if (this.mob && this.mob.logPanel) this.mob.logPanel.open = false; };
@@ -885,9 +1134,12 @@ UI.battleResults = function (res, done) {
 
 // ---------------------------------------------------------------- character sheet
 UI.showChar = function (c) {
+  this.charTab = Battle.active ? 'battle' : 'about';
   this.modal(this.charBody(c), { title: c.name, wide: true });
 };
 
+// The character sheet: a fixed header (portrait, banner, who they are to the House) and tabs, so
+// nothing needs scrolling. All tabs stay in the page; only one shows at a time.
 UI.charBody = function (c) {
   Heraldry.ensureAll();
   const mc = ch(G.mcId);
@@ -896,20 +1148,21 @@ UI.charBody = function (c) {
   const parents = c.parents.map(ch).filter(Boolean);
   const kids = c.children.map(ch).filter(Boolean);
   const link = (p) => h('a', { href: '#', onclick: (e) => { e.preventDefault(); this.replaceModal(this.charBody(p), { title: p.name, wide: true }); } }, p.name + (p.alive ? '' : ' †'));
-  const st = stageKey(c);
   const r = GD.RACES[c.race];
   const lifeLeft = c.alive ? `${Math.max(0, Math.round(r.elder - age(c)))} yrs until elder` : `Died ${year(c.died)}: ${c.cause}`;
   const statRows = STATS.map((k) => h('tr', {}, h('td', {}, STAT_NAMES[k]), h('td', {}, stat(c, k).toFixed(1)),
     h('td', { class: 'dim' }, ageMod(c, k) !== 1 ? `age ×${ageMod(c, k).toFixed(2)}` : ''), h('td', { class: 'dim' }, c.bonus[k] ? `+${c.bonus[k].toFixed(1)} flat` : ''),
     h('td', { class: 'bad' }, (c.injuries || []).reduce((t, i) => t + (GD.INJURIES[i].mods[k] || 0), 0) < 0 ? `${(c.injuries || []).reduce((t, i) => t + (GD.INJURIES[i].mods[k] || 0), 0)} injury` : '')));
+  const role = c.alive && (c.house === G.house.name || c.status === 'party' || c.status === 'household') ? this.roleOf(c) : null;
   const tags = [
+    role ? h('span', { class: `tag role r-${role.k}` }, `${role.icon} ${role.label}`) : null,
+    G.party.includes(c.id) ? h('span', { class: 'tag role r-guard' }, '⚔ Guard') : null,
+    c.id === G.heirId && role && role.k !== 'heir' ? h('span', { class: 'tag good' }, '★ Heir') : null,
     h('span', { class: 'tag' }, GD.BIRTH[bk].name),
     c.birth === 'bastard' && c.legit ? h('span', { class: 'tag good' }, 'Legitimised') : null,
     c.trait ? h('span', { class: 'tag', title: GD.TRAITS[c.trait].desc }, GD.TRAITS[c.trait].name) : null,
     c.house ? h('span', { class: 'tag house', style: `border-color:${G.house.color}` }, `House ${c.house}`) : null,
     c.evil ? h('span', { class: 'tag bad' }, 'Rival') : null,
-    c.id === G.mcId ? h('span', { class: 'tag good' }, 'Head of House') : null,
-    c.id === G.heirId ? h('span', { class: 'tag good' }, 'Heir') : null,
     !c.alive ? h('span', { class: 'tag dim' }, 'Deceased') : null,
   ];
   let lineage;
@@ -919,62 +1172,76 @@ UI.charBody = function (c) {
   const adoptive = (c.adoptedBy || []).map(ch).filter(Boolean);
   if (adoptive.length) lineage = h('div', {}, lineage, h('p', {}, 'Adopted by ', adoptive.map((p, i) => [i ? ' & ' : '', link(p)])));
   const grand = bloodline(c).filter((x) => x.depth === 2).map((x) => x.c);
-  const actions = this.charActions(c);
-  return h('div', { class: 'sheet' },
-    c.house && G.heraldry[c.house] ? Heraldry.canvas(G.heraldry[c.house], 120) : null,
-    h('div', { class: 'sheet-left' },
-      portrait(c, 140),
-      h('div', { class: 'tags' }, tags),
-      h('p', {}, this.charLine(c)),
-      h('p', { class: 'dim' }, `${GD.GENDERS[c.gender || 'man'].name} · ${bodyText(c)}`),
-      h('p', { class: 'dim' }, `Drawn to: ${orientationText(c)}`),
-      (() => { const k = ch(G.mcId) && c.id !== G.mcId ? kinship(ch(G.mcId), c) : null; return k && k.rel ? h('p', { class: 'dim' }, `${ch(G.mcId).name}'s ${k.rel}`) : null; })(),
-      c.inbred > 0.05 ? h('p', { class: 'bad' }, `Born of close kin (blood ${Math.round(c.inbred * 100)}% shared).`) : null,
-      c.condition ? h('p', { class: 'bad', title: GD.CONDITIONS[c.condition].desc }, `Born ${GD.CONDITIONS[c.condition].name.toLowerCase()}: ${GD.CONDITIONS[c.condition].desc}`) : null,
-      c.infertileKnown ? h('p', { class: 'bad' }, 'Cannot have children.') : null,
-      c.adoptedBy && c.adoptedBy.length ? h('p', { class: 'good' }, 'Adopted into the House.') : null,
-      c.forcedBy ? h('p', { class: 'bad' }, `Forced into marriage by ${ch(c.forcedBy) ? ch(c.forcedBy).name : 'the House'}. Resentful.`) : null,
-      h('p', { class: 'dim' }, `Born ${year(c.born)} · expected lifespan ~${Math.round((r.life[0] + r.life[1]) / 2)} · ${lifeLeft}`),
-      c.alive ? h('p', { class: 'dim' }, `Formative ${Math.round(c.formative)}/${formativeCap(c)} · XP ×${xpMod(c).toFixed(2)}`) : null,
-      ...actions),
-    h('div', { class: 'sheet-right' },
-      h('p', {}, h('b', {}, `Level ${c.level}`), ` · Power ${power(c)}`),
-      h('div', { class: 'classbox' },
-        h('b', {}, `${classOf(c).icon} ${classOf(c).name}`), h('small', { class: 'dim' }, ` ${classOf(c).desc}`),
-        h('small', { class: 'good' }, classOf(c).passive),
-        h('ul', { class: 'abil' }, classOf(c).skills.map((id, i) => h('li', { class: i === 2 && c.level < 5 ? 'dim' : '' }, h('b', {}, GD.ABILITIES[id].name), ` (${GD.ABILITIES[id].cost} focus${i === 2 && c.level < 5 ? ', unlocks at level 5' : ''}): ${GD.ABILITIES[id].desc}`)),
-          c.extraSkill && GD.LEGACY_SKILL[c.extraSkill] && !classOf(c).skills.includes(GD.LEGACY_SKILL[c.extraSkill]) ? h('li', {}, h('b', {}, GD.ABILITIES[GD.LEGACY_SKILL[c.extraSkill]].name), ` (learned): ${GD.ABILITIES[GD.LEGACY_SKILL[c.extraSkill]].desc}`) : null)),
-      isAdult(c) ? this.learnedBox(c) : null,
-      c.training || (c.alive && c.house === G.house.name) || c.squireOf ? this.trainingBox(c) : null,
-      (c.injuries || []).length ? h('div', { class: 'tags' }, c.injuries.map((k) => h('span', { class: 'tag ' + (GD.INJURIES[k].good ? 'good' : 'bad'), title: Object.entries(GD.INJURIES[k].mods).map(([s2, v]) => `${STAT_NAMES[s2]} ${v > 0 ? '+' : ''}${v}`).join(', ') }, GD.INJURIES[k].name))) : null,
-      c.alive ? h('div', {}, bar(c.xp, xpNeed(c.level), 'xp'), h('small', { class: 'dim' }, `XP ${Math.round(c.xp)}/${xpNeed(c.level)}`)) : null,
-      h('table', { class: 'stats' }, statRows),
-      (() => {
-        Equip.ensureChar(c);
-        const worn = Equip.worn(c);
-        const bits = worn.length
-          ? worn.map((it) => it.name).join(' · ')
-          : 'nothing equipped';
-        const heir = G.mcId === c.id && G.house.heirloom ? ` · ${G.house.heirloom.name} (+${G.house.heirloom.power})` : '';
-        return h('p', { class: 'dim' }, `Max HP ${maxHp(c)} · ${bits}${heir}`);
-      })(),
-      !Battle.active && (c.house === G.house.name || c.status === 'party' || c.status === 'household') && c.alive
-        ? act('Open equipment', () => { this.closeModal(); this.showEquipment(c); }, { sub: 'paper doll · class kit' }) : null,
-      h('h4', {}, 'Family'),
-      lineage,
-      grand.length ? h('p', { class: 'dim' }, 'Grandparents: ', grand.map((g, i) => [i ? ', ' : '', link(g)])) : null,
-      (() => {
-        const late = lateSpouseOf(c);
-        if (spouseOf(c) && sp) return h('p', {}, 'Spouse: ', link(sp));
-        if (late) return h('p', {}, 'Widowed · late spouse: ', link(late));
-        return h('p', { class: 'dim' }, 'Unmarried');
-      })(),
-      kids.length ? h('p', {}, 'Children: ', kids.map((k, i) => [i ? ', ' : '', link(k), k.alive ? ` (${ageStr(k)})` : ''])) : null,
-      mc && c.id !== mc.id && c.alive ? h('p', { class: bond(c, mc) < -40 ? 'bad' : 'dim' }, `Bond with ${mc.name}: ${Math.round(bond(c, mc))}${bond(c, mc) < -40 ? ' (resents you)' : ''} · Loyalty to the House: ${Math.round(c.loyalty)}`) : null,
-      mc && c.id !== mc.id && c.alive && isAdult(c) && c.orientKnown && !spouseOf(c) && !isDescendantOf(c, mc.id) ? h('p', { class: 'dim' }, attraction(c, mc) === 0 ? `Not drawn to ${mc.name}.` : attraction(c, mc) > 1.15 ? `Strongly drawn to ${mc.name}.` : `Could be drawn to ${mc.name}.`) : null,
-      c.alive && !c.house && isAdult(c) ? h('p', { class: c.corruption > 60 ? 'bad' : 'dim' }, `Resentment: ${c.corruption > 70 ? 'dangerous' : c.corruption > 40 ? 'simmering' : 'low'}`) : null,
-      this.lifeEvents(c),
-    ));
+  const actions = this.charActions(c).filter(Boolean);
+  const kin = mc && c.id !== mc.id ? kinship(mc, c) : null;
+
+  const about = h('div', { class: 'cs-about' },
+    h('p', { class: 'dim' }, `${GD.GENDERS[c.gender || 'man'].name} · ${bodyText(c)}`),
+    h('p', { class: 'dim' }, `Drawn to: ${orientationText(c)}`),
+    kin && kin.rel ? h('p', { class: 'dim' }, `${mc.name}'s ${kin.rel}`) : null,
+    c.inbred > 0.05 ? h('p', { class: 'bad' }, `Born of close kin (blood ${Math.round(c.inbred * 100)}% shared).`) : null,
+    c.condition ? h('p', { class: 'bad', title: GD.CONDITIONS[c.condition].desc }, `Born ${GD.CONDITIONS[c.condition].name.toLowerCase()}: ${GD.CONDITIONS[c.condition].desc}`) : null,
+    c.infertileKnown ? h('p', { class: 'bad' }, 'Cannot have children.') : null,
+    c.adoptedBy && c.adoptedBy.length ? h('p', { class: 'good' }, 'Adopted into the House.') : null,
+    c.forcedBy ? h('p', { class: 'bad' }, `Forced into marriage by ${ch(c.forcedBy) ? ch(c.forcedBy).name : 'the House'}. Resentful.`) : null,
+    h('p', { class: 'dim' }, `Born ${year(c.born)} · lifespan ~${Math.round((r.life[0] + r.life[1]) / 2)} · ${lifeLeft}`),
+    c.alive ? h('p', { class: 'dim' }, `Formative ${Math.round(c.formative)}/${formativeCap(c)} · XP ×${xpMod(c).toFixed(2)}`) : null,
+    h('table', { class: 'stats' }, statRows));
+
+  const skills = h('div', { class: 'cs-class' },
+    h('p', {}, h('b', {}, `Level ${c.level}`), ` · Power ${power(c)}`),
+    c.alive ? h('div', {}, bar(c.xp, xpNeed(c.level), 'xp'), h('small', { class: 'dim' }, `XP ${Math.round(c.xp)}/${xpNeed(c.level)}`)) : null,
+    h('div', { class: 'classbox' },
+      h('b', {}, `${classOf(c).icon} ${classOf(c).name}`), h('small', { class: 'dim' }, ` ${classOf(c).desc}`),
+      h('small', { class: 'good' }, classOf(c).passive),
+      h('ul', { class: 'abil' }, classOf(c).skills.map((id, i) => h('li', { class: i === 2 && c.level < 5 ? 'dim' : '' }, h('b', {}, GD.ABILITIES[id].name), ` (${GD.ABILITIES[id].cost} focus${i === 2 && c.level < 5 ? ', unlocks at level 5' : ''}): ${GD.ABILITIES[id].desc}`)),
+        c.extraSkill && GD.LEGACY_SKILL[c.extraSkill] && !classOf(c).skills.includes(GD.LEGACY_SKILL[c.extraSkill]) ? h('li', {}, h('b', {}, GD.ABILITIES[GD.LEGACY_SKILL[c.extraSkill]].name), ` (learned): ${GD.ABILITIES[GD.LEGACY_SKILL[c.extraSkill]].desc}`) : null)),
+    isAdult(c) ? this.learnedBox(c) : null,
+    c.training || (c.alive && c.house === G.house.name) || c.squireOf ? this.trainingBox(c) : null,
+    (c.injuries || []).length ? h('div', { class: 'tags' }, c.injuries.map((k) => h('span', { class: 'tag ' + (GD.INJURIES[k].good ? 'good' : 'bad'), title: Object.entries(GD.INJURIES[k].mods).map(([s2, v]) => `${STAT_NAMES[s2]} ${v > 0 ? '+' : ''}${v}`).join(', ') }, GD.INJURIES[k].name))) : null,
+    (() => {
+      Equip.ensureChar(c);
+      const worn = Equip.worn(c);
+      const bits = worn.length ? worn.map((it) => it.name).join(' · ') : 'nothing equipped';
+      const heir = G.mcId === c.id && G.house.heirloom ? ` · ${G.house.heirloom.name} (+${G.house.heirloom.power})` : '';
+      return h('p', { class: 'dim' }, `Max HP ${maxHp(c)} · ${bits}${heir}`);
+    })());
+
+  const family = h('div', { class: 'cs-family' },
+    lineage,
+    grand.length ? h('p', { class: 'dim' }, 'Grandparents: ', grand.map((g, i) => [i ? ', ' : '', link(g)])) : null,
+    (() => {
+      const late = lateSpouseOf(c);
+      if (spouseOf(c) && sp) return h('p', {}, 'Spouse: ', link(sp), mc && c.id === mc.id ? [' · ', h('a', { href: '#', onclick: (e) => { e.preventDefault(); this.showPartner(); } }, 'time together ›')] : null);
+      if (late) return h('p', {}, 'Widowed · late spouse: ', link(late));
+      return h('p', { class: 'dim' }, 'Unmarried');
+    })(),
+    kids.length ? h('p', {}, 'Children: ', kids.map((k, i) => [i ? ', ' : '', link(k), k.alive ? ` (${ageStr(k)})` : ''])) : null,
+    mc && c.id !== mc.id && c.alive ? h('p', { class: bond(c, mc) < -40 ? 'bad' : 'dim' }, `Bond with ${mc.name}: ${Math.round(bond(c, mc))} (${this.closeness(bond(c, mc)).toLowerCase()})${bond(c, mc) < -40 ? ', resents you' : ''} · Loyalty to the House: ${Math.round(c.loyalty)}`) : null,
+    mc && c.id !== mc.id && c.alive && isAdult(c) && c.orientKnown && !spouseOf(c) && !isDescendantOf(c, mc.id) ? h('p', { class: 'dim' }, attraction(c, mc) === 0 ? `Not drawn to ${mc.name}.` : attraction(c, mc) > 1.15 ? `Strongly drawn to ${mc.name}.` : `Could be drawn to ${mc.name}.`) : null,
+    c.alive && !c.house && isAdult(c) ? h('p', { class: c.corruption > 60 ? 'bad' : 'dim' }, `Resentment: ${c.corruption > 70 ? 'dangerous' : c.corruption > 40 ? 'simmering' : 'low'}`) : null);
+
+  const story = this.lifeEvents(c);
+  if (story) story.open = true;
+  const tabs = this.tabSet([
+    Battle.active ? { k: 'battle', label: 'Battle', body: h('div', { class: 'cs-acts' }, actions) } : null,
+    { k: 'about', label: 'About', body: about },
+    { k: 'class', label: 'Class', body: skills },
+    { k: 'family', label: 'Family', body: family },
+    !Battle.active && actions.length ? { k: 'acts', label: 'Actions', badge: actions.filter((n) => n.tagName === 'BUTTON').length || null, body: h('div', { class: 'cs-acts' }, actions) } : null,
+    story ? { k: 'story', label: 'Story', body: story } : null,
+  ], this.charTab || 'about', { cls: 'cs-tabs', onChange: (k) => { this.charTab = k; } });
+
+  return h('div', { class: 'sheet cs' },
+    h('div', { class: 'cs-head' },
+      h('div', { class: 'cs-portrait' + (role ? ' r-' + role.k : '') }, portrait(c, 92),
+        c.house && G.heraldry[c.house] ? h('span', { class: 'cs-flag' }, Heraldry.canvas(G.heraldry[c.house], 34)) : null,
+        role && role.k === 'head' ? h('span', { class: 'cs-crown', 'aria-hidden': 'true' }, '♛') : null),
+      h('div', { class: 'cs-id' },
+        h('div', { class: 'tags' }, tags),
+        h('p', {}, this.charLine(c)),
+        c.alive ? h('div', { class: 'cs-hp' }, bar(c.hp, maxHp(c), 'hp'), h('small', { class: 'dim' }, `HP ${Math.round(c.hp)}/${maxHp(c)} · L${c.level}`)) : null)),
+    tabs.nav, tabs.panes);
 };
 
 // Mid-battle party popup: combat info only — no estate social / equipment / courtship actions.
