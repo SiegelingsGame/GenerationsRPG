@@ -11,8 +11,9 @@ const chrome = fs.existsSync('/usr/bin/chromium')
 async function boot(page) {
   await page.goto(URL);
   await page.getByRole('button', { name: /^Random Lineage/ }).click();
+  await page.getByRole('button', { name: /^Skip$/ }).click();
   await page.getByRole('button', { name: 'Start the game', exact: true }).click();
-  await page.getByRole('button', { name: 'Continue playing', exact: true }).click();
+  await page.getByRole('button', { name: /^Guide me/ }).click();
 }
 
 test('spouse dies → seek/court/propose remarriage; blocked while spouse alive', async () => {

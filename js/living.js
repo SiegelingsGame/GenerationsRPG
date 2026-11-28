@@ -71,7 +71,7 @@ Living.snapTarget = function (pt) {
 };
 Living.goPoint = function (pt, agent) {
   LocationPrompt.pending = null;
-  if (!this.ensure() || Battle.active || UI.modalStack.length || TownView.open || Campfire.open) return;
+  if (!this.ensure() || Battle.active || UI.modalStack.length || TownView.open || ChurchView.open || Campfire.open) return;
   if (!LS.ensure()) return;
   // tap near the party while walking: halt without a new destination
   if (this.moving && !agent && Math.hypot(pt.x - G.ppos.x, pt.y - G.ppos.y) < 0.85) {
@@ -158,7 +158,7 @@ Living.settleAt = function () {
 Living.frame = function (ts) {
   const dt = Math.min(0.05, Math.max(0, (ts - (this.lastTs || ts)) / 1000));
   this.lastTs = ts;
-  if (!this.moving || !G || G.mode !== 'world' || Battle.active || UI.modalStack.length || TownView.open || Campfire.open || Game.busy) return;
+  if (!this.moving || !G || G.mode !== 'world' || Battle.active || UI.modalStack.length || TownView.open || ChurchView.open || Campfire.open || Game.busy) return;
   if (!this.ensure() || !LS.ensure()) return;
   if (this.targetId) {
     const ag = G.world.parties.find((x) => x.id === this.targetId);

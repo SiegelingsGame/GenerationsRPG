@@ -92,46 +92,43 @@ const PackArt = {
       },delay);
     };
     const shake=(ms,power)=>{if(typeof Render!=='undefined'&&Render.shake)Render.shake(ms,power);};
-    const banner=(text,color)=>{
-      if(!t||typeof Battle==='undefined')return;
-      Battle.fx.push({uid:t.uid,text,color:color||'#ffd76a',t0:performance.now(),small:false});
-    };
+    const later=(ms,fn)=>setTimeout(fn,ms);
+    // a short glow on the caster before the spell leaves their hands
+    const charge=(key,size=70)=>{ if(!s)return; const from=this.gridPos(s); if(!from)return;
+      this.effects.push({key,to:from,from:null,projectile:null,t0:performance.now(),delay:0,size,toAim:fromAim,charge:true}); };
+    // Each spell reads as wind-up → travel → one big impact → (at most) one echo. Captions name the spell.
     if(name==='starfall'){
-      banner('STARFALL','#ffb347');shake(520,10);
-      burst('fire_proj',0,{projectile:'fire_proj',size:80});
-      burst('explosion',180,{size:160});burst('explosion',280,{dx:.35,size:120});burst('flame',320,{size:110,loop:true});
-      burst('critical',420,{size:100});burst('sparkle',500,{size:90});
+      charge('sparkle',60);
+      burst('fire_proj',260,{projectile:'fire_proj',size:80});
+      burst('explosion',500,{size:170}); later(500,()=>shake(380,7));
+      burst('flame',760,{size:100});
     }else if(name==='solarSmite'){
-      banner('SOLAR SMITE','#fff3a0');shake(480,8);
-      burst('holy_proj',0,{projectile:'holy_proj',size:90});
-      burst('lightning',160,{size:150});burst('critical',220,{size:120});
-      burst('sparkle',300,{size:100});burst('heal',380,{size:90});
+      charge('sparkle',60);
+      burst('lightning',320,{size:170}); later(340,()=>shake(320,6));
+      burst('holy_proj',360,{size:110});
     }else if(name==='worldsong'){
-      banner('WORLDSONG','#b48aff');shake(400,6);
-      burst('music',0,{size:130});burst('buff',120,{size:110});
-      burst('wind_proj',80,{projectile:'wind_proj',size:80});
-      burst('sparkle',240,{size:100});burst('shield',320,{size:100});
+      charge('music',90);
+      burst('wind_proj',300,{projectile:'wind_proj',size:80});
+      burst('sparkle',520,{size:120});
+    }else if(name==='oathblade'){
+      burst('critical',140,{size:150}); later(150,()=>shake(260,9));
     }else if(name==='voidCascade'){
-      banner('VOID CASCADE','#c48aff');shake(700,14);
-      burst('dark_proj',0,{projectile:'dark_proj',size:95});
-      burst('explosion',200,{size:170});burst('lightning',260,{size:140});
-      burst('sparkle',340,{dx:-.3,size:110});burst('explosion',420,{dx:.4,size:130});
-      burst('flame',500,{size:120,loop:true});burst('critical',560,{size:110});
+      charge('dark_proj',90);
+      burst('dark_proj',420,{projectile:'dark_proj',size:100});
+      burst('explosion',640,{size:190}); later(640,()=>shake(600,11));
+      burst('sparkle',900,{size:110});
     }else if(name==='unmaking'){
-      banner('ABSOLUTE UNMAKING','#ff5c5c');shake(900,18);
-      burst('dark_proj',0,{projectile:'dark_proj',size:110});
-      burst('lightning',120,{size:160});burst('explosion',200,{size:180});
-      burst('explosion',320,{dx:.5,size:140});burst('explosion',320,{dx:-.5,size:140});
-      burst('flame',400,{size:140,loop:true});burst('critical',480,{size:130});
-      burst('sparkle',560,{size:120});
+      // the one moment allowed to be loud: a long wind-up, then everything at once
+      charge('dark_proj',130);
+      later(500,()=>charge('lightning',150));
+      burst('explosion',1100,{size:230}); later(1100,()=>shake(900,16));
+      burst('explosion',1250,{dx:.6,size:150}); burst('explosion',1250,{dx:-.6,size:150});
     }else if(name==='timelineBreak'){
-      banner('THE WEAVE FRACTURES','#8fd3ff');shake(1000,16);
-      burst('lightning',0,{size:160});burst('sparkle',100,{size:120});
-      burst('explosion',180,{size:150});burst('music',260,{size:110});
-      burst('shield',360,{size:130});burst('heal',480,{size:120});
-      burst('buff',560,{size:110});
+      burst('lightning',0,{size:170}); later(0,()=>shake(500,8));
+      burst('shield',380,{size:150});
+      burst('heal',760,{size:130});
     }else{
-      burst('explosion',0,{size:140});burst('critical',120,{size:100});
+      burst('explosion',0,{size:140});
     }
   },
 };

@@ -16,7 +16,7 @@ TownView.start = function (tile) {
   this.cv = h('canvas', { class: 'town-canvas' });
   this.say = h('div', { class: 'camp-say' });
   this.btns = h('div', { class: 'camp-btns' });
-  this.el = h('div', { class: 'townview' }, this.cv, UI.goldPill(), h('div', { class: 'camp-ui town-ui' }, this.say, this.btns));
+  this.el = h('div', { class: 'townview' }, this.cv, UI.goldPill(), UI.sceneHouseBtn(), h('div', { class: 'camp-ui town-ui' }, this.say, this.btns));
   document.body.append(this.el);
   this.cv.addEventListener('click', (e) => this.click(e));
   this.cv.addEventListener('mousemove', (e) => { this.hover = this.hit(e); this.cv.style.cursor = this.hover ? 'pointer' : 'default'; });
@@ -31,6 +31,7 @@ TownView.close = function () {
   this.open = false;
   if (this.el) this.el.remove();
   this.el = null;
+  UI.closeDrawer();
   UI.refresh();
 };
 // called after any game action while the town view is open

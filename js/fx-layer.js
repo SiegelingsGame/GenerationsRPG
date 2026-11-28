@@ -84,11 +84,21 @@ const FxLayer = {
     this.ctx.putImageData(this.img, 0, 0);
     const c = render.ctx;
     c.save();
-    c.globalAlpha = this.weatherKey === 'fog' ? 0.55 : this.weatherKey === 'storm' ? 0.5 : 0.42;
+    // A light touch: weather is atmosphere, the map must read through it.
+    const k = this.weatherKey;
+    c.globalAlpha = k === 'fog' ? 0.32 : k === 'storm' || k === 'blizzard' ? 0.3 : k === 'god-rays' || k === 'aurora' ? 0.22 : 0.2;
     c.imageSmoothingEnabled = false;
-    // Soften over the map so terrain still reads.
-    c.globalCompositeOperation = (this.weatherKey === 'god-rays' || this.weatherKey === 'aurora') ? 'screen' : 'source-over';
-    c.drawImage(this.canvas, 0, 0, render.w, render.h);
+    c.globalCompositeOperation = (k === 'god-rays' || k === 'aurora') ? 'screen' : 'source-over';
+    // Scale evenly (never stretch one way: that turned petals and drops into long streaks on a
+    // tall phone), and repeat down or across the screen, mirroring every other copy so it doesn't look tiled.
+    const sc = render.h > render.w ? render.w / this.W : Math.max(render.w / this.W, render.h / this.H);
+    const tw = this.W * sc, th = this.H * sc;
+    for (let y = 0, row = 0; y < render.h; y += th, row++) {
+      for (let x = 0, col = 0; x < render.w; x += tw, col++) {
+        if ((row + col) % 2) { c.save(); c.translate(x + tw, y); c.scale(-1, 1); c.drawImage(this.canvas, 0, 0, tw, th); c.restore(); }
+        else c.drawImage(this.canvas, x, y, tw, th);
+      }
+    }
     c.restore();
   },
 
