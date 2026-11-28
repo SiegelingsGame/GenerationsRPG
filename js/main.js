@@ -289,6 +289,8 @@ Game.arrangedMatch = function () {
 Game.enterWorld = function (fresh) {
   G.mode = 'world';
   Render.camInit = false;
+  Render.zoom = Render.zoomTarget = 1;
+  if (!G.ppos) G.ppos = { x: G.pos.x, y: G.pos.y }; // the map draws the party from here
   if (fresh) {
     chron(`${ch(G.mcId).name} founds House ${G.house.name} in the ${era().name}. The ${G.house.heirloom.name} is its first heirloom.`, 'head', [G.mcId], 'head');
     Log.add('Tip: click land or roads to travel — a gold path previews the route. Esc stops. Towns for recruits, ruins for prestige, estate for investment.', 'dim');
@@ -303,7 +305,7 @@ Game.enterWorld = function (fresh) {
   Guide.init();
   UI.refresh();
   saveGame();
-  if (fresh) Guide.show();
+  if (fresh) Guide.welcome();
 };
 
 // ---------------------------------------------------------------- travel

@@ -3,7 +3,7 @@ test('heraldry categories, sliders, generation, House rename and save migration'
  const b=await chromium.launch({headless:true,...(chromePath()?{executablePath:chromePath()}:{channel:'chrome'}),args:['--no-sandbox']});
  try{
  const p=await b.newPage({viewport:{width:390,height:844}}),errors=[];p.on('pageerror',e=>errors.push(e.message));
- await p.goto(process.env.GAME_TEST_URL||'http://127.0.0.1:8769');await p.getByRole('button',{name:/^Random Lineage/}).click();
+ await p.goto(process.env.GAME_TEST_URL||'http://127.0.0.1:8769');await p.getByRole('button',{name:/^Random Lineage/}).click();await p.getByRole('button',{name:/^Skip$/}).click();
  await p.getByLabel('House name',{exact:true}).fill('Brightoak');await p.getByRole('button',{name:'Edit flag & sigil',exact:true}).click();
  await p.getByLabel('Sigil category',{exact:true}).selectOption('Animals');assert.equal(await p.locator('.sigil-grid button').count(),12);
  await p.locator('.sigil-grid button').first().click();await p.getByLabel('Field Hue',{exact:true}).fill('210');await p.getByLabel('Flag pattern',{exact:true}).selectOption('2');

@@ -25,7 +25,7 @@ test('thief class lays snares, applies venom, and wears daggers', async () => {
     await p.getByText('Random Lineage · Ready to play', { exact: true }).waitFor();
     await p.getByRole('button', { name: 'Start the game', exact: true }).click();
     await p.getByText('Your first generation', { exact: true }).waitFor();
-    await p.getByRole('button', { name: 'Continue playing', exact: true }).click();
+    await p.getByRole('button', { name: /^Guide me/ }).click();
 
     const result = await p.evaluate(() => {
       const ok = (cond, msg) => { if (!cond) throw new Error(msg); };

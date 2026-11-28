@@ -491,6 +491,7 @@ UI.houseMore = function () {
     tile('📜', 'Story so far', 'what has happened', () => this.showChronicle()),
     tile('🗺', 'World', 'towns, eras, the prophecy', () => this.showWorld()),
     tile('👪', 'Household list', 'everyone at once', () => this.showHousehold()),
+    tile('🧭', 'Starter goals', G.guide && G.guide.hidden ? 'hidden · tap to see' : 'what to try next', () => Guide.show()),
     tile('⚙', 'Save & help', 'save, how to play', () => this.showMenu()));
 };
 

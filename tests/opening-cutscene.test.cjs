@@ -45,11 +45,12 @@ test('Cutscene PackArt FX aim near Hollow King screen position (not origin)', as
     await page.goto(URL);
     await page.getByRole('button', { name: /^Random Lineage/ }).click();
     await page.waitForFunction(() => OpeningCutscene.phase === 'battle' && Battle.units.some((u) => u.type === 'hollow'), null, { timeout: 8000 });
-    await page.waitForFunction(() => PackArt.effects.some((e) => e.to && Number.isFinite(e.to.x) && Number.isFinite(e.to.y)), null, { timeout: 8000 });
+    // impacts, not the caster's wind-up glow (`charge`), should land on the King
+    await page.waitForFunction(() => PackArt.effects.some((e) => !e.charge && e.to && Number.isFinite(e.to.x) && Number.isFinite(e.to.y)), null, { timeout: 12000 });
     const info = await page.evaluate(() => {
       const king = Battle.units.find((u) => u.type === 'hollow');
       const kingScreen = Render.unitScreen(king);
-      const fx = PackArt.effects.filter((e) => e.to && Number.isFinite(e.to.x) && Number.isFinite(e.to.y));
+      const fx = PackArt.effects.filter((e) => !e.charge && e.to && Number.isFinite(e.to.x) && Number.isFinite(e.to.y));
       const samples = fx.slice(0, 6).map((e) => {
         const p = Render.biso(e.to.x, e.to.y);
         return {

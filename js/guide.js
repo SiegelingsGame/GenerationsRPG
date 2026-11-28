@@ -25,28 +25,45 @@ const Guide = {
       Math.hypot(a.x-G.pos.x,a.y-G.pos.y)-Math.hypot(b.x-G.pos.x,b.y-G.pos.y));
     const t = towns[0];
     return [
-      ['travel', 'Take your first journey', 'Click or tap land and roads — a gold path shows your route before you go. Water, cliffs and far islands block travel until you find bridges or boats. Escape (or Stop) cancels a march. Roads are the surest way; travel advances time.'],
-      ['town', 'Visit a town', `Look for labelled towns on the map.${t ? ` A nearby town is ${t.name}.` : ''} Follow roads toward its banner, then Enter when the prompt appears. Visit buildings to recruit, court, shop and hear rumors.`],
-      ['renown', 'Earn renown for your House', 'Renown is called Prestige in the HUD. Earn more than you started with by doing good deeds in towns, helping travelers or winning battles. Better reputation opens stronger matches. Prepare equipment and potions before risking ruins.'],
-      ['family', 'Grow your family', 'At your estate, open Household & Heir to meet your family. A compatible couple may have children as years pass; births are not guaranteed. Adopt a Child is another path to an heir. Rest advances time and ages everyone, so plan before skipping years.', () => UI.showHousehold(), 'Open household'],
-      ['tree', 'Explore your family tree', 'Open the family tree and select a person to see their relationships. It records the line you will carry into future generations.', () => UI.showTree(), 'Open family tree'],
-      ['heir', 'Name your successor', 'In Household & Heir, select an eligible descendant and choose Name as Heir. Protect and train them: when your head of House dies, succession lets the family continue.', () => UI.showHousehold(), 'Choose an heir'],
-      ['estate', 'Plan your legacy', 'Return home along the roads. Stopping beside the estate is enough — Home actions appear when you are near the hall. Invest gold, rest, and prepare for the thousand-year threat.', () => UI.showEstate(), 'Inspect estate'],
+      ['travel', 'Take your first journey', 'Tap land or a road. A glowing path shows the route first; travel takes days. Water and cliffs block you until you find bridges or boats.'],
+      ['town', 'Visit a town', `${t ? `${t.name} is close. ` : ''}Follow the dashed line, then Enter. Inside you can recruit, court, shop and hear rumors.`],
+      ['renown', 'Earn renown for your House', 'Do good deeds in towns, help travelers or win battles. Fame opens better marriages and recruits.'],
+      ['family', 'Grow your family', 'Open House › Court. Spend time with your partner for a better chance of a child each year, or adopt a ward.', () => (UI.isMobile() ? UI.openDrawer() : UI.showHousehold()), 'Open the House'],
+      ['tree', 'Explore your family tree', 'Everyone your House has ever had, living and dead. Tap anyone to see who they are.', () => UI.showTree(), 'Open family tree'],
+      ['heir', 'Name your successor', 'When your head dies, the heir carries on. Without one, the House can end. Open House › Heir.', () => { UI.houseTab = 'heir'; UI.isMobile() ? UI.openDrawer() : UI.showHousehold(); }, 'Open the Heir tab'],
+      ['estate', 'Plan your legacy', 'Come home to build up the estate, rest and plan for the thousand-year threat.', () => UI.showEstate(), 'Inspect estate'],
     ];
   },
+  // First thing a new House sees: two big choices and an optional peek at the goals. No scrolling.
+  welcome() {
+    const g = this.init();
+    const pick = (hidden) => { g.hidden = hidden; g.chosen = true; saveGame(); UI.closeAll(); UI.refresh(); };
+    UI.modal(h('div', { class: 'gw' },
+      h('p', { class: 'gw-lead' }, 'Build a House that outlives its founder. You will grow old and die; your heir plays on.'),
+      h('button', { class: 'gw-choice hl', onclick: () => pick(false) },
+        h('span', { class: 'gw-icon', 'aria-hidden': 'true' }, '🧭'),
+        h('span', {}, h('b', {}, 'Guide me'), h('small', {}, 'One goal at a time at the top of the screen, with a hint for each.'))),
+      h('button', { class: 'gw-choice', onclick: () => pick(true) },
+        h('span', { class: 'gw-icon', 'aria-hidden': 'true' }, '⚔'),
+        h('span', {}, h('b', {}, 'Just let me play'), h('small', {}, 'No goals on screen. Find them later under House › More.'))),
+      h('button', { class: 'gw-more', onclick: () => { UI.closeAll(); this.show(); } }, 'What are the goals? ›')),
+    { title: 'Your first generation', locked: true });
+  },
+  // The goal list: one line per goal, tap to open its hint. The next goal starts open.
   show() {
     const g = this.update(), steps = this.steps();
-    UI.modal([
-      h('p', {}, 'Build a House that outlives its founder. Follow these goals in any order; progress is checked as you play. On a phone, tap Here for place actions, Log for recent activity, and House for the full menu.'),
-      h('p', { class: 'dim' }, `${steps.filter(s => g.done[s[0]]).length} / ${steps.length} goals complete. You can close this guide and keep playing at any time.`),
-      ...steps.map(([key, title, text, action, label]) => h('section', { class: 'guide-step' },
-        h('h3', {}, `${g.done[key] ? '✓ ' : ''}${title}`), h('p', {}, text),
-        action ? act(label, () => { UI.closeModal(); action(); }) : null)),
-      act('Continue playing', () => { UI.closeModal(); UI.refresh(); }),
-      act(g.hidden ? 'Show next goal while playing' : 'Hide next goal while playing', () => {
-        g.hidden = !g.hidden; saveGame(); UI.closeModal(); UI.refresh();
-      }),
-    ], { title: 'Your first generation' });
+    const done = steps.filter((s) => g.done[s[0]]).length;
+    const next = steps.find((s) => !g.done[s[0]]);
+    UI.modal(h('div', { class: 'gl' },
+      h('div', { class: 'gl-progress' }, h('small', {}, `${done} of ${steps.length} goals done`), bar(done, steps.length, 'pros')),
+      h('div', { class: 'gl-list' }, steps.map(([key, title, text, action, label]) => h('details', { class: 'gl-step' + (g.done[key] ? ' done' : ''), open: next && next[0] === key },
+        h('summary', {}, h('span', { class: 'gl-check', 'aria-hidden': 'true' }, g.done[key] ? '✓' : '○'), title),
+        h('p', {}, text),
+        action ? act(label, () => { UI.closeModal(); action(); }) : null))),
+      h('div', { class: 'gl-foot' },
+        act('Play', () => { UI.closeModal(); UI.refresh(); }, { cls: 'hl' }),
+        act(g.hidden ? 'Show goals' : 'Hide goals', () => { g.hidden = !g.hidden; saveGame(); UI.closeModal(); UI.refresh(); }))),
+    { title: 'Starter goals' });
   },
   render() {
     const g = this.update();

@@ -10,8 +10,9 @@ const chrome = require('fs').existsSync('/usr/bin/chromium')
 async function boot(page) {
   await page.goto(URL);
   await page.getByRole('button', { name: /^Random Lineage/ }).click();
+  await page.getByRole('button', { name: /^Skip$/ }).click();
   await page.getByRole('button', { name: 'Start the game', exact: true }).click();
-  await page.getByRole('button', { name: 'Continue playing', exact: true }).click();
+  await page.getByRole('button', { name: /^Guide me/ }).click();
 }
 
 test('battle party popup hides social actions; enemy lore grows and scales damage/resist', async () => {

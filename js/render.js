@@ -174,7 +174,7 @@ Render.frame = function () {
   if (approach) this.drawSpiritApproach(OpeningCutscene.spirit);
   else if (Battle.active) this.drawBattle();
   else this.drawWorld();
-  if (!Battle.active && typeof FxLayer !== 'undefined') FxLayer.drawWeather(this);
+  if (!Battle.active && !approach && typeof FxLayer !== 'undefined') FxLayer.drawWeather(this);
   LocationPrompt.render();
   if (shaking) c.restore();
 };
@@ -275,6 +275,7 @@ Render.refreshHoverRoute = function () {
 // early-game coach: ghost path to the nearest town + soft road glints
 Render.drawTravelCoach = function () {
   if (!G || !G.guide || G.guide.done?.travel || Living.moving || !LS.ready) return;
+  if (!G.ppos) G.ppos = { x: G.pos.x, y: G.pos.y };
   const towns = G.world.towns.filter((t) => !t.fallen)
     .sort((a, b) => Math.hypot(a.x - G.ppos.x, a.y - G.ppos.y) - Math.hypot(b.x - G.ppos.x, b.y - G.ppos.y));
   const town = towns[0];
@@ -342,8 +343,8 @@ Render.drawLandscape = function () {
   c.imageSmoothingEnabled = true;
   c.drawImage(LS.tex, 0, 0);
   c.restore();
-  // first-journey road pulse: teach "follow the roads"
-  this.drawTravelCoach();
+  // first-journey road pulse: teach "follow the roads". A hint must never stop the world drawing.
+  try { this.drawTravelCoach(); } catch (e) { console.warn('travel coach', e); }
   // hover preview + active route
   this.refreshHoverRoute();
   this.drawRoute(Living.moving ? Living.path : (this.hoverRoute || []), {
@@ -541,36 +542,76 @@ Render.drawSpiritApproach = function (spirit) {
     }
   }
 
-  // Ground plane in perspective
+  const street = stage === 'town' || stage === 'neighborhood' || stage === 'house';
+  // distance haze: far things fade in out of the mist instead of appearing
+  const haze = (z) => Math.max(0, Math.min(1, (30 - (camZ - z)) / 12));
+  const withHaze = (z, fn) => { const a = haze(z); if (a <= 0.01) return; c.save(); c.globalAlpha *= a; fn(); c.restore(); };
+
+  // Ground: grass verges, a cobbled street down the middle, all the way to the bottom of the screen
   if (stage !== 'belly') {
-    const nearZ = Math.max(0.6, camZ - 0.55);
-    const farZ = Math.max(nearZ + 1, camZ - 30);
-    const gNearL = P(-7, 0, nearZ), gNearR = P(7, 0, nearZ);
-    const gFarL = P(-7, 0, farZ), gFarR = P(7, 0, farZ);
-    const groundCol = (stage === 'room' || stage === 'house') ? '#4a3428' : eraTint('#8a7f6e');
-    q([gFarL, gFarR, gNearR, gNearL], groundCol);
-    // Fill below near edge to bottom of screen
-    c.fillStyle = (stage === 'room' || stage === 'house') ? '#2a1a14' : eraTint('#5e5446');
-    c.beginPath();
-    c.moveTo(gNearL.x, gNearL.y); c.lineTo(gNearR.x, gNearR.y);
-    c.lineTo(W + 40, H + 20); c.lineTo(-40, H + 20); c.closePath(); c.fill();
-    if (stage === 'town' || stage === 'neighborhood') {
-      c.strokeStyle = 'rgba(0,0,0,0.16)'; c.lineWidth = 1;
-      for (let z = nearZ; z > farZ; z -= Math.max(0.35, (nearZ - farZ) * 0.08)) {
-        const a = P(-5.5, 0, z), b = P(5.5, 0, z);
-        c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+    const nearZ = Math.max(0.6, camZ - 0.5);
+    const farZ = Math.min(nearZ - 1, 1.2);
+    const indoor = stage === 'room' || (stage === 'house' && stageProg > 0.6);
+    const grass = indoor ? '#4a3428' : eraTint('#55683f');
+    const stone = indoor ? '#4a3428' : eraTint('#9b8b70');
+    const gl = P(-9, 0, farZ), gr = P(9, 0, farZ), nl = P(-9, 0, nearZ), nr = P(9, 0, nearZ);
+    q([gl, gr, nr, nl], grass);
+    c.fillStyle = grass; c.fillRect(0, Math.min(nl.y, nr.y), W, H);
+    if (street && !indoor) {
+      const sl = P(-2.5, 0, farZ), sr = P(2.5, 0, farZ), snl = P(-2.5, 0, nearZ), snr = P(2.5, 0, nearZ);
+      q([sl, sr, snr, snl], stone);
+      // carry the street off the bottom edge
+      c.beginPath(); c.moveTo(snl.x, snl.y); c.lineTo(snr.x, snr.y); c.lineTo(snr.x + (snr.x - sr.x) * 3, H + 40); c.lineTo(snl.x + (snl.x - sl.x) * 3, H + 40); c.closePath(); c.fill();
+      // cobble courses: rows get closer together in the distance
+      c.strokeStyle = 'rgba(40,30,20,0.22)'; c.lineWidth = 1;
+      for (let z = Math.floor(nearZ * 2) / 2; z > farZ; z -= 0.5) {
+        const l = P(-2.5, 0, z), r = P(2.5, 0, z);
+        c.beginPath(); c.moveTo(l.x, l.y); c.lineTo(r.x, r.y); c.stroke();
       }
-      for (let x = -2.5; x <= 2.5; x += 0.7) {
-        const a = P(x, 0, nearZ), b = P(x, 0, farZ);
-        c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
-      }
+      c.strokeStyle = 'rgba(255,240,210,0.10)';
+      for (const x of [-1.25, 0, 1.25]) { const a1 = P(x, 0, nearZ), b1 = P(x, 0, farZ); c.beginPath(); c.moveTo(a1.x, a1.y); c.lineTo(b1.x, b1.y); c.stroke(); }
+      // kerbs
+      c.strokeStyle = 'rgba(30,22,16,0.45)'; c.lineWidth = 2;
+      for (const x of [-2.5, 2.5]) { const a1 = P(x, 0, nearZ), b1 = P(x, 0, farZ); c.beginPath(); c.moveTo(a1.x, a1.y); c.lineTo(b1.x, b1.y); c.stroke(); }
     }
   }
 
-  // Street buildings (far → near)
+  // The house the spirit is heading for stands at the end of the street from the very first frame,
+  // small in the haze, and grows as the camera travels toward it.
+  const doorZ = 2.6;
+  if (street && doorZ < camZ - 0.35 && !(stage === 'house' && stageProg > 0.7)) {
+    withHaze(doorZ, () => {
+      const wall = '#b89a74';
+      const a0 = P(-1.6, 0, doorZ), a1 = P(1.6, 0, doorZ), t1 = P(1.6, 3.5, doorZ), t0 = P(-1.6, 3.5, doorZ);
+      q([a1, P(1.6, 0, doorZ - 0.7), P(1.6, 3.5, doorZ - 0.7), t1], shade(eraTint(wall), -0.25));
+      q([a0, a1, t1, t0], eraTint(wall));
+      q([t0, t1, P(0, 4.6, doorZ)], eraTint('#7a3022'));
+      q([P(0.7, 3.9, doorZ - 0.2), P(1.05, 3.9, doorZ - 0.2), P(1.05, 4.7, doorZ - 0.2), P(0.7, 4.7, doorZ - 0.2)], shade(eraTint('#7a6a5a'), -0.1)); // chimney
+      q([P(-1.2, 2.3, doorZ + 0.01), P(-0.75, 2.3, doorZ + 0.01), P(-0.75, 2.9, doorZ + 0.01), P(-1.2, 2.9, doorZ + 0.01)], 'rgba(255,214,140,0.75)');
+      q([P(0.75, 2.3, doorZ + 0.01), P(1.2, 2.3, doorZ + 0.01), P(1.2, 2.9, doorZ + 0.01), P(0.75, 2.9, doorZ + 0.01)], 'rgba(255,214,140,0.75)');
+      q([P(-0.5, 0, doorZ + 0.02), P(0.5, 0, doorZ + 0.02), P(0.5, 2.15, doorZ + 0.02), P(-0.5, 2.15, doorZ + 0.02)], '#0e0a0c');
+      const door = P(0, 1.05, doorZ);
+      const gr = Math.max(20, Math.min(90, door.scale * 1.4));
+      const glow = c.createRadialGradient(door.x, door.y, 2, door.x, door.y, gr);
+      glow.addColorStop(0, 'rgba(255,180,100,0.45)'); glow.addColorStop(1, 'rgba(255,180,100,0)');
+      c.fillStyle = glow; c.beginPath(); c.arc(door.x, door.y, gr, 0, Math.PI * 2); c.fill();
+      // smoke from the chimney: a home, lived in
+      for (let i = 0; i < 4; i++) {
+        const k = ((this.t / 2400) + i / 4) % 1;
+        const sp2 = P(0.88 + k * 0.6, 4.8 + k * 2.2, doorZ - 0.2);
+        c.fillStyle = `rgba(220,220,225,${0.28 * (1 - k)})`;
+        c.beginPath(); c.arc(sp2.x, sp2.y, Math.max(2, sp2.scale * (0.18 + k * 0.35)), 0, Math.PI * 2); c.fill();
+      }
+    });
+  }
+
+  // Street buildings, lamps and townsfolk: fixed in the world, drawn far → near, so the camera
+  // really travels down the lane past them.
   if (stage === 'town' || stage === 'neighborhood' || (stage === 'house' && stageProg < 0.45)) {
+    const clipZ = camZ - 0.45;
     const drawBuilding = (side, z0, z1, hgt, col, roof) => {
       if (z1 >= camZ - 0.4) return;
+      z0 = Math.min(z0, clipZ);
       const sx = side === 'L' ? -2.6 : 2.6;
       const out = side === 'L' ? -1 : 1;
       const a0 = P(sx, 0, z0), a1 = P(sx, 0, z1), t1 = P(sx, hgt, z1), t0 = P(sx, hgt, z0);
@@ -586,35 +627,40 @@ Render.drawSpiritApproach = function (spirit) {
         if (hgt > 3.2) q([P(sx, hgt * 0.28, za), P(sx, hgt * 0.28, zb), P(sx, hgt * 0.42, zb), P(sx, hgt * 0.42, za)], 'rgba(255,220,140,0.45)');
       }
     };
+    const drawLamp = (x, z) => {
+      if (z >= camZ - 0.5) return;
+      const b0 = P(x, 0, z), t0 = P(x, 2.1, z);
+      c.strokeStyle = 'rgba(30,24,20,0.9)'; c.lineWidth = Math.max(1, b0.scale * 0.06);
+      c.beginPath(); c.moveTo(b0.x, b0.y); c.lineTo(t0.x, t0.y); c.stroke();
+      const r = Math.max(4, t0.scale * 0.5);
+      const g = c.createRadialGradient(t0.x, t0.y, 1, t0.x, t0.y, r);
+      g.addColorStop(0, 'rgba(255,224,150,0.95)'); g.addColorStop(0.25, 'rgba(255,196,110,0.45)'); g.addColorStop(1, 'rgba(255,190,100,0)');
+      c.fillStyle = g; c.beginPath(); c.arc(t0.x, t0.y, r, 0, Math.PI * 2); c.fill();
+    };
+    const folk = [
+      { x: -1.7, z: 5.2, tunic: '#6a4a3a', g: 'woman' }, { x: 1.5, z: 8.4, tunic: '#3d5a80', g: 'man' },
+      { x: -1.3, z: 12.6, tunic: '#5a6a3a', g: 'man' }, { x: 1.8, z: 15.8, tunic: '#7a3a4a', g: 'woman' },
+      { x: -1.9, z: 19.5, tunic: '#4a4a6a', g: 'man' }, { x: 0.9, z: 23.2, tunic: '#6a5a3a', g: 'woman' },
+    ];
     const items = [];
-    // Place buildings ahead of camera along decreasing z
-    for (let k = 0; k < 12; k++) {
-      const z0 = camZ - 1.2 - k * 1.85 - rng(k) * 0.35;
-      if (z0 < 0.8) continue;
-      const z1 = Math.max(0.7, z0 - 1.4 - rng(k + 1) * 0.6);
-      items.push({ side: 'L', z0, z1, hgt: 2.5 + rng(k + 2) * 1.9, col: ['#c9b08a', '#d4c3a0', '#bfa57d'][k % 3], roof: ['#8c3b2a', '#5b4a8a', '#7a3022'][k % 3], z: (z0 + z1) / 2 });
-      items.push({ side: 'R', z0: z0 - 0.35, z1: Math.max(0.7, z0 - 1.7 - rng(k + 4) * 0.5), hgt: 2.3 + rng(k + 5) * 2.1, col: ['#d8cbb0', '#a99478', '#c9b08a'][k % 3], roof: ['#4a5a6a', '#6b4a2a', '#8c3b2a'][k % 3], z: z0 - 0.9 });
+    for (let k = 0; k < 14; k++) {
+      const z0 = 4.4 + k * 1.8 + rng(k) * 0.3;
+      const z1 = z0 - 1.4 - rng(k + 1) * 0.3;
+      items.push({ z: (z0 + z1) / 2, draw: () => drawBuilding('L', z0, z1, 2.5 + rng(k + 2) * 1.9, ['#c9b08a', '#d4c3a0', '#bfa57d'][k % 3], ['#8c3b2a', '#5b4a8a', '#7a3022'][k % 3]) });
+      const r0 = z0 - 0.5, r1 = r0 - 1.3 - rng(k + 4) * 0.3;
+      items.push({ z: (r0 + r1) / 2, draw: () => drawBuilding('R', r0, r1, 2.3 + rng(k + 5) * 2.1, ['#d8cbb0', '#a99478', '#c9b08a'][k % 3], ['#4a5a6a', '#6b4a2a', '#8c3b2a'][k % 3]) });
     }
-    items.sort((a, b) => a.z - b.z); // far first
-    for (const b of items) drawBuilding(b.side, b.z0, b.z1, b.hgt, b.col, b.roof);
-  }
-
-  // Target house facade / doorway
-  if (stage === 'neighborhood' || stage === 'house') {
-    const doorZ = Math.min(camZ - 0.9, 2.6);
-    if (doorZ < camZ - 0.35) {
-      const wall = '#b89a74';
-      const a0 = P(-1.6, 0, doorZ), a1 = P(1.6, 0, doorZ), t1 = P(1.6, 3.5, doorZ), t0 = P(-1.6, 3.5, doorZ);
-      q([a0, a1, t1, t0], eraTint(wall));
-      q([t0, t1, P(0, 4.5, doorZ)], eraTint('#7a3022'));
-      // Side thickness for 2.5D
-      q([a1, P(1.6, 0, doorZ - 0.7), P(1.6, 3.5, doorZ - 0.7), t1], shade(eraTint(wall), -0.25));
-      q([P(-0.5, 0, doorZ - 0.02), P(0.5, 0, doorZ - 0.02), P(0.5, 2.15, doorZ - 0.02), P(-0.5, 2.15, doorZ - 0.02)], '#0e0a0c');
-      const door = P(0, 1.05, doorZ);
-      const glow = c.createRadialGradient(door.x, door.y, 3, door.x, door.y, 70);
-      glow.addColorStop(0, 'rgba(255,180,100,0.4)'); glow.addColorStop(1, 'rgba(255,180,100,0)');
-      c.fillStyle = glow; c.beginPath(); c.arc(door.x, door.y, 70, 0, Math.PI * 2); c.fill();
-    }
+    for (let z = 4; z < 28; z += 4.5) { items.push({ z, draw: () => drawLamp(-2.3, z) }); items.push({ z: z + 2.2, draw: () => drawLamp(2.3, z + 2.2) }); }
+    folk.forEach((f, i) => items.push({ z: f.z, draw: () => {
+      if (f.z >= camZ - 0.8) return;
+      const sway = Math.sin(this.t / 700 + i) * 0.12;
+      const foot = P(f.x + sway, 0, f.z);
+      const sc = foot.scale / 46;
+      if (sc < 0.08 || sc > 6) return;
+      this.drawFigure(foot.x, foot.y, { skin: '#c9a88a', hair: '#3a2418', tunic: f.tunic, stage: 'prime', race: 'human', gender: f.g, hairStyle: f.g === 'woman' ? 'long' : 'short', hScale: 1, wScale: 1 }, sc, {});
+    } }));
+    items.sort((a2, b2) => a2.z - b2.z); // far first
+    for (const it of items) withHaze(it.z, it.draw);
   }
 
   // Interior box (house → room → belly)
@@ -1670,7 +1716,15 @@ Render.drawBattle = function () {
   const bs = this.bscale = Math.min(mobileBattle ? 1.2 : 1, this.w / (mobileBattle ? 560 : 780), this.h / (mobileBattle ? 440 : 520));
   const bm = this.mouse ? this.unbattle(this.mouse) : null;
   c.save();
-  c.translate(this.w / 2, this.h / 2); c.scale(bs, bs); c.translate(-this.w / 2, -this.h / 2);
+  // Cutscene camera: eases its zoom and focus toward Render.cine's targets. Normal battles never move.
+  let fx = this.w / 2, fy = this.h / 2, cz = 1;
+  if (Battle.cinematic && this.cine) {
+    const k = this.cine;
+    k.z += (k.zt - k.z) * k.ease; k.gx += (k.tgx - k.gx) * k.ease; k.gy += (k.tgy - k.gy) * k.ease;
+    const f = this.biso(k.gx, k.gy);
+    fx = f.x; fy = f.y - 40; cz = k.z;
+  }
+  c.translate(this.w / 2, this.h / 2); c.scale(bs * cz, bs * cz); c.translate(-fx, -fy);
   // Soft ground skirt so the arena sits in the landscape instead of a floating slab.
   {
     const mid = this.biso(3.5, 2.5);
@@ -1791,9 +1845,16 @@ Render.drawBattle = function () {
     c.globalAlpha = 1;
   }
   c.restore();
-  // title
+  // title (a cutscene has its own captions)
+  if (Battle.cinematic) return;
   c.font = `600 ${bs < 0.7 ? 14 : 18}px Georgia, serif`; c.textAlign = 'center'; c.fillStyle = '#f2ead8';
   c.fillText(`${Battle.title} — Round ${Math.max(1, Battle.round)}`, this.w / 2, bs < 0.7 ? 22 : 34);
+};
+// Point the cutscene camera at a grid spot (or a unit) with a zoom; `ease` is how quickly it gets there.
+Render.cineAim = function (target, zoom = 1.3, ease = 0.05) {
+  const t = target && target.gx != null ? { gx: +target.gx, gy: +target.gy - 0.3 } : (target || { gx: 3.5, gy: 2.5 });
+  if (!this.cine) this.cine = { z: zoom, gx: t.gx, gy: t.gy, zt: zoom, tgx: t.gx, tgy: t.gy, ease };
+  Object.assign(this.cine, { zt: zoom, tgx: t.gx, tgy: t.gy, ease });
 };
 Render.unbattle = function (p) {
   const bs = this.bscale || 1;

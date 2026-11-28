@@ -1151,3 +1151,47 @@ body.oc-approach-active .compass { display: none; }
   .cs .tabset-nav button { font-size: 13px; padding: 6px 2px; }
 }
 .modal:has(> .modal-body > .cs) > .close { position: absolute; top: 10px; right: 10px; margin: 0; float: none; }
+
+/* ---- Starter guide: welcome choice and compact goal list ---- */
+.gw { display: flex; flex-direction: column; gap: 10px; }
+.gw-lead { margin: 0 0 4px; font-size: 15px; line-height: 1.45; }
+.gw-choice { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px; border-radius: 14px; text-align: left; font: inherit; color: var(--text);
+  background: #2a2636; border: 1px solid var(--line); cursor: pointer; min-height: 76px; }
+.gw-choice.hl { background: linear-gradient(180deg, #3d3219, #2a2213); border-color: var(--gold); }
+.gw-choice:hover { border-color: var(--gold); }
+.gw-choice > span:last-child { display: flex; flex-direction: column; gap: 3px; }
+.gw-choice b { font-size: 18px; }
+.gw-choice small { color: var(--dim); font-size: 13px; line-height: 1.35; }
+.gw-icon { font-size: 28px; width: 36px; text-align: center; flex: none; }
+.gw-more { align-self: center; background: none; border: none; color: var(--gold); font: inherit; font-size: 14px; padding: 10px; cursor: pointer; }
+.gl { display: flex; flex-direction: column; gap: 10px; }
+.gl-progress small { color: var(--dim); }
+.gl-list { display: flex; flex-direction: column; gap: 4px; }
+.gl-step { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.gl-step summary { list-style: none; cursor: pointer; padding: 10px 12px; display: flex; gap: 10px; align-items: center; font-size: 15px; }
+.gl-step summary::-webkit-details-marker { display: none; }
+.gl-step[open] { border-color: var(--gold); }
+.gl-step[open] summary { color: var(--gold); }
+.gl-step.done summary { color: var(--dim); }
+.gl-check { width: 16px; text-align: center; color: var(--gold); }
+.gl-step.done .gl-check { color: var(--good); }
+.gl-step p { margin: 0 12px 8px; font-size: 14px; line-height: 1.4; color: var(--text); }
+.gl-step button.act { margin: 0 12px 10px; width: calc(100% - 24px); }
+.gl-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gl-foot button.act { margin: 0; }
+
+/* ---- opening cutscene: one voice on screen (the caption), nothing competing with it ---- */
+body.opening-cutscene-active #sheet,
+body.opening-cutscene-active #panel,
+body.opening-cutscene-active #party,
+body.opening-cutscene-active #topbar,
+body.opening-cutscene-active #guide-goal { visibility: hidden !important; }
+.opening-cutscene .oc-stage { width: 100%; text-align: center; }
+.opening-cutscene .oc-line { font-size: clamp(19px, 2.8vw, 24px); }
+.opening-cutscene .oc-line.oc-flash { animation: oc-line-in 0.9s ease-out; }
+.opening-cutscene .oc-skip { padding: 10px 18px; min-height: 44px; }
+.opening-cutscene .oc-hint { display: none; }
+@media (hover: hover) { .opening-cutscene .oc-hint { display: block; } }
+.opening-cutscene .oc-flashfx { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen; }
+.opening-cutscene .oc-flashfx.go { animation: oc-flash 0.7s ease-out; }
+@keyframes oc-flash { 0% { opacity: var(--oc-flash, .5); } 100% { opacity: 0; } }

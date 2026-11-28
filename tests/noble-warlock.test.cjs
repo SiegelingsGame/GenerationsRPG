@@ -16,7 +16,7 @@ async function boot(page) {
   await page.getByText('Random Lineage · Ready to play', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Start the game', exact: true }).click();
   await page.getByText('Your first generation', { exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Continue playing', exact: true }).click();
+  await page.getByRole('button', { name: /^Guide me/ }).click();
 }
 
 test('noble strategizes and musters focus; warlock holds 4 AP and casts obliterate', async () => {

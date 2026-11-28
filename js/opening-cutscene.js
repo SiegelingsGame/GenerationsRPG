@@ -26,6 +26,22 @@ OpeningCutscene.after = function (ms, fn) {
   return id;
 };
 
+// How long a caption stays up: long enough to read comfortably on a phone.
+OpeningCutscene.readMs = function (line) {
+  const n = String(line || '').length;
+  return Math.round(Math.min(7000, Math.max(2600, 1500 + n * 55)));
+};
+// Run beats one after another; each waits for its own `hold` (or the reading time of its line).
+OpeningCutscene.sequence = function (beats, then) {
+  let t = 0;
+  for (const b of beats) {
+    this.after(t, () => { if (b.text) this.setText(b.text[0], b.text[1], b.text[2] || ''); if (b.run) b.run(); });
+    t += b.hold != null ? b.hold : this.readMs(b.text && b.text[1]);
+  }
+  if (then) this.after(t, then);
+  return t;
+};
+
 OpeningCutscene.mount = function () {
   if (this.el) this.el.remove();
   this.el = h('div', { id: 'opening-cutscene', class: 'opening-cutscene', role: 'dialog', 'aria-label': 'Opening chronicle' },
@@ -36,7 +52,8 @@ OpeningCutscene.mount = function () {
       h('p', { class: 'oc-chapter', id: 'oc-chapter' }, ''),
       h('p', { class: 'oc-line', id: 'oc-line' }, ''),
       h('p', { class: 'oc-speaker', id: 'oc-speaker' }, '')),
-    h('div', { class: 'oc-vignette', id: 'oc-vignette', hidden: true }));
+    h('div', { class: 'oc-vignette', id: 'oc-vignette', hidden: true }),
+    h('div', { class: 'oc-flashfx', id: 'oc-flashfx' }));
   document.body.append(this.el);
   document.body.classList.add('opening-cutscene-active');
 };
@@ -48,6 +65,18 @@ OpeningCutscene.setText = function (chapter, line, speaker) {
   if (ch) ch.textContent = chapter || '';
   if (ln) { ln.textContent = line || ''; ln.classList.remove('oc-flash'); void ln.offsetWidth; ln.classList.add('oc-flash'); }
   if (sp) sp.textContent = speaker || '';
+};
+
+// A short full-screen flash of light for the biggest impacts only.
+OpeningCutscene.flash = function (color = '#fff', strength = 0.55) {
+  const el = this.el && this.el.querySelector('#oc-flashfx');
+  if (!el || (PackArt.reduced && PackArt.reduced.matches)) return;
+  el.style.background = color; el.style.setProperty('--oc-flash', strength);
+  el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+};
+// midpoint between two units, for framing a caster and their target together
+OpeningCutscene.between = function (a, b) {
+  return { gx: (+a.gx + +b.gx) / 2, gy: (+a.gy + +b.gy) / 2 - 0.3 };
 };
 
 OpeningCutscene.heroUnit = function (opts, slot) {
@@ -112,7 +141,7 @@ OpeningCutscene.setupBattle = function () {
 
 OpeningCutscene.hit = function (src, t, dmg, label, crit) {
   if (!t || !t.alive) return;
-  Battle.damage(src, t, dmg, !!crit, label);
+  Battle.damage(src, t, dmg, !!crit, label || null);
   t.flash = 1;
   UI.battleChanged();
 };
@@ -121,7 +150,6 @@ OpeningCutscene.kill = function (u, who) {
   if (!u || !u.alive) return;
   u.hp = 0; u.alive = false;
   Battle.say(`${u.name} ${u.side === 'party' ? 'has fallen!' : 'is defeated.'}`);
-  if (who) Battle.fx.push({ uid: u.uid, text: who, color: '#ff5c5c', t0: performance.now() });
   UI.battleChanged();
 };
 
@@ -137,8 +165,9 @@ OpeningCutscene.play = function (done) {
     if (e.key === 'Escape' && this.active) { e.preventDefault(); this.skip(); }
   };
   document.addEventListener('keydown', this.keyHandler);
-  this.setText('Chronicle', 'In an age before your House was named, champions stood against the Hollow King.');
-  this.after(1600, () => this.phaseBattle());
+  const intro = 'In an age before your House was named, champions stood against the Hollow King.';
+  this.setText('Chronicle', intro);
+  this.after(this.readMs(intro), () => this.phaseBattle());
 };
 
 OpeningCutscene.phaseBattle = function () {
@@ -146,76 +175,54 @@ OpeningCutscene.phaseBattle = function () {
   const cast = this.setupBattle();
   const { heroes, king, herald } = cast;
   const [knight, mage, priest, bard] = heroes;
-  this.setText('The Black Spire', 'Steel, song and starfire meet the King’s void.', '');
-
-  this.after(700, () => {
-    Battle.cur = mage; mage.anim = { type: 'cast', to: king.uid, t0: performance.now() };
-    PackArt.godSpell('starfall', king, mage);
-    this.hit(mage, king, 90, 'Starfall');
-    this.hit(mage, herald, 55, 'Starfall');
-    Battle.say(`${mage.name} tears open the sky — Starfall!`);
-    this.setText('Maera the Star', 'Starfall!', 'Maera');
-  });
-
-  this.after(2000, () => {
-    Battle.cur = priest; priest.anim = { type: 'cast', to: king.uid, t0: performance.now() };
-    PackArt.godSpell('solarSmite', king, priest);
-    this.hit(priest, king, 110, 'Solar Smite');
-    Battle.say(`${priest.name} calls down Solar Smite!`);
-    this.setText('Brother Oren', 'Solar Smite!', 'Oren');
-  });
-
-  this.after(3400, () => {
-    Battle.cur = bard; bard.anim = { type: 'cast', to: knight.uid, t0: performance.now() };
-    PackArt.godSpell('worldsong', king, bard);
-    heroes.forEach((h) => { Battle.give(h, 'atkUp', 3, 0.35); PackArt.emit('buff', h); });
-    this.hit(bard, king, 40, 'Worldsong');
-    this.hit(bard, herald, 70, 'Worldsong');
-    Battle.say(`${bard.name} sings the Worldsong — the weave itself answers.`);
-    this.setText('Lira of Songs', 'Worldsong!', 'Lira');
-  });
-
-  this.after(4800, () => {
-    Battle.cur = knight; knight.anim = { type: 'lunge', to: king.uid, t0: performance.now() };
-    PackArt.emit('critical', king, knight);
-    PackArt.emit('hit', king);
-    this.hit(knight, king, 75, 'Oathblade', true);
-    Battle.say(`${knight.name} drives the Oathblade into the Hollow King!`);
-    this.setText('Ser Calen', 'For the world that was!', 'Calen');
-  });
-
-  this.after(6000, () => {
-    Battle.cur = king; king.anim = { type: 'cast', to: knight.uid, t0: performance.now() };
-    PackArt.godSpell('voidCascade', knight, king);
-    heroes.forEach((h, i) => this.hit(king, h, 55 + i * 12, 'Void Cascade'));
-    if (herald.alive) this.kill(herald, 'scattered');
-    Battle.say(`The Hollow King answers with a Void Cascade!`);
-    this.setText('The Hollow King', 'Your age ends here.', 'The Hollow King');
-  });
-
-  this.after(7600, () => {
-    PackArt.godSpell('solarSmite', king, priest);
-    PackArt.godSpell('starfall', king, mage);
-    this.hit(mage, king, 70, 'Twin Stars');
-    this.hit(priest, king, 65, 'Last Light');
-    Battle.say('The champions pour out every last miracle.');
-    this.setText('The Last Stand', 'Miracles burn out against the void.');
-  });
-
-  this.after(9200, () => {
-    Battle.cur = king;
-    PackArt.godSpell('unmaking', knight, king);
-    this.setText('The Hollow King', 'ABSOLUTE UNMAKING', 'The Hollow King');
-    Battle.say('The Hollow King unmakes the field.');
-  });
-
-  this.after(10000, () => {
-    heroes.forEach((h) => this.kill(h));
-    Battle.round = Math.max(Battle.round, 3);
-    UI.battleChanged();
-  });
-
-  this.after(11200, () => this.phaseEpilogue(king));
+  // One hero acts at a time: they wind up, the spell lands, the caption names it, then a breath.
+  const cast1 = (who, anim, to) => { Battle.cur = who; who.anim = { type: anim, to: to.uid, t0: performance.now() }; };
+  const aim = (t, z, e) => Render.cineAim(t, z, e);
+  // open wide on the whole field, then ease in
+  Render.cine = null; aim({ gx: 3.5, gy: 2.2 }, 1.05, 1); aim({ gx: 3.5, gy: 2.2 }, 1.25, 0.02);
+  this.sequence([
+    { text: ['The Black Spire', 'Steel, song and starfire meet the King’s void.'] },
+    { text: ['Maera the Star', 'Starfall!', 'Maera'], hold: 3000, run: () => {
+      aim(this.between(mage, king), 1.4, 0.05);
+      cast1(mage, 'cast', king); PackArt.godSpell('starfall', king, mage);
+      this.after(520, () => { this.flash('#ffb060', 0.35); this.hit(mage, king, 90); this.hit(mage, herald, 55); });
+    } },
+    { text: ['Brother Oren', 'Solar Smite!', 'Oren'], hold: 3000, run: () => {
+      aim(this.between(priest, king), 1.4, 0.05);
+      cast1(priest, 'cast', king); PackArt.godSpell('solarSmite', king, priest);
+      this.after(340, () => { this.flash('#fff6c8', 0.45); this.hit(priest, king, 110); });
+    } },
+    { text: ['Lira of Songs', 'Worldsong! The weave itself answers.', 'Lira'], run: () => {
+      aim(this.between(bard, king), 1.3, 0.05);
+      cast1(bard, 'cast', knight); PackArt.godSpell('worldsong', king, bard);
+      heroes.forEach((h) => Battle.give(h, 'atkUp', 3, 0.35));
+      this.after(400, () => { this.hit(bard, king, 40); this.hit(bard, herald, 70); });
+    } },
+    { text: ['Ser Calen', 'For the world that was!', 'Calen'], run: () => {
+      aim(king, 1.6, 0.08);
+      cast1(knight, 'lunge', king); PackArt.godSpell('oathblade', king, knight);
+      this.after(260, () => { this.flash('#ffffff', 0.3); this.hit(knight, king, 75, null, true); });
+    } },
+    { text: ['The Hollow King', 'Your age ends here.', 'The Hollow King'], run: () => {
+      aim({ gx: 3.2, gy: 2.2 }, 1.15, 0.06); // pull back: the King hits everyone
+      cast1(king, 'cast', knight); PackArt.godSpell('voidCascade', knight, king);
+      this.after(640, () => { this.flash('#7a3cff', 0.4); heroes.forEach((h, i) => this.hit(king, h, 55 + i * 12)); if (herald.alive) this.kill(herald); });
+    } },
+    { text: ['The Last Stand', 'Every last miracle burns out against the void.'], run: () => {
+      aim(king, 1.35, 0.04);
+      PackArt.godSpell('starfall', king, mage);
+      this.after(1300, () => PackArt.godSpell('solarSmite', king, priest));
+      this.after(700, () => this.hit(mage, king, 70));
+      this.after(1700, () => this.hit(priest, king, 65));
+    } },
+    { text: ['The Hollow King', 'ABSOLUTE UNMAKING', 'The Hollow King'], hold: 3600, run: () => {
+      // a slow push in on the King while he gathers it... then the blow, and the camera reels back
+      aim(king, 1.9, 0.025);
+      cast1(king, 'cast', knight); PackArt.godSpell('unmaking', knight, king);
+      this.after(1100, () => { this.flash('#ff3050', 0.7); aim({ gx: 3.2, gy: 2.4 }, 1.0, 0.12); });
+      this.after(1400, () => { heroes.forEach((h) => this.kill(h)); Battle.round = Math.max(Battle.round, 3); UI.battleChanged(); });
+    } },
+  ], () => this.phaseEpilogue(king));
 };
 
 OpeningCutscene.phaseEpilogue = function (king) {
@@ -231,18 +238,21 @@ OpeningCutscene.phaseEpilogue = function (king) {
   if (vig) { vig.hidden = false; vig.className = 'oc-vignette oc-void'; }
   const target = king || Battle.units.find((u) => u.type === 'hollow') || { gx: 5.4, gy: 2 };
 
-  this.setText('Chronicle', 'The champions fall. The Hollow King turns upon the timeline itself.');
+  const fall = 'The champions fall. The Hollow King turns upon the timeline itself.';
+  const reset = 'Something older than kings answers. The weave resets. The blow is turned aside.';
+  this.setText('Chronicle', fall);
   PackArt.godSpell('voidCascade', target, null);
-  if (typeof Render !== 'undefined') Render.shake(700, 14);
+  if (typeof Render !== 'undefined') Render.shake(500, 8);
 
-  this.after(2200, () => {
+  this.after(this.readMs(fall), () => {
     if (vig) vig.className = 'oc-vignette oc-reset';
     PackArt.godSpell('timelineBreak', target, null);
-    this.setText('Chronicle', 'Something older than kings answers. The weave resets. The blow is turned aside.');
-    if (typeof Render !== 'undefined') Render.shake(900, 12);
+    this.flash('#bfe6ff', 0.6);
+    Render.cineAim(target, 1.5, 0.02);
+    this.setText('Chronicle', reset);
   });
 
-  this.after(4800, () => this.phaseSpiritFlight(king || target));
+  this.after(this.readMs(fall) + this.readMs(reset), () => this.phaseSpiritFlight(king || target));
 };
 
 // Continuous 2.5D tracking shot: map flight → town → neighborhood → house → room → belly.
@@ -251,7 +261,7 @@ OpeningCutscene.APPROACH_STAGES = ['town', 'neighborhood', 'house', 'room', 'bel
 OpeningCutscene.approachBeats = function () {
   // Camera: z = depth along street (dolly), y = height, pitch = look-down (negative) / look-up.
   // Spirit rides slightly ahead of the camera so the follow-cam feels intentional.
-  return [
+  const beats = [
     {
       name: 'town', dur: 2600,
       cam: { z: 26, y: 7.2, x: 0, pitch: -0.32, fov: 1.05 },
@@ -283,6 +293,9 @@ OpeningCutscene.approachBeats = function () {
       chapter: 'The White Spirit', line: 'I will seek the right bloodline. This time, I will prevail.', speaker: 'The Spirit',
     },
   ];
+  // slow dolly: each stage lasts at least as long as its caption takes to read
+  for (const b of beats) b.dur = Math.max(Math.round(b.dur * 1.8), this.readMs(b.line) + 600);
+  return beats;
 };
 
 OpeningCutscene.lerpCam = function (a, b, u) {
@@ -327,10 +340,10 @@ OpeningCutscene.phaseSpiritFlight = function (king) {
   const ease = (t) => t * t * (3 - 2 * t);
   // Map legs end overhead of the town; intimacy stages continue in 2.5D.
   const legs = [
-    { x: spire.x, y: spire.y, alt: 56, dur: 800, chapter: 'Chronicle', line: 'The Hollow King is broken. From the fracture, a white spirit takes flight.', speaker: '' },
-    { x: spire.x - (spire.x - estate.x) * 0.35, y: spire.y - (spire.y - estate.y) * 0.25, alt: 72, dur: 1800, chapter: 'Chronicle', line: 'The spirit casts itself across the seas, seeking the right bloodline.', speaker: '' },
-    { x: estate.x + (town.x - estate.x) * 0.15, y: estate.y + (town.y - estate.y) * 0.1, alt: 48, dur: 1800, chapter: 'The Starting Isle', line: 'It finds the island where a House will one day rise.', speaker: '' },
-    { x: town.x, y: town.y, alt: 22, dur: 1600, chapter: 'A Living Town', line: 'Over rooftops and hearths — the tracking shot begins.', speaker: '' },
+    { x: spire.x, y: spire.y, alt: 56, dur: 1200, chapter: 'Chronicle', line: 'The Hollow King is broken. From the fracture, a white spirit takes flight.', speaker: '' },
+    { x: spire.x - (spire.x - estate.x) * 0.35, y: spire.y - (spire.y - estate.y) * 0.25, alt: 72, dur: 5400, chapter: 'Chronicle', line: 'The spirit casts itself across the seas, seeking the right bloodline.', speaker: '' },
+    { x: estate.x + (town.x - estate.x) * 0.15, y: estate.y + (town.y - estate.y) * 0.1, alt: 48, dur: 5200, chapter: 'The Starting Isle', line: 'It finds the island where a House will one day rise.', speaker: '' },
+    { x: town.x, y: town.y, alt: 22, dur: 4600, chapter: 'A Living Town', line: 'Over rooftops and hearths, down toward the lanes.', speaker: '' },
   ];
 
   const beats = this.approachBeats();
@@ -485,8 +498,9 @@ OpeningCutscene.tickApproach = function (now) {
 
       if (i >= beats.length - 1 && u >= 1 && !s.finishing) {
         s.finishing = true;
-        this.setText('Chronicle', 'And so a House is founded — the bloodline the spirit claimed.');
-        this.after(2200, () => this.complete());
+        const end = 'And so a House is founded: the bloodline the spirit claimed.';
+        this.setText('Chronicle', end);
+        this.after(this.readMs(end), () => this.complete());
       }
       return;
     }
@@ -534,6 +548,7 @@ OpeningCutscene.teardown = function () {
   if (typeof Render !== 'undefined') {
     Render.zoomTarget = 1;
     Render.followOverride = null;
+    Render.cine = null;
   }
   if (Battle.active || Battle.cinematic || Battle.units.length) {
     Battle.over = true;
