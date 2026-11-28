@@ -1219,3 +1219,14 @@ body.opening-cutscene-active #guide-goal { visibility: hidden !important; }
 .tip-body p:last-child { margin-bottom: 0; }
 .tip-body ul { margin: 0 0 6px; padding-left: 18px; color: var(--dim); }
 .takein-none { margin: 4px 0; }
+
+/* ---- the House screen from inside a town, church or camp ---- */
+.scene-house { position: absolute; z-index: 2; top: calc(12px + env(safe-area-inset-top, 0px)); left: 14px; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 40px; padding: 6px 14px 6px 10px; border-radius: 20px; background: rgba(33, 30, 43, 0.92); border: 1px solid #b8913a; color: #f3d98a;
+  font: inherit; font-size: 15px; box-shadow: 0 2px 8px rgba(0, 0, 0, .5); cursor: pointer; }
+.scene-house span { color: var(--gold); font-size: 17px; }
+.scene-house:active { background: #3a2f15; }
+body.scene-open #backdrop { z-index: 31; }
+body.scene-open #drawer { z-index: 32; }
+body.scene-open .modal-wrap { z-index: 33; }
+body.scene-open .toast { z-index: 34; }

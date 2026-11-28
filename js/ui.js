@@ -131,8 +131,19 @@ UI.fixStandalone = function () {
   // iOS paints nothing outside the page box, so the page itself has to be screen-tall as well
   document.documentElement.classList.toggle('ios-short', full > window.innerHeight);
 };
+// Inside a town, church or camp, the House screen still opens: over the scene, which stays put.
+UI.inScene = function () {
+  return !!((typeof TownView !== 'undefined' && TownView.open) || (typeof ChurchView !== 'undefined' && ChurchView.open) || (typeof Campfire !== 'undefined' && Campfire.open));
+};
+UI.sceneHouseBtn = function () {
+  return h('button', { class: 'scene-house', type: 'button', 'aria-label': 'Open House: family, Guard, heir', onclick: (e) => {
+    e.stopPropagation();
+    if (this.isMobile()) this.openDrawer(); else this.showHousehold();
+  } }, h('span', { 'aria-hidden': 'true' }, '♛'), ' House');
+};
 UI.openDrawer = function () {
   this.closeModalQuiet();
+  document.body.classList.toggle('scene-open', this.inScene());
   if (this.mob.camera) this.mob.camera.open = false;
   this.closeLog();
   document.body.classList.add('drawer-open');
@@ -576,7 +587,7 @@ UI.showNameHeir = function () {
         } }, 'Name', h('small', {}, 'as heir')))),
   ], { title: 'Name an heir', sheet: true });
 };
-UI.closeDrawer = function () { document.body.classList.remove('drawer-open'); this.mob.drawer.setAttribute('aria-hidden', 'true'); };
+UI.closeDrawer = function () { document.body.classList.remove('drawer-open'); document.body.classList.toggle('scene-open', this.inScene()); this.mob.drawer.setAttribute('aria-hidden', 'true'); };
 UI.closeLog = function () { if (this.mob && this.mob.logPanel) this.mob.logPanel.open = false; };
 UI.setLogTab = function (tab) {
   if (!this.mob) return;
@@ -606,6 +617,7 @@ UI.placeLayout = function () {
   const body = $('#drawer-body');
   const mobile = this.isMobile();
   document.body.classList.toggle('mobile', mobile);
+  document.body.classList.toggle('scene-open', this.inScene());
   document.body.classList.toggle('in-battle', mobile && Battle.active);
   // Battle HUD overlays the canvas; never reserve bottom space for the sheet.
   stage.style.bottom = '';

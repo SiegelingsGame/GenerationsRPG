@@ -536,7 +536,7 @@ Campfire.start = function () {
   this.cv = h('canvas', { class: 'camp-canvas' });
   this.box = h('div', { class: 'camp-say' });
   this.btns = h('div', { class: 'camp-btns' });
-  this.el = h('div', { class: 'campfire' }, this.cv, h('div', { class: 'camp-ui' }, this.box, this.btns));
+  this.el = h('div', { class: 'campfire' }, this.cv, UI.sceneHouseBtn(), h('div', { class: 'camp-ui' }, this.box, this.btns));
   document.body.append(this.el);
   this.cv.addEventListener('click', (e) => { const p = this.hit(e); if (p) this.talk(p); });
   this.cv.addEventListener('mousemove', (e) => { this.hover = this.hit(e); this.cv.style.cursor = this.hover ? 'pointer' : 'default'; });
@@ -565,6 +565,7 @@ Campfire.close = function (then) {
   if (this.sound) { try { this.sound.ctx.close(); } catch (e) { /* ignore */ } this.sound = null; }
   if (this.el) this.el.remove();
   this.el = null;
+  UI.closeDrawer();
   if (then) then(); else Game.after();
 };
 Campfire.layout = function () {
